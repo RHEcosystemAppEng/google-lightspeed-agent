@@ -107,8 +107,7 @@ class TestModels:
 class TestUsageReporter:
     """Tests for UsageReporter.
 
-    Note: UsageReporter now uses aggregate usage from UsageTrackingPlugin
-    instead of per-order metering. Tests are updated accordingly.
+    Note: UsageReporter uses per-order deltas from UsageTrackingPlugin.
     """
 
     @pytest.fixture

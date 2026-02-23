@@ -24,11 +24,19 @@ logger = logging.getLogger(__name__)
 _request_access_token: contextvars.ContextVar[tuple[str, datetime] | None] = (
     contextvars.ContextVar("_request_access_token", default=None)
 )
+_request_order_id: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+    "_request_order_id", default=None
+)
 
 
 def get_request_access_token() -> tuple[str, datetime] | None:
     """Return the current request's access token and its expiry, or None."""
     return _request_access_token.get()
+
+
+def get_request_order_id() -> str | None:
+    """Return the current request's order_id, or None."""
+    return _request_order_id.get()
 
 
 class AuthenticationMiddleware(BaseHTTPMiddleware):
@@ -71,6 +79,8 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
         call_next,
     ) -> Response:
         """Process request with authentication check."""
+        _request_access_token.set(None)
+        _request_order_id.set(None)
         path = request.url.path
         method = request.method
 
@@ -102,8 +112,10 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
             # Store user in request state for access in handlers
             request.state.user = user
             request.state.access_token = token
+            request.state.order_id = user.metadata.get("order_id")
             # Make token available to downstream services (MCP header provider)
             _request_access_token.set((token, user.token_exp))
+            _request_order_id.set(user.metadata.get("order_id"))
             logger.debug("Authenticated user: %s", user.user_id)
         except InsufficientScopeError as e:
             logger.warning("Insufficient scope: %s", e)
@@ -150,6 +162,9 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
             # Use a generous expiry — the MCP server will validate the token.
             far_future = datetime.now(UTC) + timedelta(hours=1)
             _request_access_token.set((token, far_future))
+            order_id = request.headers.get("X-Order-Id")
+            if order_id:
+                _request_order_id.set(order_id)
             logger.debug("Extracted Bearer token for pass-through (validation skipped)")
 
     def _unauthorized_response(self, detail: str) -> JSONResponse:
