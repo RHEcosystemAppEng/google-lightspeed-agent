@@ -202,12 +202,8 @@ class TestA2AEndpoints:
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "ok"
-        assert "usage" in data
-        usage = data["usage"]
-        assert "total_input_tokens" in usage
-        assert "total_output_tokens" in usage
-        assert "total_requests" in usage
-        assert "total_tool_calls" in usage
+        assert "usage_by_order" in data
+        usage = data["usage_by_order"]
 
     def test_send_message_jsonrpc(self, client):
         """Test / endpoint with JSON-RPC message/send."""

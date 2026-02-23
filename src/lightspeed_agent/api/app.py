@@ -16,7 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from lightspeed_agent.api.a2a.a2a_setup import setup_a2a_routes
 from lightspeed_agent.api.a2a.agent_card import get_agent_card_dict
-from lightspeed_agent.api.a2a.usage_plugin import get_aggregate_usage
+from lightspeed_agent.api.a2a.usage_plugin import get_usage_by_order
 from lightspeed_agent.auth import AuthenticationMiddleware
 from lightspeed_agent.config import get_settings
 from lightspeed_agent.ratelimit import RateLimitMiddleware
@@ -121,14 +121,13 @@ def create_app() -> FastAPI:
         return get_agent_card_dict()
 
     # Usage statistics endpoint
-    # Returns aggregate token and request counts tracked by UsageTrackingPlugin
+    # Returns per-order usage metrics tracked by UsageTrackingPlugin
     @app.get("/usage")
     async def get_usage_stats() -> dict:
-        """Get aggregate usage statistics."""
-        usage = get_aggregate_usage()
+        """Get per-order usage statistics."""
         return {
             "status": "ok",
-            "usage": usage.to_dict(),
+            "usage_by_order": get_usage_by_order(),
         }
 
     # Add rate limiting middleware

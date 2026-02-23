@@ -1,9 +1,4 @@
-"""Usage reporter for Google Cloud Service Control.
-
-This reporter uses aggregate usage data from the UsageTrackingPlugin.
-Note: Per-order usage tracking is not currently implemented. All usage
-is reported as aggregate metrics.
-"""
+"""Usage reporter for Google Cloud Service Control."""
 
 import logging
 from datetime import datetime, timedelta
@@ -11,7 +6,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from lightspeed_agent.api.a2a.usage_plugin import get_aggregate_usage
+from lightspeed_agent.api.a2a.usage_plugin import get_order_usage
 from lightspeed_agent.config import get_settings
 from lightspeed_agent.service_control.client import (
     ServiceControlClient,
@@ -81,13 +76,8 @@ class UsageReporter:
         self._failed_reports: list[UsageReport] = []
         # Track last report time per order
         self._last_report_time: dict[str, datetime] = {}
-        # Track last reported aggregate values to compute deltas
-        self._last_aggregate: dict[str, int] = {
-            "total_requests": 0,
-            "total_input_tokens": 0,
-            "total_output_tokens": 0,
-            "total_tool_calls": 0,
-        }
+        # Track last reported usage values per order to compute deltas
+        self._last_reported_by_order: dict[str, dict[str, int]] = {}
 
     async def get_consumer_id(self, order_id: str) -> str | None:
         """Get the consumer ID (usageReportingId) for an order.
@@ -135,16 +125,9 @@ class UsageReporter:
                 mapped[google_name] = value
         return mapped
 
-    def _get_usage_delta(self) -> dict[str, int]:
-        """Get usage delta since last report.
-
-        Returns current aggregate usage minus last reported values,
-        then updates last reported values.
-
-        Returns:
-            Dictionary of metric deltas.
-        """
-        current = get_aggregate_usage()
+    def _get_usage_delta(self, order_id: str) -> dict[str, int]:
+        """Get usage delta for a single order since its last report."""
+        current = get_order_usage(order_id)
         current_values = {
             "total_requests": current.total_requests,
             "total_input_tokens": current.total_input_tokens,
@@ -155,7 +138,7 @@ class UsageReporter:
         # Compute deltas
         deltas = {}
         for key, current_val in current_values.items():
-            last_val = self._last_aggregate.get(key, 0)
+            last_val = self._last_reported_by_order.get(order_id, {}).get(key, 0)
             delta = current_val - last_val
             if delta > 0:
                 deltas[key] = delta
@@ -171,8 +154,8 @@ class UsageReporter:
         if deltas.get("total_tool_calls", 0) > 0:
             billable["mcp_tool_calls"] = deltas["total_tool_calls"]
 
-        # Update last aggregate
-        self._last_aggregate = current_values
+        # Update last reported values for this order
+        self._last_reported_by_order[order_id] = current_values
 
         return billable
 
@@ -204,9 +187,8 @@ class UsageReporter:
                 error_message="Could not determine consumer ID",
             )
 
-        # Get billable usage delta since last report
-        # Note: This is aggregate usage, not per-order. All orders get the same metrics.
-        metrics = self._get_usage_delta()
+        # Get billable usage delta since last report for this order only.
+        metrics = self._get_usage_delta(order_id)
 
         # Map to Google metric names
         mapped_metrics = self.map_metrics(metrics)
@@ -264,10 +246,6 @@ class UsageReporter:
         end_time: datetime,
     ) -> list[ReportResult]:
         """Report usage for all active orders.
-
-        Note: Since per-order tracking is not implemented, this reports
-        aggregate usage to all active orders. In production, you should
-        implement per-order tracking to properly attribute usage.
 
         Args:
             start_time: Start of reporting period.

@@ -1,4 +1,4 @@
-"""Simple usage tracking plugin for aggregate token and tool metrics."""
+"""Usage tracking plugin with per-order metrics."""
 
 import logging
 from dataclasses import dataclass
@@ -8,12 +8,14 @@ from google.adk.models.llm_response import LlmResponse
 from google.adk.plugins.base_plugin import BasePlugin
 from google.adk.tools.base_tool import BaseTool
 
+from lightspeed_agent.auth.middleware import get_request_order_id
+
 logger = logging.getLogger(__name__)
 
 
 @dataclass
-class AggregateUsage:
-    """Aggregate usage statistics across all requests."""
+class OrderUsage:
+    """Usage statistics for a specific order."""
 
     total_input_tokens: int = 0
     total_output_tokens: int = 0
@@ -31,24 +33,36 @@ class AggregateUsage:
         }
 
 
-# Global aggregate usage tracker
-_aggregate_usage = AggregateUsage()
+# Per-order usage tracker (source of truth)
+_usage_by_order: dict[str, OrderUsage] = {}
+UNKNOWN_ORDER_ID = "unknown"
 
 
-def get_aggregate_usage() -> AggregateUsage:
-    """Get current aggregate usage statistics."""
-    return _aggregate_usage
+def get_usage_by_order() -> dict[str, dict]:
+    """Get usage statistics grouped by order_id."""
+    return {order_id: usage.to_dict() for order_id, usage in _usage_by_order.items()}
+
+
+def get_order_usage(order_id: str) -> OrderUsage:
+    """Get usage statistics for a specific order_id."""
+    if not order_id:
+        order_id = UNKNOWN_ORDER_ID
+    return _usage_by_order.get(order_id, OrderUsage())
+
+
+def _resolve_order_id() -> str:
+    """Resolve the current request order_id from request context."""
+    return get_request_order_id() or UNKNOWN_ORDER_ID
 
 
 class UsageTrackingPlugin(BasePlugin):
-    """ADK Plugin for tracking aggregate token and tool usage.
+    """ADK Plugin for tracking per-order usage.
 
     This plugin tracks:
-    - Total input/output tokens across all LLM calls
-    - Total number of requests
-    - Total number of tool/MCP calls
+    - Per-order input/output tokens across all LLM calls
+    - Per-order number of requests
+    - Per-order number of tool/MCP calls
 
-    Usage is stored in a global counter accessible via get_aggregate_usage().
     """
 
     def __init__(self):
@@ -56,8 +70,14 @@ class UsageTrackingPlugin(BasePlugin):
 
     async def before_run_callback(self, *, invocation_context) -> None:
         """Track request count at start of each run."""
-        _aggregate_usage.total_requests += 1
-        logger.debug(f"Request #{_aggregate_usage.total_requests} started")
+        order_id = _resolve_order_id()
+        order_usage = _usage_by_order.setdefault(order_id, OrderUsage())
+        order_usage.total_requests += 1
+        logger.debug(
+            "Request #%d started for order %s",
+            order_usage.total_requests,
+            order_id,
+        )
         return None
 
     async def after_model_callback(
@@ -68,17 +88,19 @@ class UsageTrackingPlugin(BasePlugin):
     ) -> Optional[LlmResponse]:
         """Track token usage from LLM responses."""
         if llm_response.usage_metadata:
+            order_id = _resolve_order_id()
             usage = llm_response.usage_metadata
             input_tokens = getattr(usage, "prompt_token_count", 0) or 0
             output_tokens = getattr(usage, "candidates_token_count", 0) or 0
 
-            _aggregate_usage.total_input_tokens += input_tokens
-            _aggregate_usage.total_output_tokens += output_tokens
+            order_usage = _usage_by_order.setdefault(order_id, OrderUsage())
+            order_usage.total_input_tokens += input_tokens
+            order_usage.total_output_tokens += output_tokens
 
             logger.debug(
+                f"Order {order_id}: "
                 f"Tokens: in={input_tokens}, out={output_tokens}, "
-                f"totals: in={_aggregate_usage.total_input_tokens}, "
-                f"out={_aggregate_usage.total_output_tokens}"
+                f"totals: in={order_usage.total_input_tokens}, out={order_usage.total_output_tokens}"
             )
 
         return None  # Don't modify the response
@@ -92,9 +114,12 @@ class UsageTrackingPlugin(BasePlugin):
         result: dict,
     ) -> Optional[dict]:
         """Track tool/MCP calls."""
-        _aggregate_usage.total_tool_calls += 1
+        order_id = _resolve_order_id()
+        order_usage = _usage_by_order.setdefault(order_id, OrderUsage())
+        order_usage.total_tool_calls += 1
         tool_name = getattr(tool, "name", type(tool).__name__)
         logger.debug(
-            f"Tool call: {tool_name}, total calls: {_aggregate_usage.total_tool_calls}"
+            f"Order {order_id}: "
+            f"Tool call: {tool_name}, total calls: {order_usage.total_tool_calls}"
         )
         return None  # Don't modify the result
