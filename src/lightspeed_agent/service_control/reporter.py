@@ -124,18 +124,25 @@ class UsageReporter:
                 mapped[google_name] = value
         return mapped
 
-    async def _get_usage_delta(
-        self,
-        order_id: str,
-        start_time: datetime,
-        end_time: datetime,
-    ) -> dict[str, int]:
-        """Get unreported usage for a single order and period from DB."""
-        return await self._usage_repo.get_unreported_usage(
-            order_id=order_id,
-            start_time=start_time,
-            end_time=end_time,
-        )
+    def _aggregate_metrics_from_rows(self, rows: list) -> dict[str, int]:
+        """Aggregate metrics from claimed usage rows."""
+        if not rows:
+            return {}
+        total_requests = sum(r.request_count for r in rows)
+        total_input_tokens = sum(r.input_tokens for r in rows)
+        total_output_tokens = sum(r.output_tokens for r in rows)
+        total_tool_calls = sum(r.tool_calls for r in rows)
+
+        metrics: dict[str, int] = {}
+        if total_requests > 0:
+            metrics["send_message_requests"] = total_requests
+        if total_input_tokens > 0:
+            metrics["input_tokens"] = total_input_tokens
+        if total_output_tokens > 0:
+            metrics["output_tokens"] = total_output_tokens
+        if total_tool_calls > 0:
+            metrics["mcp_tool_calls"] = total_tool_calls
+        return metrics
 
     async def report_usage(
         self,
@@ -165,13 +172,14 @@ class UsageReporter:
                 error_message="Could not determine consumer ID",
             )
 
-        # Get billable usage delta since last report for this order only.
-        metrics = await self._get_usage_delta(order_id, start_time, end_time)
+        # 1. Atomically claim rows (no other worker can claim them)
+        claimed_rows = await self._usage_repo.claim_unreported_rows_for_reporting(
+            order_id=order_id,
+            start_time=start_time,
+            end_time=end_time,
+        )
 
-        # Map to Google metric names
-        mapped_metrics = self.map_metrics(metrics)
-
-        if not mapped_metrics:
+        if not claimed_rows:
             logger.debug("No billable metrics for order %s in period", order_id)
             return ReportResult(
                 order_id=order_id,
@@ -180,7 +188,12 @@ class UsageReporter:
                 metrics_reported={},
             )
 
-        # Report to Service Control
+        # 2. Aggregate metrics from claimed rows
+        metrics = self._aggregate_metrics_from_rows(claimed_rows)
+        mapped_metrics = self.map_metrics(metrics)
+        claimed_ids = [r.id for r in claimed_rows]
+
+        # 3. Report to Service Control (no DB lock held)
         success, error_msg = await self._client.check_and_report(
             consumer_id=consumer_id,
             metrics=mapped_metrics,
@@ -199,28 +212,26 @@ class UsageReporter:
             metrics_reported=mapped_metrics if success else {},
         )
 
-        # Queue for retry if failed
-        if not success and retry_on_failure:
-            self._queue_failed_report(
-                UsageReport(
-                    order_id=order_id,
-                    consumer_id=consumer_id,
-                    start_time=start_time,
-                    end_time=end_time,
-                    metrics=mapped_metrics,
-                    error_message=error_msg,
-                )
-            )
-
-        # Update last report time on success
         if success:
-            await self._usage_repo.mark_reported_for_period(
-                order_id=order_id,
-                start_time=start_time,
-                end_time=end_time,
+            # 4a. Mark claimed rows as reported
+            await self._usage_repo.mark_reported_by_ids(
+                ids=claimed_ids,
                 reported_at=end_time,
             )
             self._last_report_time[order_id] = end_time
+        else:
+            # 4b. Release claim for retry
+            await self._usage_repo.release_claimed_rows(ids=claimed_ids)
+            if retry_on_failure:
+                self._queue_failed_report(
+                    UsageReport(
+                        order_id=order_id,
+                        consumer_id=consumer_id,
+                        start_time=start_time,
+                        end_time=end_time,
+                        error_message=error_msg,
+                    )
+                )
 
         return result
 
@@ -338,10 +349,37 @@ class UsageReporter:
             if not consumer_id:
                 consumer_id = report.consumer_id
 
-            # Retry the report
+            # Re-claim rows (released rows may be claimed again)
+            claimed_rows = await self._usage_repo.claim_unreported_rows_for_reporting(
+                order_id=report.order_id,
+                start_time=report.start_time,
+                end_time=report.end_time,
+            )
+
+            if not claimed_rows:
+                # Rows already claimed/reported by another worker; remove from queue
+                logger.info(
+                    "Retry for order %s: no rows to claim (already handled), removing from queue",
+                    report.order_id,
+                )
+                results.append(
+                    ReportResult(
+                        order_id=report.order_id,
+                        consumer_id=consumer_id,
+                        success=True,
+                        metrics_reported={},
+                    )
+                )
+                continue
+
+            metrics = self._aggregate_metrics_from_rows(claimed_rows)
+            mapped_metrics = self.map_metrics(metrics)
+            claimed_ids = [r.id for r in claimed_rows]
+
+            # Report to Service Control
             success, error_msg = await self._client.check_and_report(
                 consumer_id=consumer_id,
-                metrics=report.metrics,
+                metrics=mapped_metrics,
                 start_time=report.start_time,
                 end_time=report.end_time,
                 labels={
@@ -355,18 +393,17 @@ class UsageReporter:
                 consumer_id=consumer_id,
                 success=success,
                 error_message=error_msg,
-                metrics_reported=report.metrics if success else {},
+                metrics_reported=mapped_metrics if success else {},
             )
             results.append(result)
 
             if not success:
                 report.error_message = error_msg
+                await self._usage_repo.release_claimed_rows(ids=claimed_ids)
                 still_failed.append(report)
             else:
-                await self._usage_repo.mark_reported_for_period(
-                    order_id=report.order_id,
-                    start_time=report.start_time,
-                    end_time=report.end_time,
+                await self._usage_repo.mark_reported_by_ids(
+                    ids=claimed_ids,
                     reported_at=datetime.utcnow(),
                 )
                 logger.info(
@@ -394,7 +431,6 @@ class UsageReporter:
                 and existing.end_time == report.end_time
             ):
                 # Update the existing report
-                existing.metrics = report.metrics
                 existing.error_message = report.error_message
                 return
 
