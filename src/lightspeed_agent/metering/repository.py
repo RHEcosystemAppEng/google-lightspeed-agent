@@ -6,6 +6,7 @@ import logging
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import func, select, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from lightspeed_agent.db import UsageRecordModel, get_session
 
@@ -42,7 +43,8 @@ class UsageRepository:
     ) -> None:
         """Persist usage increments into the current hourly usage record.
 
-        The method upserts into usage_records by (order_id, current hour, reported=False).
+        Uses atomic INSERT ... ON CONFLICT DO UPDATE (no read-before-write) for
+        concurrent-safe increments. Safe for multiple instances/workers.
         """
         if request_count == 0 and input_tokens == 0 and output_tokens == 0 and tool_calls == 0:
             return
@@ -50,38 +52,104 @@ class UsageRepository:
         period_start, period_end = _current_hour_window()
 
         async with get_session() as session:
-            result = await session.execute(
-                select(UsageRecordModel).where(
-                    UsageRecordModel.order_id == order_id,
-                    UsageRecordModel.period_start == period_start,
-                    UsageRecordModel.period_end == period_end,
-                    UsageRecordModel.reported.is_(False),
+            dialect_name = session.get_bind().dialect.name
+            if dialect_name == "postgresql":
+                await self._increment_usage_atomic(
+                    session, order_id, period_start, period_end,
+                    request_count, input_tokens, output_tokens, tool_calls, client_id,
                 )
-            )
-            existing = result.scalar_one_or_none()
-
-            if existing:
-                existing.request_count += request_count
-                existing.input_tokens += input_tokens
-                existing.output_tokens += output_tokens
-                existing.tool_calls += tool_calls
-                if client_id and not existing.client_id:
-                    existing.client_id = client_id
-                return
-
-            session.add(
-                UsageRecordModel(
-                    order_id=order_id,
-                    client_id=client_id,
-                    request_count=request_count,
-                    input_tokens=input_tokens,
-                    output_tokens=output_tokens,
-                    tool_calls=tool_calls,
-                    period_start=period_start,
-                    period_end=period_end,
-                    reported=False,
+            else:
+                # SQLite (tests): fallback to read-modify-write; not safe under concurrency
+                await self._increment_usage_fallback(
+                    session, order_id, period_start, period_end,
+                    request_count, input_tokens, output_tokens, tool_calls, client_id,
                 )
+
+    async def _increment_usage_atomic(
+        self,
+        session,
+        order_id: str,
+        period_start: datetime,
+        period_end: datetime,
+        request_count: int,
+        input_tokens: int,
+        output_tokens: int,
+        tool_calls: int,
+        client_id: str | None,
+    ) -> None:
+        """Atomic upsert: single SQL statement, no read-before-write."""
+        stmt = pg_insert(UsageRecordModel).values(
+            order_id=order_id,
+            client_id=client_id,
+            request_count=request_count,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            tool_calls=tool_calls,
+            period_start=period_start,
+            period_end=period_end,
+            reported=False,
+        )
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["order_id", "period_start", "period_end"],
+            index_where=UsageRecordModel.reported.is_(False),
+            set_={
+                UsageRecordModel.request_count: UsageRecordModel.request_count + stmt.excluded.request_count,
+                UsageRecordModel.input_tokens: UsageRecordModel.input_tokens + stmt.excluded.input_tokens,
+                UsageRecordModel.output_tokens: UsageRecordModel.output_tokens + stmt.excluded.output_tokens,
+                UsageRecordModel.tool_calls: UsageRecordModel.tool_calls + stmt.excluded.tool_calls,
+                UsageRecordModel.client_id: func.coalesce(
+                    UsageRecordModel.client_id,
+                    stmt.excluded.client_id,
+                ),
+            },
+        )
+        await session.execute(stmt)
+
+    async def _increment_usage_fallback(
+        self,
+        session,
+        order_id: str,
+        period_start: datetime,
+        period_end: datetime,
+        request_count: int,
+        input_tokens: int,
+        output_tokens: int,
+        tool_calls: int,
+        client_id: str | None,
+    ) -> None:
+        """Fallback for SQLite (tests): read-modify-write. Not concurrency-safe."""
+        result = await session.execute(
+            select(UsageRecordModel).where(
+                UsageRecordModel.order_id == order_id,
+                UsageRecordModel.period_start == period_start,
+                UsageRecordModel.period_end == period_end,
+                UsageRecordModel.reported.is_(False),
             )
+        )
+        existing = result.scalar_one_or_none()
+
+        if existing:
+            existing.request_count += request_count
+            existing.input_tokens += input_tokens
+            existing.output_tokens += output_tokens
+            existing.tool_calls += tool_calls
+            if client_id and not existing.client_id:
+                existing.client_id = client_id
+            return
+
+        session.add(
+            UsageRecordModel(
+                order_id=order_id,
+                client_id=client_id,
+                request_count=request_count,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                tool_calls=tool_calls,
+                period_start=period_start,
+                period_end=period_end,
+                reported=False,
+            )
+        )
 
     async def get_unreported_usage(
         self,
