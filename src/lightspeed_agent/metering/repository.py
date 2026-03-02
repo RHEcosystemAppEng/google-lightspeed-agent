@@ -88,10 +88,12 @@ class UsageRepository:
             period_start=period_start,
             period_end=period_end,
             reported=False,
+            reporting_started_at=None,
         )
         stmt = stmt.on_conflict_do_update(
             index_elements=["order_id", "period_start", "period_end"],
-            index_where=UsageRecordModel.reported.is_(False),
+            index_where=UsageRecordModel.reported.is_(False)
+            & UsageRecordModel.reporting_started_at.is_(None),
             set_={
                 UsageRecordModel.request_count: UsageRecordModel.request_count + stmt.excluded.request_count,
                 UsageRecordModel.input_tokens: UsageRecordModel.input_tokens + stmt.excluded.input_tokens,
@@ -124,6 +126,7 @@ class UsageRepository:
                 UsageRecordModel.period_start == period_start,
                 UsageRecordModel.period_end == period_end,
                 UsageRecordModel.reported.is_(False),
+                UsageRecordModel.reporting_started_at.is_(None),
             )
         )
         existing = result.scalar_one_or_none()
@@ -151,70 +154,90 @@ class UsageRepository:
             )
         )
 
-    async def get_unreported_usage(
+    async def claim_unreported_rows_for_reporting(
         self,
         *,
         order_id: str,
         start_time: datetime,
         end_time: datetime,
-    ) -> dict[str, int]:
-        """Aggregate unreported usage for an order within a period."""
+        limit: int = 1000,
+    ) -> list[UsageRecordModel]:
+        """Atomically claim unreported rows for reporting.
+
+        Uses SELECT ... FOR UPDATE SKIP LOCKED so only one worker can claim
+        a given row. Claimed rows are excluded from increment_usage (they
+        leave the partial unique index). Returns claimed rows with metrics.
+
+        Returns:
+            List of claimed UsageRecordModel instances.
+        """
         start = _normalize_utc(start_time)
         end = _normalize_utc(end_time)
+        claimed_at = datetime.now(UTC)
 
         async with get_session() as session:
-            result = await session.execute(
-                select(UsageRecordModel).where(
+            stmt = (
+                select(UsageRecordModel)
+                .where(
                     UsageRecordModel.order_id == order_id,
                     UsageRecordModel.reported.is_(False),
+                    UsageRecordModel.reporting_started_at.is_(None),
                     UsageRecordModel.period_start >= start,
                     UsageRecordModel.period_end <= end,
                 )
+                .limit(limit)
             )
-            rows = result.scalars().all()
+            if session.get_bind().dialect.name == "postgresql":
+                stmt = stmt.with_for_update(skip_locked=True)
 
-        if not rows:
-            return {}
+            result = await session.execute(stmt)
+            rows = list(result.scalars().all())
+            if not rows:
+                return []
 
-        total_requests = sum(r.request_count for r in rows)
-        total_input_tokens = sum(r.input_tokens for r in rows)
-        total_output_tokens = sum(r.output_tokens for r in rows)
-        total_tool_calls = sum(r.tool_calls for r in rows)
+            ids = [r.id for r in rows]
+            await session.execute(
+                update(UsageRecordModel)
+                .where(UsageRecordModel.id.in_(ids))
+                .values(reporting_started_at=claimed_at)
+            )
+            for r in rows:
+                r.reporting_started_at = claimed_at
+            return rows
 
-        metrics: dict[str, int] = {}
-        if total_requests > 0:
-            metrics["send_message_requests"] = total_requests
-        if total_input_tokens > 0:
-            metrics["input_tokens"] = total_input_tokens
-        if total_output_tokens > 0:
-            metrics["output_tokens"] = total_output_tokens
-        if total_tool_calls > 0:
-            metrics["mcp_tool_calls"] = total_tool_calls
-        return metrics
-
-    async def mark_reported_for_period(
+    async def mark_reported_by_ids(
         self,
-        *,
-        order_id: str,
-        start_time: datetime,
-        end_time: datetime,
+        ids: list[int],
         reported_at: datetime | None = None,
     ) -> int:
-        """Mark unreported usage rows as reported for an order/time window."""
-        start = _normalize_utc(start_time)
-        end = _normalize_utc(end_time)
+        """Mark claimed rows as reported. Call only after successful API report."""
+        if not ids:
+            return 0
         marked_at = _normalize_utc(reported_at or datetime.now(UTC))
 
         async with get_session() as session:
             stmt = (
                 update(UsageRecordModel)
-                .where(
-                    UsageRecordModel.order_id == order_id,
-                    UsageRecordModel.reported.is_(False),
-                    UsageRecordModel.period_start >= start,
-                    UsageRecordModel.period_end <= end,
+                .where(UsageRecordModel.id.in_(ids))
+                .values(
+                    reported=True,
+                    reported_at=marked_at,
+                    report_error=None,
                 )
-                .values(reported=True, reported_at=marked_at, report_error=None)
+            )
+            result = await session.execute(stmt)
+            return int(result.rowcount or 0)
+
+    async def release_claimed_rows(self, ids: list[int]) -> int:
+        """Release claimed rows on report failure. Clears reporting_started_at."""
+        if not ids:
+            return 0
+
+        async with get_session() as session:
+            stmt = (
+                update(UsageRecordModel)
+                .where(UsageRecordModel.id.in_(ids))
+                .values(reporting_started_at=None, report_error=None)
             )
             result = await session.execute(stmt)
             return int(result.rowcount or 0)

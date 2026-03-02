@@ -39,46 +39,86 @@ class TestUsageRepository:
         assert usage["order-1"]["total_tool_calls"] == 3
 
     @pytest.mark.asyncio
-    async def test_get_unreported_and_mark_reported_for_period(self, db_session):
-        """Returns unreported metrics and clears them after marking reported."""
+    async def test_claim_then_mark_reported_by_ids(self, db_session):
+        """Claim rows, report, then mark by IDs."""
         repo = UsageRepository()
 
         await repo.increment_usage(
-            order_id="order-2",
-            request_count=2,
-            input_tokens=20,
-            output_tokens=9,
-            tool_calls=4,
+            order_id="order-3",
+            request_count=5,
+            input_tokens=100,
+            output_tokens=50,
+            tool_calls=2,
         )
 
         now = datetime.now(UTC)
-        # Use a broad window around "now" to ensure the current-hour bucket
-        # [period_start, period_end) is always included.
         start = now - timedelta(hours=1)
         end = now + timedelta(hours=2)
 
-        metrics = await repo.get_unreported_usage(
-            order_id="order-2",
+        claimed = await repo.claim_unreported_rows_for_reporting(
+            order_id="order-3",
             start_time=start,
             end_time=end,
         )
-        assert metrics["send_message_requests"] == 2
-        assert metrics["input_tokens"] == 20
-        assert metrics["output_tokens"] == 9
-        assert metrics["mcp_tool_calls"] == 4
+        assert len(claimed) == 1
+        assert claimed[0].request_count == 5
+        claimed_ids = [r.id for r in claimed]
 
-        marked = await repo.mark_reported_for_period(
-            order_id="order-2",
+        # After claim, re-claim returns empty (rows are claimed by us)
+        re_claimed = await repo.claim_unreported_rows_for_reporting(
+            order_id="order-3",
             start_time=start,
             end_time=end,
+        )
+        assert re_claimed == []
+
+        marked = await repo.mark_reported_by_ids(
+            ids=claimed_ids,
             reported_at=now,
         )
         assert marked == 1
 
-        metrics_after = await repo.get_unreported_usage(
-            order_id="order-2",
+        # Rows are now reported; claim returns empty
+        after_mark = await repo.claim_unreported_rows_for_reporting(
+            order_id="order-3",
             start_time=start,
             end_time=end,
         )
-        assert metrics_after == {}
+        assert after_mark == []
+
+    @pytest.mark.asyncio
+    async def test_claim_then_release(self, db_session):
+        """Claim rows, report fails, release - rows become available again."""
+        repo = UsageRepository()
+
+        await repo.increment_usage(
+            order_id="order-4",
+            request_count=3,
+            input_tokens=50,
+        )
+
+        now = datetime.now(UTC)
+        start = now - timedelta(hours=1)
+        end = now + timedelta(hours=2)
+
+        claimed = await repo.claim_unreported_rows_for_reporting(
+            order_id="order-4",
+            start_time=start,
+            end_time=end,
+        )
+        assert len(claimed) == 1
+        claimed_ids = [r.id for r in claimed]
+
+        released = await repo.release_claimed_rows(ids=claimed_ids)
+        assert released == 1
+
+        # After release, rows can be claimed again
+        re_claimed = await repo.claim_unreported_rows_for_reporting(
+            order_id="order-4",
+            start_time=start,
+            end_time=end,
+        )
+        assert len(re_claimed) == 1
+        assert re_claimed[0].request_count == 3
+        assert re_claimed[0].input_tokens == 50
 

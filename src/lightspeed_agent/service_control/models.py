@@ -95,13 +95,12 @@ class ReportResponse(BaseModel):
 
 
 class UsageReport(BaseModel):
-    """A usage report to be sent to Service Control."""
+    """A usage report to be sent to Service Control (or queued for retry)."""
 
     order_id: str = Field(..., description="Order ID (entitlement ID)")
     consumer_id: str = Field(..., description="Consumer ID (usageReportingId)")
     start_time: datetime = Field(..., description="Start of reporting period")
     end_time: datetime = Field(..., description="End of reporting period")
-    metrics: dict[str, int] = Field(default_factory=dict, description="Metric name -> value")
     reported: bool = Field(default=False, description="Whether successfully reported")
     reported_at: datetime | None = Field(None, description="When reported")
     error_message: str | None = Field(None, description="Error if report failed")
