@@ -40,7 +40,7 @@ All usage tracking is handled by the `UsageTrackingPlugin` in `src/lightspeed_ag
 │  └─────────────────────────────────────────────────────────────────┘    │
 │                                    │                                    │
 │                                    ▼                                    │
-│                          AggregateUsage (in-memory)                     │
+│                    UsageRepository (DB-backed, per-order)                │
 └─────────────────────────────────────────────────────────────────────────┘
                                     │
                                     ▼
@@ -101,12 +101,13 @@ The `UsageTrackingPlugin` (`src/lightspeed_agent/api/a2a/usage_plugin.py`) imple
 ```python
 async def before_run_callback(self, *, invocation_context) -> None:
     """Track request count at start of each run."""
-    _aggregate_usage.total_requests += 1
-    logger.debug(f"Request #{_aggregate_usage.total_requests} started")
+    order_id = _resolve_order_id()
+    if order_id:
+        await self._persist_increment(order_id=order_id, request_count=1)
     return None
 ```
 
-This callback fires at the start of every A2A request, incrementing the global request counter.
+This callback fires at the start of every A2A request, persisting a request increment for the current order.
 
 ### Token Tracking
 
@@ -118,14 +119,15 @@ async def after_model_callback(
     llm_response: LlmResponse,
 ) -> Optional[LlmResponse]:
     """Track token usage from LLM responses."""
-    if llm_response.usage_metadata:
+    if llm_response.usage_metadata and (order_id := _resolve_order_id()):
         usage = llm_response.usage_metadata
         input_tokens = getattr(usage, "prompt_token_count", 0) or 0
         output_tokens = getattr(usage, "candidates_token_count", 0) or 0
-
-        _aggregate_usage.total_input_tokens += input_tokens
-        _aggregate_usage.total_output_tokens += output_tokens
-
+        await self._persist_increment(
+            order_id=order_id,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+        )
     return None  # Don't modify the response
 ```
 
@@ -147,39 +149,26 @@ async def after_tool_callback(
     result: dict,
 ) -> Optional[dict]:
     """Track tool/MCP calls."""
-    _aggregate_usage.total_tool_calls += 1
-    tool_name = getattr(tool, "name", type(tool).__name__)
-    logger.debug(f"Tool call: {tool_name}")
+    if order_id := _resolve_order_id():
+        await self._persist_increment(order_id=order_id, tool_calls=1)
     return None  # Don't modify the result
 ```
 
-This callback fires after every MCP tool invocation, tracking tool usage.
+This callback fires after every MCP tool invocation, persisting a tool-call increment for the current order.
 
-## Storage: AggregateUsage
+## Storage: UsageRepository
 
-Usage data is stored in a global dataclass:
+Usage data is persisted in the database via `UsageRepository` (`src/lightspeed_agent/metering/repository.py`):
 
-```python
-@dataclass
-class AggregateUsage:
-    total_input_tokens: int = 0
-    total_output_tokens: int = 0
-    total_requests: int = 0
-    total_tool_calls: int = 0
+- **Per-order, per-period**: Usage is stored per `order_id` and hourly time window
+- **Atomic increments**: PostgreSQL uses `INSERT ... ON CONFLICT DO UPDATE` for concurrent-safe writes
+- **Claim-then-report**: Rows are claimed for reporting, then marked reported or released on failure
 
-    def to_dict(self) -> dict:
-        return {
-            "total_input_tokens": self.total_input_tokens,
-            "total_output_tokens": self.total_output_tokens,
-            "total_tokens": self.total_input_tokens + self.total_output_tokens,
-            "total_requests": self.total_requests,
-            "total_tool_calls": self.total_tool_calls,
-        }
-```
-
-Access functions:
-- `get_aggregate_usage()`: Get current usage statistics
-- `reset_aggregate_usage()`: Reset counters (useful for testing)
+Key methods:
+- `increment_usage()`: Persist usage increments (called by `UsageTrackingPlugin`)
+- `claim_unreported_rows_for_reporting()`: Atomically claim rows for Service Control reporting
+- `mark_reported_by_ids()` / `release_claimed_rows()`: Mark reported or release on failure
+- `get_usage_by_order()`: Aggregate totals by order (for GET /usage endpoint)
 
 ## API Endpoint
 
@@ -198,36 +187,45 @@ curl http://localhost:8000/usage
 ```json
 {
   "status": "ok",
-  "usage": {
-    "total_input_tokens": 12345,
-    "total_output_tokens": 45678,
-    "total_tokens": 58023,
-    "total_requests": 150,
-    "total_tool_calls": 75
+  "usage_by_order": {
+    "order-123": {
+      "total_input_tokens": 12345,
+      "total_output_tokens": 45678,
+      "total_tokens": 58023,
+      "total_requests": 150,
+      "total_tool_calls": 75
+    }
   }
 }
 ```
 
 ## Rate Limiting
 
-The agent includes a separate in-memory rate limiter that works independently from usage tracking.
+The agent includes a separate Redis-backed rate limiter that works independently from usage tracking.
 
 ### Configuration
 
 ```bash
 # Environment variables
+RATE_LIMIT_REDIS_URL=redis://localhost:6379/0
+RATE_LIMIT_REDIS_TIMEOUT_MS=200
+RATE_LIMIT_KEY_PREFIX=lightspeed:ratelimit
 RATE_LIMIT_REQUESTS_PER_MINUTE=60    # Max requests per minute
 RATE_LIMIT_REQUESTS_PER_HOUR=1000    # Max requests per hour
 ```
 
 ### How It Works
 
-The `RateLimitMiddleware` uses a sliding window algorithm:
+The `RateLimitMiddleware` uses an atomic Redis + Lua sliding window algorithm:
 
-1. Each request timestamp is recorded
-2. Old timestamps (> window size) are pruned
-3. Count is compared against configured limits
-4. If exceeded, returns HTTP 429 with `Retry-After` header
+1. Resolve principal dimensions for the request:
+   - `order_id` (if available)
+   - `user_id` (or `client_id` if `user_id` is missing) for authenticated requests
+   - client IP only when no authenticated principal is available
+2. For each principal dimension, remove expired timestamps from minute/hour Redis windows.
+3. Atomically evaluate limits across all dimensions in a single Redis Lua execution.
+4. If any dimension exceeds its limit, return HTTP `429` with `Retry-After`.
+5. If all dimensions pass, record the request in all relevant Redis windows.
 
 ### Rate Limited Paths
 
@@ -259,45 +257,11 @@ See [Rate Limiting](rate-limiting.md) for more details.
 
 ### Per-Tool Metrics
 
-To track usage per tool, extend the `after_tool_callback`:
-
-```python
-from collections import defaultdict
-
-_tool_usage = defaultdict(int)
-
-async def after_tool_callback(self, *, tool, tool_args, tool_context, result):
-    tool_name = getattr(tool, "name", type(tool).__name__)
-    _tool_usage[tool_name] += 1
-
-    # Categorize by service
-    if "advisor" in tool_name:
-        _aggregate_usage.advisor_calls += 1
-    elif "vulnerability" in tool_name:
-        _aggregate_usage.vulnerability_calls += 1
-    # etc.
-
-    return None
-```
+To track usage per tool, extend the `after_tool_callback` and call `_persist_increment` (which records `tool_calls=1` per order). For per-tool breakdown, you would need to extend the `usage_records` schema or add a separate tracking table.
 
 ### Database Persistence
 
-Replace the in-memory `AggregateUsage` with a database-backed implementation:
-
-```python
-from sqlalchemy.ext.asyncio import AsyncSession
-
-class DatabaseUsageTracker:
-    async def increment_tokens(self, session: AsyncSession, input: int, output: int):
-        await session.execute(
-            update(UsageRecord)
-            .values(
-                input_tokens=UsageRecord.input_tokens + input,
-                output_tokens=UsageRecord.output_tokens + output,
-            )
-        )
-        await session.commit()
-```
+Usage is persisted via `UsageRepository` and the `usage_records` table. See `src/lightspeed_agent/metering/repository.py` and `docs/troubleshooting.md` for migration and index setup.
 
 ### OpenTelemetry Integration
 
@@ -326,7 +290,7 @@ The agent includes a Service Control integration for Google Cloud Marketplace bi
 - Runs on a scheduled hourly basis (Google's minimum requirement)
 - Handles retry logic for failed reports
 
-**Current Limitation**: The reporter uses aggregate usage data from `UsageTrackingPlugin` rather than per-order tracking. This means all active marketplace orders receive the same usage delta. For production multi-tenant deployments, implement per-order tracking.
+The reporter uses per-order usage from `UsageRepository` (DB-backed). Each active marketplace order receives its own usage delta.
 
 ```python
 # Enable Service Control reporting via environment variables
@@ -363,15 +327,25 @@ app = App(
 )
 ```
 
-## Limitations
+## Capabilities
 
-The current in-memory implementation:
-- Resets when the application restarts
-- Is per-instance (not shared across replicas)
-- Does not persist historical data
-- Does not track per-user or per-order usage
+- **Per-order, DB persistence**: Usage is stored per order and hourly period in the database; multiple replicas share the same data
+- **Atomic increments**: PostgreSQL uses `INSERT ... ON CONFLICT DO UPDATE` for concurrent-safe writes; safe for multi-worker deployments
+- **Claim-then-report**: Rows are atomically claimed for reporting, then marked reported or released on failure; prevents double reporting
+- **Historical data retained**: Reported rows remain in the database for audit
+- **Service Control integration**: Hourly reporting to Google Cloud Service Control for marketplace billing (requests, tokens, tool calls)
+- **Retry on failure**: Failed reports are queued and retried with configurable max attempts; rows are released on failure for re-claim on retry
+- **Stale claim recovery**: Rows claimed by a crashed worker (never marked or released) are released at the start of each hourly run; threshold configurable via `METERING_STALE_CLAIM_MINUTES`
+- **Automatic backfill**: Unreported periods (from scheduler downtime or stale releases) are reported on each hourly run; configurable via `METERING_BACKFILL_MAX_AGE_HOURS` (default 7 days) and `METERING_BACKFILL_LIMIT_PER_RUN` (default 20)
+- **GET /usage endpoint**: Returns per-order aggregate totals (requests, tokens, tool calls)
 
-For production deployments with multiple replicas or billing requirements, implement database persistence or use external metrics systems.
+## Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `METERING_STALE_CLAIM_MINUTES` | 15 | Release rows claimed longer than this (worker crash recovery) |
+| `METERING_BACKFILL_MAX_AGE_HOURS` | 168 | Backfill only periods within this many hours (7 days) |
+| `METERING_BACKFILL_LIMIT_PER_RUN` | 20 | Max unreported periods to process per backfill run |
 
 ## Testing
 

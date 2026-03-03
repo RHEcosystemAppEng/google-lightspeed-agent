@@ -16,10 +16,10 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from lightspeed_agent.api.a2a.a2a_setup import setup_a2a_routes
 from lightspeed_agent.api.a2a.agent_card import get_agent_card_dict
-from lightspeed_agent.api.a2a.usage_plugin import get_aggregate_usage
 from lightspeed_agent.auth import AuthenticationMiddleware
 from lightspeed_agent.config import get_settings
-from lightspeed_agent.ratelimit import RateLimitMiddleware
+from lightspeed_agent.metering import get_usage_repository
+from lightspeed_agent.ratelimit import RateLimitMiddleware, get_redis_rate_limiter
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +28,14 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     """Application lifespan manager for startup/shutdown events."""
     settings = get_settings()
+
+    # Startup: Verify Redis connectivity for rate limiting
+    try:
+        await get_redis_rate_limiter().verify_connection()
+        logger.info("Rate limiter Redis backend is reachable")
+    except Exception as e:
+        logger.error("Rate limiter Redis backend is unavailable: %s", e)
+        raise
 
     # Startup: Initialize database
     try:
@@ -76,6 +84,12 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error("Failed to close database: %s", e)
 
+    # Shutdown: Close Redis connection used by rate limiter
+    try:
+        await get_redis_rate_limiter().close()
+    except Exception as e:
+        logger.error("Failed to close rate limiter Redis connection: %s", e)
+
 
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application.
@@ -121,14 +135,14 @@ def create_app() -> FastAPI:
         return get_agent_card_dict()
 
     # Usage statistics endpoint
-    # Returns aggregate token and request counts tracked by UsageTrackingPlugin
+    # Returns per-order usage metrics from the persistence layer.
     @app.get("/usage")
     async def get_usage_stats() -> dict:
-        """Get aggregate usage statistics."""
-        usage = get_aggregate_usage()
+        """Get per-order usage statistics."""
+        usage_repo = get_usage_repository()
         return {
             "status": "ok",
-            "usage": usage.to_dict(),
+            "usage_by_order": await usage_repo.get_usage_by_order(),
         }
 
     # Add rate limiting middleware

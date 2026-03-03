@@ -2,7 +2,7 @@
 
 import asyncio
 from datetime import datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -95,21 +95,16 @@ class TestModels:
             consumer_id="project:test-project",
             start_time=now - timedelta(hours=1),
             end_time=now,
-            metrics={"api_calls": 100, "input_tokens": 5000},
         )
 
         assert report.order_id == "order-123"
-        assert report.metrics["api_calls"] == 100
+        assert report.consumer_id == "project:test-project"
         assert report.reported is False
         assert report.retry_count == 0
 
 
 class TestUsageReporter:
-    """Tests for UsageReporter.
-
-    Note: UsageReporter now uses aggregate usage from UsageTrackingPlugin
-    instead of per-order metering. Tests are updated accordingly.
-    """
+    """Tests for UsageReporter with DB-backed metering repository."""
 
     @pytest.fixture
     def mock_client(self):
@@ -119,11 +114,39 @@ class TestUsageReporter:
         return client
 
     @pytest.fixture
-    def reporter(self, mock_client):
+    def mock_usage_repo(self):
+        """Create mock usage repository."""
+        repo = MagicMock()
+        repo.claim_unreported_rows_for_reporting = AsyncMock(return_value=[])
+        repo.mark_reported_by_ids = AsyncMock(return_value=1)
+        repo.release_claimed_rows = AsyncMock(return_value=1)
+        return repo
+
+    def _make_mock_row(
+        self,
+        row_id=1,
+        request_count=10,
+        input_tokens=0,
+        output_tokens=0,
+        tool_calls=0,
+    ):
+        """Create a mock UsageRecordModel row."""
+        row = MagicMock()
+        row.id = row_id
+        row.request_count = request_count
+        row.input_tokens = input_tokens
+        row.output_tokens = output_tokens
+        row.tool_calls = tool_calls
+        return row
+
+    @pytest.fixture
+    def reporter(self, mock_client, mock_usage_repo):
         """Create reporter with mocked dependencies."""
-        return UsageReporter(
+        reporter = UsageReporter(
             service_control_client=mock_client,
         )
+        reporter._usage_repo = mock_usage_repo
+        return reporter
 
     def test_map_metrics(self, reporter):
         """Test metric mapping."""
@@ -152,13 +175,15 @@ class TestUsageReporter:
         assert "input_tokens" not in mapped
 
     @pytest.mark.asyncio
-    async def test_report_usage_success(self, reporter, mock_client):
-        """Test successful usage report."""
-        # Mock get_consumer_id and _get_usage_delta
+    async def test_report_usage_success(self, reporter, mock_client, mock_usage_repo):
+        """Test successful usage report with claim-then-report."""
+        mock_row = self._make_mock_row(row_id=101, request_count=10)
+        mock_usage_repo.claim_unreported_rows_for_reporting = AsyncMock(
+            return_value=[mock_row]
+        )
+
         with patch.object(
             reporter, "get_consumer_id", return_value="project:test-project"
-        ), patch.object(
-            reporter, "_get_usage_delta", return_value={"send_message_requests": 10}
         ):
             now = datetime.utcnow()
             result = await reporter.report_usage(
@@ -170,9 +195,14 @@ class TestUsageReporter:
             assert result.success is True
             assert result.order_id == "order-123"
             assert result.consumer_id == "project:test-project"
+            mock_usage_repo.mark_reported_by_ids.assert_awaited_once_with(
+                ids=[101],
+                reported_at=now,
+            )
+            mock_usage_repo.release_claimed_rows.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_report_usage_no_consumer_id(self, reporter):
+    async def test_report_usage_no_consumer_id(self, reporter, mock_usage_repo):
         """Test report fails when consumer ID not found."""
         with patch.object(reporter, "get_consumer_id", return_value=None):
             now = datetime.utcnow()
@@ -184,18 +214,21 @@ class TestUsageReporter:
 
             assert result.success is False
             assert "consumer ID" in result.error_message
+            mock_usage_repo.claim_unreported_rows_for_reporting.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_report_usage_queues_failed(self, reporter, mock_client):
-        """Test that failed reports are queued for retry."""
+    async def test_report_usage_queues_failed(self, reporter, mock_client, mock_usage_repo):
+        """Test that failed reports release claim and queue for retry."""
         mock_client.check_and_report = AsyncMock(
             return_value=(False, "Service unavailable")
+        )
+        mock_row = self._make_mock_row(row_id=102, request_count=10)
+        mock_usage_repo.claim_unreported_rows_for_reporting = AsyncMock(
+            return_value=[mock_row]
         )
 
         with patch.object(
             reporter, "get_consumer_id", return_value="project:test-project"
-        ), patch.object(
-            reporter, "_get_usage_delta", return_value={"send_message_requests": 10}
         ):
             now = datetime.utcnow()
             result = await reporter.report_usage(
@@ -206,16 +239,45 @@ class TestUsageReporter:
 
             assert result.success is False
             assert reporter.get_failed_reports_count() == 1
+            mock_usage_repo.release_claimed_rows.assert_awaited_once_with(ids=[102])
+            mock_usage_repo.mark_reported_by_ids.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_report_all_usage(self, reporter):
+    async def test_report_usage_skips_api_when_no_billable_metrics(
+        self, reporter, mock_client, mock_usage_repo
+    ):
+        """Test that no-op (no claimed rows) does not call Service Control."""
+        mock_usage_repo.claim_unreported_rows_for_reporting = AsyncMock(
+            return_value=[]
+        )
+
+        with patch.object(
+            reporter, "get_consumer_id", return_value="project:test-project"
+        ):
+            now = datetime.utcnow()
+            result = await reporter.report_usage(
+                order_id="order-123",
+                start_time=now - timedelta(hours=1),
+                end_time=now,
+            )
+
+            assert result.success is True
+            assert result.metrics_reported == {}
+            mock_client.check_and_report.assert_not_called()
+            mock_usage_repo.mark_reported_by_ids.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_report_all_usage(self, reporter, mock_usage_repo):
         """Test reporting for all orders."""
+        mock_row = self._make_mock_row(row_id=201, request_count=10)
+        mock_usage_repo.claim_unreported_rows_for_reporting = AsyncMock(
+            return_value=[mock_row]
+        )
+
         with patch.object(
             reporter, "get_consumer_id", return_value="project:test-project"
         ), patch.object(
             reporter, "_get_active_order_ids", return_value=["order-123", "order-456"]
-        ), patch.object(
-            reporter, "_get_usage_delta", return_value={"send_message_requests": 10}
         ):
             now = datetime.utcnow()
             results = await reporter.report_all_usage(
@@ -224,20 +286,26 @@ class TestUsageReporter:
             )
 
             assert len(results) == 2
+            assert mock_usage_repo.mark_reported_by_ids.await_count == 2
 
     @pytest.mark.asyncio
-    async def test_retry_failed_reports(self, reporter, mock_client):
-        """Test retrying failed reports."""
-        # Queue a failed report
+    async def test_retry_failed_reports(self, reporter, mock_client, mock_usage_repo):
+        """Test retrying failed reports re-claims and uses mark_reported_by_ids."""
+        start_time = datetime.utcnow() - timedelta(hours=1)
+        end_time = datetime.utcnow()
         reporter._failed_reports.append(
             UsageReport(
                 order_id="order-123",
                 consumer_id="project:test-project",
-                start_time=datetime.utcnow() - timedelta(hours=1),
-                end_time=datetime.utcnow(),
-                metrics={"api_calls": 100},
+                start_time=start_time,
+                end_time=end_time,
                 retry_count=0,
             )
+        )
+
+        mock_row = self._make_mock_row(row_id=301, request_count=10)
+        mock_usage_repo.claim_unreported_rows_for_reporting = AsyncMock(
+            return_value=[mock_row]
         )
 
         with patch.object(
@@ -248,9 +316,48 @@ class TestUsageReporter:
             assert len(results) == 1
             assert results[0].success is True
             assert reporter.get_failed_reports_count() == 0
+            mock_usage_repo.claim_unreported_rows_for_reporting.assert_awaited_once()
+            mock_usage_repo.mark_reported_by_ids.assert_awaited_once_with(
+                ids=[301],
+                reported_at=ANY,
+            )
 
     @pytest.mark.asyncio
-    async def test_retry_gives_up_after_max_retries(self, reporter, mock_client):
+    async def test_retry_removes_from_queue_when_no_rows_to_claim(
+        self, reporter, mock_client, mock_usage_repo
+    ):
+        """Test retry removes report from queue when rows already claimed by another worker."""
+        start_time = datetime.utcnow() - timedelta(hours=1)
+        end_time = datetime.utcnow()
+        reporter._failed_reports.append(
+            UsageReport(
+                order_id="order-123",
+                consumer_id="project:test-project",
+                start_time=start_time,
+                end_time=end_time,
+                retry_count=0,
+            )
+        )
+
+        mock_usage_repo.claim_unreported_rows_for_reporting = AsyncMock(
+            return_value=[]
+        )
+
+        with patch.object(
+            reporter, "get_consumer_id", return_value="project:test-project"
+        ):
+            results = await reporter.retry_failed_reports()
+
+            assert len(results) == 1
+            assert results[0].success is True
+            assert reporter.get_failed_reports_count() == 0
+            mock_client.check_and_report.assert_not_called()
+            mock_usage_repo.mark_reported_by_ids.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_retry_gives_up_after_max_retries(
+        self, reporter, mock_client, mock_usage_repo
+    ):
         """Test that retry gives up after max attempts."""
         mock_client.check_and_report = AsyncMock(
             return_value=(False, "Still failing")
@@ -263,7 +370,6 @@ class TestUsageReporter:
                 consumer_id="project:test-project",
                 start_time=datetime.utcnow() - timedelta(hours=1),
                 end_time=datetime.utcnow(),
-                metrics={"api_calls": 100},
                 retry_count=3,  # Already at max
             )
         )
@@ -276,6 +382,85 @@ class TestUsageReporter:
             # Should not retry, report should be dropped
             assert len(results) == 0
             assert reporter.get_failed_reports_count() == 0
+            mock_usage_repo.claim_unreported_rows_for_reporting.assert_not_called()
+            mock_usage_repo.mark_reported_by_ids.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_report_backfill(self, reporter, mock_client, mock_usage_repo):
+        """Test backfill reports unreported periods."""
+        start = datetime.utcnow() - timedelta(hours=3)
+        end = start + timedelta(hours=1)
+        mock_usage_repo.get_unreported_periods = AsyncMock(
+            return_value=[("order-backfill", start, end)]
+        )
+        mock_row = self._make_mock_row(row_id=501, request_count=5)
+        mock_usage_repo.claim_unreported_rows_for_reporting = AsyncMock(
+            return_value=[mock_row]
+        )
+
+        with patch.object(
+            reporter, "get_consumer_id", new_callable=AsyncMock, return_value="project:test-project"
+        ):
+            results = await reporter.report_backfill()
+
+            assert len(results) == 1
+            assert results[0].success is True
+            assert results[0].order_id == "order-backfill"
+            mock_usage_repo.get_unreported_periods.assert_awaited_once()
+            mock_usage_repo.claim_unreported_rows_for_reporting.assert_awaited_once()
+            mock_usage_repo.mark_reported_by_ids.assert_awaited_once_with(
+                ids=[501],
+                reported_at=ANY,
+            )
+
+    @pytest.mark.asyncio
+    async def test_report_backfill_empty_when_no_periods(
+        self, reporter, mock_client, mock_usage_repo
+    ):
+        """Test backfill returns empty when no unreported periods."""
+        mock_usage_repo.get_unreported_periods = AsyncMock(return_value=[])
+
+        results = await reporter.report_backfill()
+
+        assert results == []
+        mock_usage_repo.get_unreported_periods.assert_awaited_once()
+        mock_usage_repo.claim_unreported_rows_for_reporting.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_retry_releases_on_failure(
+        self, reporter, mock_client, mock_usage_repo
+    ):
+        """Test retry releases claimed rows when API call fails."""
+        mock_client.check_and_report = AsyncMock(
+            return_value=(False, "Still failing")
+        )
+        mock_row = self._make_mock_row(row_id=401, request_count=10)
+        mock_usage_repo.claim_unreported_rows_for_reporting = AsyncMock(
+            return_value=[mock_row]
+        )
+
+        reporter._failed_reports.append(
+            UsageReport(
+                order_id="order-123",
+                consumer_id="project:test-project",
+                start_time=datetime.utcnow() - timedelta(hours=1),
+                end_time=datetime.utcnow(),
+                retry_count=0,
+            )
+        )
+
+        with patch.object(
+            reporter, "get_consumer_id", return_value="project:test-project"
+        ):
+            results = await reporter.retry_failed_reports()
+
+            assert len(results) == 1
+            assert results[0].success is False
+            assert reporter.get_failed_reports_count() == 1
+            mock_usage_repo.release_claimed_rows.assert_awaited_once_with(
+                ids=[401]
+            )
+            mock_usage_repo.mark_reported_by_ids.assert_not_called()
 
 
 class TestReportingScheduler:
@@ -285,7 +470,7 @@ class TestReportingScheduler:
     def mock_reporter(self):
         """Create mock reporter."""
         reporter = MagicMock()
-        reporter.report_hourly = AsyncMock(return_value=[])
+        reporter.run_hourly_cycle = AsyncMock(return_value=[])
         reporter.retry_failed_reports = AsyncMock(return_value=[])
         reporter.get_failed_reports_count = MagicMock(return_value=0)
         reporter.get_reporting_stats = MagicMock(
@@ -333,7 +518,7 @@ class TestReportingScheduler:
         """Test running immediate report."""
         await scheduler.run_immediate_report()
 
-        mock_reporter.report_hourly.assert_called_once()
+        mock_reporter.run_hourly_cycle.assert_called_once()
 
     def test_set_failure_callback(self, scheduler):
         """Test setting failure callback."""

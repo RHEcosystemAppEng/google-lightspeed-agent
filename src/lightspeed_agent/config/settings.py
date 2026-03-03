@@ -112,8 +112,21 @@ class Settings(BaseSettings):
         default=True,
         description="Enable usage reporting to Google Cloud Service Control",
     )
+    # Metering recovery: stale claim release and backfill
+    metering_stale_claim_minutes: int = Field(
+        default=15,
+        description="Release rows claimed longer than this (worker crash recovery)",
+    )
+    metering_backfill_max_age_hours: int = Field(
+        default=168,
+        description="Backfill only periods within this many hours (default 7 days)",
+    )
+    metering_backfill_limit_per_run: int = Field(
+        default=20,
+        description="Max unreported periods to process per backfill run",
+    )
 
-    # Rate Limiting (in-memory, no Redis required)
+    # Rate Limiting (Redis-backed)
     rate_limit_requests_per_minute: int = Field(
         default=60,
         description="Global requests per minute limit",
@@ -121,6 +134,18 @@ class Settings(BaseSettings):
     rate_limit_requests_per_hour: int = Field(
         default=1000,
         description="Global requests per hour limit",
+    )
+    rate_limit_redis_url: str = Field(
+        default="redis://localhost:6379/0",
+        description="Redis URL for distributed rate limiting",
+    )
+    rate_limit_redis_timeout_ms: int = Field(
+        default=200,
+        description="Redis operation timeout in milliseconds",
+    )
+    rate_limit_key_prefix: str = Field(
+        default="lightspeed:ratelimit",
+        description="Redis key prefix for rate limiting data",
     )
 
     # Logging

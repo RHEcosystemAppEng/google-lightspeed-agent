@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Any
 
 from sqlalchemy import (
+    Index,
     JSON,
     TIMESTAMP,
     Boolean,
@@ -11,6 +12,7 @@ from sqlalchemy import (
     String,
     Text,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column
@@ -119,6 +121,20 @@ class UsageRecordModel(Base):
     """ORM model for usage tracking records."""
 
     __tablename__ = "usage_records"
+    __table_args__ = (
+        # Partial unique index: at most one "available" row per (order_id, period).
+        # Available = unreported AND not claimed (reporting_started_at IS NULL).
+        # Enables atomic INSERT ... ON CONFLICT for increments and claim-then-report.
+        Index(
+            "uq_usage_records_order_period_unreported",
+            "order_id",
+            "period_start",
+            "period_end",
+            unique=True,
+            postgresql_where=text("reported = false AND reporting_started_at IS NULL"),
+            sqlite_where=text("reported = 0 AND reporting_started_at IS NULL"),
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     order_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
@@ -126,6 +142,7 @@ class UsageRecordModel(Base):
     input_tokens: Mapped[int] = mapped_column(Integer, default=0)
     output_tokens: Mapped[int] = mapped_column(Integer, default=0)
     request_count: Mapped[int] = mapped_column(Integer, default=0)
+    tool_calls: Mapped[int] = mapped_column(Integer, default=0)
     period_start: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
         nullable=False,
@@ -135,6 +152,10 @@ class UsageRecordModel(Base):
         nullable=False,
     )
     reported: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    reporting_started_at: Mapped[datetime | None] = mapped_column(
+        TIMESTAMP(timezone=True),
+        nullable=True,
+    )
     reported_at: Mapped[datetime | None] = mapped_column(
         TIMESTAMP(timezone=True),
         nullable=True,
