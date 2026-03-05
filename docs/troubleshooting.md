@@ -257,6 +257,23 @@ alembic upgrade head
 alembic current
 ```
 
+**Symptom**: `usage_records` table exists but atomic upsert fails (e.g. `ON CONFLICT` error)
+
+If you upgraded from an older version that created `usage_records` without the partial unique index, add it manually (PostgreSQL):
+
+```sql
+-- Add tool_calls counter (for metering)
+ALTER TABLE usage_records ADD COLUMN IF NOT EXISTS tool_calls INTEGER NOT NULL DEFAULT 0;
+
+-- Add reporting_started_at column (for reporting)
+ALTER TABLE usage_records ADD COLUMN IF NOT EXISTS reporting_started_at TIMESTAMP WITH TIME ZONE;
+
+-- Create partial unique index (available = unreported AND not claimed)
+CREATE UNIQUE INDEX uq_usage_records_order_period_unreported 
+   ON usage_records (order_id, period_start, period_end) 
+   WHERE reported IS FALSE AND reporting_started_at IS NULL;
+```
+
 ## Container/Pod Issues
 
 ### Pod Won't Start

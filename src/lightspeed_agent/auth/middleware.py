@@ -24,11 +24,19 @@ logger = logging.getLogger(__name__)
 _request_access_token: contextvars.ContextVar[tuple[str, datetime] | None] = (
     contextvars.ContextVar("_request_access_token", default=None)
 )
+_request_order_id: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+    "_request_order_id", default=None
+)
 
 
 def get_request_access_token() -> tuple[str, datetime] | None:
     """Return the current request's access token and its expiry, or None."""
     return _request_access_token.get()
+
+
+def get_request_order_id() -> str | None:
+    """Return the current request's order_id, or None."""
+    return _request_order_id.get()
 
 
 class AuthenticationMiddleware(BaseHTTPMiddleware):
@@ -71,6 +79,8 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
         call_next,
     ) -> Response:
         """Process request with authentication check."""
+        _request_access_token.set(None)
+        _request_order_id.set(None)
         path = request.url.path
         method = request.method
 
@@ -99,11 +109,20 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
         try:
             introspector = get_token_introspector()
             user = await introspector.validate_token(token)
+
+            order_id = await self._resolve_and_validate_order(client_id=user.client_id)
+            if not order_id:
+                return self._forbidden_response(
+                    "No active order found for this client"
+                )
+
             # Store user in request state for access in handlers
             request.state.user = user
             request.state.access_token = token
+            request.state.order_id = order_id
             # Make token available to downstream services (MCP header provider)
             _request_access_token.set((token, user.token_exp))
+            _request_order_id.set(order_id)
             logger.debug("Authenticated user: %s", user.user_id)
         except InsufficientScopeError as e:
             logger.warning("Insufficient scope: %s", e)
@@ -150,7 +169,64 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
             # Use a generous expiry — the MCP server will validate the token.
             far_future = datetime.now(UTC) + timedelta(hours=1)
             _request_access_token.set((token, far_future))
+            order_id = request.headers.get("X-Order-Id")
+            if order_id:
+                _request_order_id.set(order_id)
             logger.debug("Extracted Bearer token for pass-through (validation skipped)")
+
+    async def _resolve_and_validate_order(self, *, client_id: str) -> str | None:
+        """Resolve and validate the active order for a given client_id.
+
+        Looks up the DCR client by client_id to obtain the order_id, then
+        verifies the corresponding entitlement exists and is active.
+
+        Returns the resolved order_id on success, or None on any failure.
+        """
+        if not client_id:
+            logger.warning("Token missing client_id during order resolution")
+            return None
+
+        try:
+            # Deferred imports to avoid circular dependencies at module load time.
+            from lightspeed_agent.dcr.repository import get_dcr_client_repository
+            from lightspeed_agent.marketplace.models import EntitlementState
+            from lightspeed_agent.marketplace.repository import get_entitlement_repository
+
+            dcr_repo = get_dcr_client_repository()
+            entitlement_repo = get_entitlement_repository()
+
+            registered_client = await dcr_repo.get_by_client_id(client_id)
+            if not registered_client:
+                logger.warning("No DCR client found for client_id: %s", client_id)
+                return None
+
+            order_id = registered_client.order_id
+
+            entitlement = await entitlement_repo.get(order_id)
+            if not entitlement:
+                logger.warning(
+                    "Order not found during auth validation: %s (client_id=%s)",
+                    order_id,
+                    client_id,
+                )
+                return None
+            if entitlement.state != EntitlementState.ACTIVE:
+                logger.warning(
+                    "Order is not active during auth validation: %s (state=%s, client_id=%s)",
+                    order_id,
+                    entitlement.state,
+                    client_id,
+                )
+                return None
+
+            return order_id
+        except Exception as e:
+            logger.exception(
+                "Failed to resolve order_id for client_id=%s: %s",
+                client_id,
+                e,
+            )
+            return None
 
     def _unauthorized_response(self, detail: str) -> JSONResponse:
         """Build 401 Unauthorized response."""
