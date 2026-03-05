@@ -124,7 +124,7 @@ The setup script enables required APIs, creates service accounts (runtime + Pub/
 | `SERVICE_ACCOUNT_NAME` | `${SERVICE_NAME}` | GCP service account name (allows a different name than the Cloud Run service) |
 | `HANDLER_SERVICE_NAME` | `marketplace-handler` | Marketplace handler Cloud Run service name |
 | `DB_INSTANCE_NAME` | `lightspeed-agent-db` | Cloud SQL instance name |
-| `VPC_CONNECTOR_NAME` | `lightspeed-redis-connector` | Serverless VPC Access connector for Redis |
+| `VPC_CONNECTOR_NAME` | `lightspeed-redis-conn` | Serverless VPC Access connector for Redis |
 | `PUBSUB_INVOKER_NAME` | `pubsub-invoker` | Pub/Sub invoker SA name |
 | `PUBSUB_TOPIC` | `marketplace-entitlements` | Pub/Sub topic name for marketplace events |
 | `ENABLE_MARKETPLACE` | `true` | Create Pub/Sub invoker SA and topic for marketplace integration |
@@ -186,7 +186,7 @@ The agent uses Redis for distributed rate limiting. On Cloud Run, use **Cloud Me
 # Create a Serverless VPC Access connector in the same region as Cloud Run
 # Use the default network or your custom VPC. The subnet range must not overlap with existing subnets.
 # Check available ranges: gcloud compute networks subnets list --network=default --filter="region:$GOOGLE_CLOUD_LOCATION"
-gcloud compute networks vpc-access connectors create lightspeed-redis-connector \
+gcloud compute networks vpc-access connectors create lightspeed-redis-conn \
   --region=$GOOGLE_CLOUD_LOCATION \
   --network=default \
   --range=10.8.0.0/28 \
@@ -223,8 +223,8 @@ echo -n "redis://${REDIS_HOST}:6379/0" | \
 **Step 4: Set the VPC connector name** (if different from default):
 
 ```bash
-# Default is lightspeed-redis-connector; override if you used a different name
-export VPC_CONNECTOR_NAME="lightspeed-redis-connector"
+# Default is lightspeed-redis-conn; override if you used a different name
+export VPC_CONNECTOR_NAME="lightspeed-redis-conn"
 ```
 
 See [Connect to Redis from Cloud Run](https://cloud.google.com/run/docs/integrate/redis-memorystore) for more details.
@@ -385,7 +385,7 @@ deployment without the script, substitute all `${...}` variables in the YAML bef
 sed -e "s|\${PROJECT_ID}|$GOOGLE_CLOUD_PROJECT|g" \
     -e "s|\${REGION}|$GOOGLE_CLOUD_LOCATION|g" \
     -e "s|\${DB_INSTANCE_NAME}|${DB_INSTANCE_NAME:-lightspeed-agent-db}|g" \
-    -e "s|\${VPC_CONNECTOR_NAME}|${VPC_CONNECTOR_NAME:-lightspeed-redis-connector}|g" \
+    -e "s|\${VPC_CONNECTOR_NAME}|${VPC_CONNECTOR_NAME:-lightspeed-redis-conn}|g" \
     -e "s|\${SERVICE_NAME}|${SERVICE_NAME:-lightspeed-agent}|g" \
     -e "s|\${SERVICE_ACCOUNT_NAME}|${SERVICE_ACCOUNT_NAME:-lightspeed-agent}|g" \
     -e "s|\${MCP_IMAGE}|${MCP_IMAGE:-gcr.io/$GOOGLE_CLOUD_PROJECT/insights-mcp:latest}|g" \
@@ -415,7 +415,7 @@ The agent uses Cloud Memorystore for Redis for distributed rate limiting. Requir
 | `RATE_LIMIT_REQUESTS_PER_MINUTE` | Env | Max requests per minute per principal |
 | `RATE_LIMIT_REQUESTS_PER_HOUR` | Env | Max requests per hour per principal |
 
-The service uses a VPC connector to reach the Redis instance. Set `VPC_CONNECTOR_NAME` (default: `lightspeed-redis-connector`) when deploying.
+The service uses a VPC connector to reach the Redis instance. Set `VPC_CONNECTOR_NAME` (default: `lightspeed-redis-conn`) when deploying.
 
 ### MCP Server Sidecar
 

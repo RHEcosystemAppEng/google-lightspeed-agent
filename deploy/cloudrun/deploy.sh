@@ -64,7 +64,7 @@ SERVICE_NAME="${SERVICE_NAME:-lightspeed-agent}"
 SERVICE_ACCOUNT_NAME="${SERVICE_ACCOUNT_NAME:-${SERVICE_NAME}}"
 HANDLER_SERVICE_NAME="${HANDLER_SERVICE_NAME:-marketplace-handler}"
 DB_INSTANCE_NAME="${DB_INSTANCE_NAME:-lightspeed-agent-db}"
-VPC_CONNECTOR_NAME="${VPC_CONNECTOR_NAME:-lightspeed-redis-connector}"
+VPC_CONNECTOR_NAME="${VPC_CONNECTOR_NAME:-lightspeed-redis-conn}"
 IMAGE_TAG="${IMAGE_TAG:-latest}"
 
 # Pub/Sub Invoker Service Account (must match setup.sh)
