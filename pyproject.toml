@@ -32,7 +32,7 @@ dependencies = [
     "uvicorn>=0.30.0",
     "fastapi>=0.115.0",
     "PyJWT[crypto]>=2.8.0",
-    "cryptography>=42.0.0",
+    "cryptography>=46.0.5",
     "redis>=5.0.0",
     "google-cloud-service-control>=1.0.0",
     "google-cloud-pubsub>=2.0.0",
@@ -42,6 +42,11 @@ dependencies = [
     # PostgreSQL drivers
     "asyncpg>=0.29.0",  # Async driver for SQLAlchemy async operations
     "psycopg2-binary>=2.9.0",  # Sync driver for ADK DatabaseSessionService
+    # Transitive dependency version floors (CVE fixes)
+    "aiohttp>=3.13.3",
+    "azure-core>=1.38.0",
+    "pyasn1>=0.6.2",
+    "PyNaCl>=1.6.2",
     # OpenTelemetry for distributed tracing
     "opentelemetry-api>=1.20.0",
     "opentelemetry-sdk>=1.20.0",
