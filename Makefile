@@ -87,6 +87,12 @@ stop:
 	podman pod rm $(POD_NAME) 2>/dev/null || true
 	@echo "Pod stopped and removed."
 
+cve-scan:
+	@echo "Scanning for CVEs with trivy"
+	pip freeze > requirements.txt
+	podman run --rm -v $$(pwd):/app:Z aquasec/trivy fs /app
+	rm requirements.txt
+
 logs:
 	@echo "Showing agent logs..."
 	podman logs -f $(POD_NAME)-lightspeed-agent
