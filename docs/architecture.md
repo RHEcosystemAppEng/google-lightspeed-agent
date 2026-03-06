@@ -306,7 +306,7 @@ src/lightspeed_agent/
 
 - Both services are stateless and can scale horizontally
 - State stored in PostgreSQL (shared by both services)
-- Rate limits enforced in-memory (per instance)
+- Rate limits enforced via Redis (shared across replicas)
 
 ### Service Scaling Requirements
 
