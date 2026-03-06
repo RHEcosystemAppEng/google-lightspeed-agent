@@ -42,11 +42,6 @@ All usage tracking is handled by the `UsageTrackingPlugin` in `src/lightspeed_ag
 │                                    ▼                                    │
 │                    UsageRepository (DB-backed, per-order)                │
 └─────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│                         GET /usage endpoint                             │
-└─────────────────────────────────────────────────────────────────────────┘
 ```
 
 ## ADK Plugin System
@@ -169,35 +164,6 @@ Key methods:
 - `claim_unreported_rows_for_reporting()`: Atomically claim rows for Service Control reporting
 - `mark_reported_by_ids()` / `release_claimed_rows()`: Mark reported or release on failure
 - `get_usage_by_order()`: Aggregate totals by order (for GET /usage endpoint)
-
-## API Endpoint
-
-### GET /usage
-
-Returns aggregate usage statistics.
-
-**Authentication**: Not required
-
-```bash
-curl http://localhost:8000/usage
-```
-
-**Response:**
-
-```json
-{
-  "status": "ok",
-  "usage_by_order": {
-    "order-123": {
-      "total_input_tokens": 12345,
-      "total_output_tokens": 45678,
-      "total_tokens": 58023,
-      "total_requests": 150,
-      "total_tool_calls": 75
-    }
-  }
-}
-```
 
 ## Rate Limiting
 
@@ -353,9 +319,6 @@ app = App(
 # Start the server
 python -m lightspeed_agent.main
 
-# Check initial usage
-curl http://localhost:8000/usage
-
 # Make A2A requests
 curl -X POST http://localhost:8000/ \
   -H "Content-Type: application/json" \
@@ -372,8 +335,6 @@ curl -X POST http://localhost:8000/ \
     }
   }'
 
-# Check updated usage
-curl http://localhost:8000/usage
 ```
 
 ## References
