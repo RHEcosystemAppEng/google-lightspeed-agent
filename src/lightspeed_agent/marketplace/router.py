@@ -185,9 +185,16 @@ async def _handle_pubsub_event(body: dict[str, Any]) -> JSONResponse:
         logger.warning("Could not build procurement event from data")
         return JSONResponse(content={"status": "ok", "message": "Invalid event data"})
 
-    # Process the event
+    # Process the event — let failures propagate as 500 so Pub/Sub retries.
     procurement_service = get_procurement_service()
-    await procurement_service.process_event(event)
+    try:
+        await procurement_service.process_event(event)
+    except Exception as e:
+        logger.exception("Failed to process marketplace event %s: %s", message_id, e)
+        return JSONResponse(
+            status_code=500,
+            content={"error": "event_processing_failed", "message": str(e)},
+        )
 
     order_id = event.entitlement.id if event.entitlement else None
     logger.info("Processed marketplace event: %s (%s)", message_id, event_type_str)

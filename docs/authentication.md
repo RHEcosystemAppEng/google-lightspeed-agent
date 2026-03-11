@@ -29,10 +29,10 @@ Clients obtain access tokens directly from Red Hat SSO (Keycloak) using their DC
 |  |                                                   | |                  |
 |  |  Pub/Sub path:         DCR path:                  | |                  |
 |  |  - Decode msg          - Validate Google JWT  [3] | |                  |
-|  |  - Approve via         - Verify order in DB       | |                  |
-|  |    Procurement API     - Create OAuth client  [4] | |                  |
-|  |  - Store account/      - Return client_id +       | |                  |
-|  |    entitlement           client_secret            | |                  |
+|  |  - Filter by product   - Verify order in DB       | |                  |
+|  |  - Approve entitlement - Create OAuth client  [4] | |                  |
+|  |    via Procurement API - Return client_id +       | |                  |
+|  |  - Store entitlement     client_secret            | |                  |
 |  +---+--------------------+----------+---------------+ |                  |
 |      |                    |          |                 |                  |
 |      v                    |          v                 |                  |

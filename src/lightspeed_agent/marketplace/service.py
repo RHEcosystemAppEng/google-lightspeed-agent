@@ -107,21 +107,24 @@ class ProcurementService:
             logger.error("ENTITLEMENT_CREATION_REQUESTED missing entitlement info")
             return
 
-        # Create entitlement record
-        metadata = {}
-        if event.entitlement.product:
-            metadata["product_id"] = event.entitlement.product
-        entitlement = Entitlement(
-            id=event.entitlement.id,
-            account_id="",  # Will be set when we fetch from API
-            state=EntitlementState.PENDING_APPROVAL,
-            plan=event.entitlement.new_plan,
-            provider_id=event.provider_id,
-            metadata=metadata,
-        )
-        await self._entitlement_repo.create(entitlement)
+        # Create entitlement record (idempotent — skip if already exists so
+        # that Pub/Sub retries after a failed approval don't fail on duplicate).
+        existing = await self._entitlement_repo.get(event.entitlement.id)
+        if not existing:
+            metadata = {}
+            if event.entitlement.product:
+                metadata["product_id"] = event.entitlement.product
+            entitlement = Entitlement(
+                id=event.entitlement.id,
+                account_id="",  # Will be set when we fetch from API
+                state=EntitlementState.PENDING_APPROVAL,
+                plan=event.entitlement.new_plan,
+                provider_id=event.provider_id,
+                metadata=metadata,
+            )
+            await self._entitlement_repo.create(entitlement)
 
-        # Auto-approve the entitlement
+        # Auto-approve the entitlement (raises on failure so Pub/Sub retries)
         await self._approve_entitlement(event.entitlement.id)
 
         logger.info(
@@ -337,48 +340,42 @@ class ProcurementService:
             logger.warning("Failed to get ADC credentials: %s", e)
             return {}
 
-    async def _approve_entitlement(self, entitlement_id: str) -> bool:
+    async def _approve_entitlement(self, entitlement_id: str) -> None:
         """Approve an entitlement via the Procurement API.
 
         Args:
             entitlement_id: The entitlement ID to approve.
 
-        Returns:
-            True if approved, False otherwise.
+        Raises:
+            RuntimeError: If the Procurement API returns a non-200 response.
+            httpx.RequestError: On network errors.
         """
-        try:
-            if not self._settings.service_control_service_name:
-                logger.warning("SERVICE_CONTROL_SERVICE_NAME not set, skipping approval")
-                return True  # Allow for development
+        if not self._settings.service_control_service_name:
+            logger.warning("SERVICE_CONTROL_SERVICE_NAME not set, skipping approval")
+            return
 
-            svc = self._settings.service_control_service_name
-            url = (
-                f"{self.PROCUREMENT_API_BASE}/providers/{svc}"
-                f"/entitlements/{entitlement_id}:approve"
+        svc = self._settings.service_control_service_name
+        url = (
+            f"{self.PROCUREMENT_API_BASE}/providers/{svc}"
+            f"/entitlements/{entitlement_id}:approve"
+        )
+        headers = await self._get_auth_headers()
+
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                url,
+                json={},
+                headers=headers,
+                timeout=30.0,
             )
-            headers = await self._get_auth_headers()
 
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    url,
-                    json={},
-                    headers=headers,
-                    timeout=30.0,
-                )
-
-                if response.status_code == 200:
-                    logger.info("Approved entitlement: %s", entitlement_id)
-                    return True
-                else:
-                    logger.error(
-                        "Failed to approve entitlement %s: %s",
-                        entitlement_id,
-                        response.text,
-                    )
-                    return False
-        except Exception as e:
-            logger.error("Error approving entitlement %s: %s", entitlement_id, e)
-            return False
+        if response.status_code == 200:
+            logger.info("Approved entitlement: %s", entitlement_id)
+        else:
+            raise RuntimeError(
+                f"Failed to approve entitlement {entitlement_id}: "
+                f"HTTP {response.status_code} — {response.text}"
+            )
 
     async def _get_account_state(self, account_id: str) -> str | None:
         """Get account state from the Procurement API.
@@ -431,53 +428,47 @@ class ProcurementService:
         self,
         entitlement_id: str,
         new_plan: str | None,
-    ) -> bool:
+    ) -> None:
         """Approve a plan change via the Procurement API.
 
         Args:
             entitlement_id: The entitlement ID.
             new_plan: The new plan name.
 
-        Returns:
-            True if approved, False otherwise.
+        Raises:
+            RuntimeError: If the Procurement API returns a non-200 response.
+            httpx.RequestError: On network errors.
         """
-        try:
-            if not self._settings.service_control_service_name:
-                logger.warning("SERVICE_CONTROL_SERVICE_NAME not set, skipping approval")
-                return True  # Allow for development
+        if not self._settings.service_control_service_name:
+            logger.warning("SERVICE_CONTROL_SERVICE_NAME not set, skipping approval")
+            return
 
-            svc = self._settings.service_control_service_name
-            url = (
-                f"{self.PROCUREMENT_API_BASE}/providers/{svc}"
-                f"/entitlements/{entitlement_id}:approvePlanChange"
+        svc = self._settings.service_control_service_name
+        url = (
+            f"{self.PROCUREMENT_API_BASE}/providers/{svc}"
+            f"/entitlements/{entitlement_id}:approvePlanChange"
+        )
+        headers = await self._get_auth_headers()
+
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                url,
+                json={"pendingPlanName": new_plan},
+                headers=headers,
+                timeout=30.0,
             )
-            headers = await self._get_auth_headers()
 
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    url,
-                    json={"pendingPlanName": new_plan},
-                    headers=headers,
-                    timeout=30.0,
-                )
-
-                if response.status_code == 200:
-                    logger.info(
-                        "Approved plan change for %s: %s",
-                        entitlement_id,
-                        new_plan,
-                    )
-                    return True
-                else:
-                    logger.error(
-                        "Failed to approve plan change for %s: %s",
-                        entitlement_id,
-                        response.text,
-                    )
-                    return False
-        except Exception as e:
-            logger.error("Error approving plan change for %s: %s", entitlement_id, e)
-            return False
+        if response.status_code == 200:
+            logger.info(
+                "Approved plan change for %s: %s",
+                entitlement_id,
+                new_plan,
+            )
+        else:
+            raise RuntimeError(
+                f"Failed to approve plan change for {entitlement_id}: "
+                f"HTTP {response.status_code} — {response.text}"
+            )
 
     # Validation methods for DCR
 

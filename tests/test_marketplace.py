@@ -1,7 +1,8 @@
 """Tests for Marketplace Procurement integration."""
 
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
+import httpx
 import pytest
 
 from lightspeed_agent.marketplace.models import (
@@ -242,4 +243,67 @@ class TestProcurementService:
         )
 
         # Should not raise — just logs a warning about no handler
+        await service.process_event(event)
+
+    @pytest.mark.asyncio
+    async def test_approve_entitlement_raises_on_non_200(self, service):
+        """Test _approve_entitlement raises RuntimeError on non-200 response."""
+        mock_response = httpx.Response(
+            status_code=403,
+            text="Forbidden",
+            request=httpx.Request("POST", "https://example.com"),
+        )
+        with patch.object(service, "_settings") as mock_settings, \
+             patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_response):
+            mock_settings.service_control_service_name = "test-service"
+
+            with pytest.raises(RuntimeError, match="Failed to approve entitlement"):
+                await service._approve_entitlement("entitlement-123")
+
+    @pytest.mark.asyncio
+    async def test_approve_entitlement_raises_on_network_error(self, service):
+        """Test _approve_entitlement raises on network errors."""
+        with patch.object(service, "_settings") as mock_settings, \
+             patch("httpx.AsyncClient.post", new_callable=AsyncMock, side_effect=httpx.ConnectError("connection refused")):
+            mock_settings.service_control_service_name = "test-service"
+
+            with pytest.raises(httpx.ConnectError):
+                await service._approve_entitlement("entitlement-123")
+
+    @pytest.mark.asyncio
+    async def test_approve_plan_change_raises_on_non_200(self, service):
+        """Test _approve_plan_change raises RuntimeError on non-200 response."""
+        mock_response = httpx.Response(
+            status_code=500,
+            text="Internal Server Error",
+            request=httpx.Request("POST", "https://example.com"),
+        )
+        with patch.object(service, "_settings") as mock_settings, \
+             patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_response):
+            mock_settings.service_control_service_name = "test-service"
+
+            with pytest.raises(RuntimeError, match="Failed to approve plan change"):
+                await service._approve_plan_change("entitlement-123", "new-plan")
+
+    @pytest.mark.asyncio
+    async def test_entitlement_creation_idempotent(self, service):
+        """Test _handle_entitlement_creation_requested skips create when entitlement exists."""
+        # Pre-create the entitlement
+        existing = Entitlement(
+            id="order-existing",
+            account_id="",
+            state=EntitlementState.PENDING_APPROVAL,
+            provider_id="provider-123",
+        )
+        await service._entitlement_repo.create(existing)
+
+        event = ProcurementEvent(
+            event_id="event-retry",
+            event_type=ProcurementEventType.ENTITLEMENT_CREATION_REQUESTED,
+            provider_id="provider-123",
+            entitlement={"id": "order-existing", "newPlan": "basic"},
+        )
+
+        # Approval skipped in dev mode (no SERVICE_CONTROL_SERVICE_NAME).
+        # The key assertion is that it doesn't raise a duplicate-key error.
         await service.process_event(event)

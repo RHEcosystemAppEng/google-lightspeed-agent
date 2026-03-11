@@ -62,6 +62,26 @@ Customer Admin                Google Cloud Marketplace                 Agent (Ma
    the agent's database. This `order_id` is the key that links all subsequent
    authentication artifacts to this subscription.
 
+**Error paths:**
+
+| Failure | Behaviour |
+|---|---|
+| Invalid JSON in Pub/Sub message body | Handler returns `400 Invalid JSON body` |
+| Pub/Sub message data is not valid base64 or UTF-8 JSON | Handler returns `400 Invalid message encoding` |
+| Event has no `product` field (account-only event) | Handler returns `200` with `"Account-only event, skipping"` (acknowledged; account validation is done via the Procurement API during DCR) |
+| Event `product` does not match `SERVICE_CONTROL_SERVICE_NAME` | Handler returns `200` with `"Event not for this product"` (acknowledged; event belongs to a different agent) |
+| Unknown event type (not a recognised `ProcurementEventType`) | Handler returns `200` with `"Unknown event: {type}"` (acknowledged so Pub/Sub does not retry) |
+| Missing required fields in event payload | Handler returns `200` with `"Invalid event data"` (acknowledged) |
+| Entitlement approval fails (Procurement API non-200) | Handler returns `500`; Pub/Sub will retry delivery |
+| Plan change approval fails (Procurement API non-200) | Handler returns `500`; Pub/Sub will retry delivery |
+| Network error or ADC credential failure during Procurement API call | Handler returns `500`; Pub/Sub will retry delivery |
+
+> **Note:** Events that are structurally valid but not relevant (unknown
+> type, wrong product, account-only) are acknowledged with `200` to prevent
+> infinite retry loops. Procurement API failures (approval errors, network
+> errors) return `500`, so Pub/Sub will redeliver the message automatically
+> with exponential backoff.
+
 ---
 
 ## Step 2 — Agent Registration in Gemini Enterprise
@@ -131,6 +151,53 @@ Gemini Enterprise                     Agent (Marketplace Handler)             Re
 6. Encrypts the `client_secret` (Fernet symmetric encryption) and stores the
    mapping `order_id → client_id` in the database.
 7. Returns the `client_id` and `client_secret` to Gemini Enterprise.
+
+**Error paths (Option A):**
+
+```
+Gemini Enterprise                     Agent (Marketplace Handler)             Red Hat SSO (Keycloak)
+     |                                          |                                    |
+     |-- POST /dcr                              |                                    |
+     |   { software_statement: <bad JWT> } ---->|                                    |
+     |                                          |                                    |
+     |                                          |-- Validate Google JWT              |
+     |                                          |   FAIL:                            |
+     |                                          |    - Invalid JWT format            |
+     |                                          |    - Missing 'kid' in header       |
+     |                                          |    - Unsupported algorithm          |
+     |                                          |    - Signing key not found         |
+     |                                          |    - JWT expired                   |
+     |                                          |    - Invalid issuer                |
+     |                                          |    - Missing google.order claim    |
+     |                                          |                                    |
+     |<-- 400 { error:                          |                                    |
+     |   "invalid_software_statement",          |                                    |
+     |   error_description: "..." } ------------|                                    |
+```
+
+| Failure | HTTP | Error code | Error description |
+|---|---|---|---|
+| JWT header cannot be decoded | 400 | `invalid_software_statement` | `Invalid JWT format` |
+| JWT header missing `kid` | 400 | `invalid_software_statement` | `JWT header missing 'kid' claim` |
+| Algorithm is not RS256 | 400 | `invalid_software_statement` | `Unsupported algorithm: {alg}. Expected RS256` |
+| Signing key ID not in Google certificates | 400 | `invalid_software_statement` | `Key with ID '{kid}' not found in Google certificates` |
+| JWT signature expired | 400 | `invalid_software_statement` | `JWT has expired` |
+| JWT signature or claims invalid | 400 | `invalid_software_statement` | `{validation error}` |
+| Issuer is not the expected Google service account | 400 | `invalid_software_statement` | `Invalid issuer. Expected: {GOOGLE_DCR_ISSUER}` |
+| `google.order` claim missing from JWT | 400 | `invalid_software_statement` | `Missing google.order claim` |
+| Claims cannot be parsed | 400 | `invalid_software_statement` | `Invalid claims format: {error}` |
+| Account ID (`sub`) is not ACTIVE | 400 | `unapproved_software_statement` | `Invalid Procurement Account ID: {account_id}` |
+| Order ID is not ACTIVE | 400 | `unapproved_software_statement` | `Invalid Order ID: {order_id}` |
+| Initial Access Token not configured | 400 | `server_error` | `Failed to create OAuth client: DCR_INITIAL_ACCESS_TOKEN not configured` |
+| Keycloak DCR endpoint returns error | 400 | `server_error` | `Failed to create OAuth client: Failed to create OAuth client: {keycloak_error}` |
+| Network error calling Keycloak | 400 | `server_error` | `Failed to create OAuth client: HTTP error calling Keycloak DCR: {error}` |
+| Unexpected error creating client or storing credentials | 400 | `server_error` | `Failed to create client: {error}` |
+| Decryption of previously stored credentials fails | 400 | `server_error` | `Failed to retrieve existing credentials` |
+
+> **Note:** All DCR errors return HTTP 400 regardless of the underlying cause.
+> The `error` / `error_description` body follows RFC 7591. The "Decryption"
+> error applies to both Option A and Option B — it triggers when a client
+> already exists for the order but the stored secret cannot be decrypted.
 
 ### Option B — Static Credentials
 
@@ -230,6 +297,49 @@ Customer Admin        Red Hat Google Form       Google Card Form         Gemini 
 7. The agent encrypts and stores the credentials linked to the `order_id`.
 8. Returns the credentials back to Gemini Enterprise.
 
+**Error paths (Option B):**
+
+The same JWT validation and account/order state errors from Option A apply.
+In addition, static credential mode has these specific errors:
+
+```
+Gemini Enterprise           Agent (Marketplace Handler)           Red Hat SSO (Keycloak)
+     |                                 |                                    |
+     |-- POST /dcr                     |                                    |
+     |   { software_statement,         |                                    |
+     |     client_id,                  |                                    |
+     |     client_secret } ----------->|                                    |
+     |                                 |                                    |
+     |                                 |-- Validate Google JWT (same as A)  |
+     |                                 |                                    |
+     |                                 |-- Check client_id and              |
+     |                                 |   client_secret present            |
+     |                                 |   FAIL: one or both missing        |
+     |                                 |                                    |
+     |<-- 400 { error:                 |                                    |
+     |   "invalid_client_metadata",    |                                    |
+     |   error_description:            |                                    |
+     |   "...both must be provided"}---|                                    |
+     |                                 |                                    |
+     |   --- OR ---                    |                                    |
+     |                                 |                                    |
+     |                                 |-- POST /token                      |
+     |                                 |   grant_type=client_credentials -->|
+     |                                 |                                    |-- Validate
+     |                                 |<-- 401 (invalid credentials) ------|   FAIL
+     |                                 |                                    |
+     |<-- 400 { error:                 |                                    |
+     |   "invalid_client_metadata",    |                                    |
+     |   error_description:            |                                    |
+     |   "Invalid client credentials"}-|                                    |
+```
+
+| Failure | HTTP | Error code | Error description |
+|---|---|---|---|
+| `client_id` or `client_secret` missing from request body | 400 | `invalid_client_metadata` | `Static credentials mode: both client_id and client_secret must be provided in the request body.` |
+| Credentials fail `client_credentials` grant against SSO | 400 | `invalid_client_metadata` | `Invalid client credentials: client_id={client_id} failed validation against the OAuth server.` |
+| Database error storing credentials | 400 | `server_error` | `Failed to store client credentials: {error}` |
+
 ---
 
 ## Step 3 — User Authentication (OAuth 2.0 Authorization Code Flow)
@@ -328,6 +438,21 @@ Customer User          Gemini Enterprise            Red Hat SSO (Keycloak)      
 token is issued by Red Hat SSO and represents both the user's identity and the
 Gemini Enterprise client's authorization to act on their behalf.
 
+**Error paths:**
+
+The authorization code flow is executed between Gemini Enterprise (client) and
+Red Hat SSO (authorization server). The Lightspeed Agent is not involved in
+this step, so errors are handled by those two parties. Common failures include:
+
+| Failure | Handled by | Behaviour |
+|---|---|---|
+| User enters invalid Red Hat credentials | Red Hat SSO | Login page shows an error; user can retry |
+| User denies consent for requested scopes | Red Hat SSO | Redirects to `redirect_uri` with `error=access_denied` |
+| Invalid `client_id` in authorization request | Red Hat SSO | Returns `error=unauthorized_client` to Gemini |
+| `redirect_uri` does not match registered URIs | Red Hat SSO | Refuses to redirect; shows error page |
+| Authorization code expired or already used | Red Hat SSO | Token endpoint returns `error=invalid_grant` |
+| Invalid `client_secret` on token exchange | Red Hat SSO | Token endpoint returns `error=invalid_client` |
+
 ---
 
 ## Step 4 — Agent Authentication and Authorization (Token Introspection)
@@ -415,6 +540,70 @@ Gemini Enterprise                  Lightspeed Agent                      Red Hat
 
 3. If all checks pass, the request proceeds to the agent's business logic.
 
+**Error paths:**
+
+```
+Gemini Enterprise                  Lightspeed Agent                      Red Hat SSO (Keycloak)
+     |                                    |                                       |
+     |-- POST /                           |                                       |
+     |   (no Authorization header) ------>|                                       |
+     |                                    |                                       |
+     |<-- 401 { code: -32001,             |                                       |
+     |   message: "Unauthorized",         |                                       |
+     |   detail: "Missing Authorization   |                                       |
+     |            header" } --------------|                                       |
+     |                                    |                                       |
+     |   --- OR ---                       |                                       |
+     |                                    |                                       |
+     |-- POST /                           |                                       |
+     |   Authorization: Bearer <token> -->|                                       |
+     |                                    |-- POST /token/introspect              |
+     |                                    |   token=<bearer_token> -------------->|
+     |                                    |                                       |-- Token expired
+     |                                    |<-- { "active": false } ---------------|   or revoked
+     |                                    |                                       |
+     |<-- 401 { code: -32001,             |                                       |
+     |   message: "Unauthorized",         |                                       |
+     |   detail: "Token is not active" }--|                                       |
+     |                                    |                                       |
+     |   --- OR ---                       |                                       |
+     |                                    |                                       |
+     |                                    |<-- { "active": true,                  |
+     |                                    |      "scope": "openid" } -------------|
+     |                                    |   (missing agent:insights scope)      |
+     |                                    |                                       |
+     |<-- 403 { code: -32003,             |                                       |
+     |   message: "Forbidden",            |                                       |
+     |   detail: "Token is missing        |                                       |
+     |     required scope:                |                                       |
+     |     agent:insights" } -------------|                                       |
+     |                                    |                                       |
+     |   --- OR ---                       |                                       |
+     |                                    |                                       |
+     |                                    |-- Look up azp → order_id              |
+     |                                    |   FAIL: client not in credentials DB  |
+     |                                    |         or order not ACTIVE           |
+     |                                    |                                       |
+     |<-- 403 { code: -32003,             |                                       |
+     |   message: "Forbidden",            |                                       |
+     |   detail: "No active order found   |                                       |
+     |     for this client" } ------------|                                       |
+```
+
+| Failure | HTTP | JSON-RPC code | Detail |
+|---|---|---|---|
+| No `Authorization` header in request | 401 | -32001 | `Missing Authorization header` |
+| Header does not start with `Bearer ` | 401 | -32001 | `Invalid Authorization header format` |
+| Token is expired or revoked (`active: false`) | 401 | -32001 | `Token is not active` |
+| Introspection endpoint returns non-200 | 401 | -32001 | `Introspection request failed (HTTP {status})` |
+| Network error calling introspection endpoint | 401 | -32001 | `HTTP error calling introspection endpoint: {error}` |
+| Token missing `agent:insights` scope | 403 | -32003 | `Token is missing required scope: agent:insights` |
+| `azp` client ID not found in credentials DB | 403 | -32003 | `No active order found for this client` |
+| Order ID not found in entitlements DB | 403 | -32003 | `No active order found for this client` |
+| Order state is not `ACTIVE` | 403 | -32003 | `No active order found for this client` |
+| Rate limit exceeded for order/user/client/IP | 429 | — | `Rate limit exceeded ({exceeded}) for {principal}` where `{exceeded}` is `per_minute` or `per_hour` (includes `Retry-After` header) |
+| Rate limiter backend (Redis) unavailable | 503 | — | `Rate limiter backend unavailable` |
+
 **Credentials distinction:**
 
 | Credential | Owner | Purpose |
@@ -488,6 +677,18 @@ The MCP header provider uses a two-tier priority system:
 - **stdio transport**: Credentials are passed via environment variables
   (`LIGHTSPEED_CLIENT_ID` / `LIGHTSPEED_CLIENT_SECRET`) to the MCP server
   process at startup.
+
+**Error paths:**
+
+| Failure | Behaviour |
+|---|---|
+| No credentials available (no service account configured and no Bearer token in request context) | Warning logged: `No MCP credentials available`; empty headers sent — MCP server will reject the unauthenticated request |
+| Forwarded access token is expired | Warning logged: `Access token expired at {exp}`; token is still forwarded — MCP server will reject it and the error propagates back to the caller |
+| MCP server or downstream Lightspeed API rejects the token | MCP tool call returns an error result; the agent surfaces this in the A2A response to Gemini Enterprise |
+
+> **Note:** The agent intentionally forwards expired tokens rather than
+> pre-emptively rejecting them. This avoids clock-skew issues and lets the
+> downstream service be the authoritative validator.
 
 ---
 

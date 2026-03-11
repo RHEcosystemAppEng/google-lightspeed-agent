@@ -29,7 +29,7 @@ The system consists of **two separate services**:
 │  │                           FastAPI Application                             │  │
 │  │  ┌──────────────────────────────────────────────────────────────────────┐ │  │
 │  │  │                    Hybrid /dcr Endpoint                              │ │  │
-│  │  │  - Pub/Sub Events → Approve accounts/entitlements                    │ │  │
+│  │  │  - Pub/Sub Events → Approve entitlements (accounts skipped)           │ │  │
 │  │  │  - DCR Requests → Create OAuth clients via Keycloak                  │ │  │
 │  │  └──────────────────────────────────────────────────────────────────────┘ │  │
 │  └───────────────────────────────────────────────────────────────────────────┘  │
@@ -179,7 +179,7 @@ This flow happens when a customer purchases from Google Cloud Marketplace:
                                                                           ▼
                                          ┌─────────────────────────────────────┐
                                          │   Google Procurement API            │
-                                         │   (Approve Account/Entitlement)     │
+                                         │   (Approve Entitlement)             │
                                          └─────────────────────────────────────┘
 ```
 
@@ -298,7 +298,7 @@ src/lightspeed_agent/
 | Red Hat Lightspeed MCP | Agent | Data access | Yes |
 | PostgreSQL | Both | Data persistence | Yes (Production) |
 | Google Cloud Pub/Sub | Handler | Marketplace events | Production |
-| Google Procurement API | Handler | Account/entitlement approval | Production |
+| Google Procurement API | Handler | Entitlement approval, account validation | Production |
 | Google Service Control | Agent | Usage reporting | Production |
 
 ## Scaling Considerations
