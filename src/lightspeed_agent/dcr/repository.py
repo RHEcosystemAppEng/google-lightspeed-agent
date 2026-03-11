@@ -99,7 +99,8 @@ class DCRClientRepository:
                 metadata_=metadata or {},
             )
             session.add(model)
-            await session.flush()  # Get the created_at timestamp
+            await session.flush()
+            await session.refresh(model)
 
             logger.info(
                 "Created DCR client: client_id=%s, order_id=%s",

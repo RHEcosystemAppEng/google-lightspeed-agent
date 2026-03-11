@@ -66,6 +66,7 @@ class AccountRepository:
             )
             session.add(model)
             await session.flush()
+            await session.refresh(model)
             logger.info("Created account: %s", account.id)
             return self._model_to_entity(model)
 
@@ -185,6 +186,7 @@ class EntitlementRepository:
             )
             session.add(model)
             await session.flush()
+            await session.refresh(model)
 
             logger.info(
                 "Created entitlement: %s (account=%s)",
