@@ -3,10 +3,11 @@
 import contextvars
 import logging
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, Callable
 
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.base import RequestResponseEndpoint
 from starlette.responses import JSONResponse
 
 from lightspeed_agent.auth.introspection import (
@@ -75,7 +76,7 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
     async def dispatch(
         self,
         request: Request,
-        call_next,
+        call_next: RequestResponseEndpoint,
     ) -> Response:
         """Process request with authentication check."""
         _request_access_token.set(None)

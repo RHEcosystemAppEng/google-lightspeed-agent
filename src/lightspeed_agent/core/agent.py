@@ -2,6 +2,7 @@
 
 import logging
 import os
+from typing import Any
 
 from google.adk.agents import LlmAgent
 
@@ -92,7 +93,7 @@ def create_agent() -> LlmAgent:
     _setup_environment()
     settings = get_settings()
 
-    tools: list = []
+    tools: list[Any] = []
 
     try:
         from lightspeed_agent.tools import READ_ONLY_TOOLS, create_insights_toolset

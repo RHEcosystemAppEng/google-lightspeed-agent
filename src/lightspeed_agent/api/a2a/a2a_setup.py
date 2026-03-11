@@ -6,6 +6,7 @@ task management, and event conversion automatically.
 """
 
 import logging
+from typing import Any
 
 from a2a.server.apps import A2AFastAPIApplication
 from a2a.server.request_handlers import DefaultRequestHandler
@@ -26,7 +27,7 @@ from lightspeed_agent.core import create_agent
 logger = logging.getLogger(__name__)
 
 
-def _get_session_service():
+def _get_session_service() -> Any:
     """Get the appropriate session service based on configuration.
 
     For production, uses DatabaseSessionService which persists sessions to PostgreSQL.
@@ -83,7 +84,7 @@ def _get_session_service():
             )
 
     logger.info("Using InMemorySessionService for session management")
-    return InMemorySessionService()
+    return InMemorySessionService()  # type: ignore[no-untyped-call]
 
 
 def _create_runner() -> Runner:
@@ -114,7 +115,7 @@ def _create_runner() -> Runner:
         app=app,
         artifact_service=InMemoryArtifactService(),
         session_service=session_service,
-        memory_service=InMemoryMemoryService(),
+        memory_service=InMemoryMemoryService(),  # type: ignore[no-untyped-call]
     )
 
 
