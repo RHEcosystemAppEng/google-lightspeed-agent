@@ -57,7 +57,7 @@ def create_mcp_header_provider():
             token, token_exp = token_info
             now = datetime.now(UTC)
             if settings.production:
-                logger.info(
+                logger.debug(
                     "Production mode: forwarding user JWT to MCP server"
                 )
             if now >= token_exp:
