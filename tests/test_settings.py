@@ -28,7 +28,7 @@ class TestSkipJwtProductionGuard:
             os.environ, {"K_SERVICE": "lightspeed-agent"}, clear=False
         ):
             with pytest.raises(
-                ValidationError, match="not allowed in Cloud Run"
+                ValidationError, match="not allowed when running on Cloud Run"
             ):
                 Settings(skip_jwt_validation=True)
 
