@@ -23,7 +23,7 @@ spec:
   - name: revision
     value: '{{revision}}'
   - name: output-image
-    value: quay.io/redhat-user-workloads/ai5-marketplace-tenant/google-lightspeed-agent-marketplace-handler:{{revision}}
+    value: quay.io/ishishov/google-lightspeed-agent-marketplace-handler:{{revision}}
   - name: dockerfile
     value: ./Containerfile.marketplace-handler
   pipelineSpec:
