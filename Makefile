@@ -1,7 +1,7 @@
 # Red Hat Lightspeed Agent for Google Cloud - Makefile
 # Common development and deployment commands
 
-.PHONY: help build run stop logs logs-mcp clean test lint dev check-env
+.PHONY: help build build-agent build-marketplace run stop logs logs-mcp clean test lint dev check-env
 
 # Default target
 help:
@@ -13,7 +13,9 @@ help:
 	@echo "  make lint         - Run linter and type checker"
 	@echo ""
 	@echo "Container (Podman):"
-	@echo "  make build        - Build container image"
+	@echo "  make build             - Build all container images (agent + marketplace handler)"
+	@echo "  make build-agent       - Build agent container image only"
+	@echo "  make build-marketplace - Build marketplace handler container image only"
 	@echo "  make run          - Start the pod with all services"
 	@echo "  make stop         - Stop and remove the pod"
 	@echo "  make logs         - View agent container logs"
@@ -54,12 +56,19 @@ lint:
 # =============================================================================
 
 IMAGE_NAME ?= localhost/lightspeed-agent
+MARKETPLACE_IMAGE_NAME ?= localhost/marketplace-handler
 IMAGE_TAG ?= latest
 POD_NAME = lightspeed-agent-pod
 
-build:
-	@echo "Building container image..."
+build: build-agent build-marketplace
+
+build-agent:
+	@echo "Building agent container image..."
 	podman build -t $(IMAGE_NAME):$(IMAGE_TAG) -f Containerfile .
+
+build-marketplace:
+	@echo "Building marketplace handler container image..."
+	podman build -t $(MARKETPLACE_IMAGE_NAME):$(IMAGE_TAG) -f Containerfile.marketplace-handler .
 
 run: check-env build
 	@echo "Starting pod..."
@@ -150,8 +159,9 @@ check-env:
 # =============================================================================
 
 clean: stop
-	@echo "Removing container image..."
+	@echo "Removing container images..."
 	podman rmi $(IMAGE_NAME):$(IMAGE_TAG) 2>/dev/null || true
+	podman rmi $(MARKETPLACE_IMAGE_NAME):$(IMAGE_TAG) 2>/dev/null || true
 	@echo "Removing dangling images..."
 	podman image prune -f
 	@echo "Cleanup complete."
