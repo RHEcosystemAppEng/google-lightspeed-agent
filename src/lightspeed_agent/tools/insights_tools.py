@@ -13,7 +13,7 @@ from mcp import StdioServerParameters
 from lightspeed_agent.tools.schema_sanitizer import SanitizedMcpToolset as McpToolset
 
 from lightspeed_agent.config import get_settings
-from lightspeed_agent.tools.mcp_config import MCPServerConfig, setup_mcp_environment
+from lightspeed_agent.tools.mcp_config import MCPServerConfig
 from lightspeed_agent.tools.mcp_headers import create_mcp_header_provider
 
 if TYPE_CHECKING:
@@ -24,16 +24,12 @@ if TYPE_CHECKING:
 def create_insights_toolset(
     config: MCPServerConfig | None = None,
     tool_filter: list[str] | None = None,
-    use_dynamic_headers: bool = True,
 ) -> McpToolset:
     """Create an MCP toolset for Red Hat Insights.
 
     Args:
         config: Optional MCP server configuration. If None, loads from settings.
         tool_filter: Optional list of tool names to expose. If None, all tools are exposed.
-        use_dynamic_headers: If True, use header_provider for per-user credentials.
-            Headers are resolved from session state first, then fall back to
-            agent-level environment variables.
 
     Returns:
         Configured McpToolset instance.
@@ -41,11 +37,8 @@ def create_insights_toolset(
     if config is None:
         config = MCPServerConfig.from_settings()
 
-    # Set up environment for MCP connection (for stdio mode)
-    setup_mcp_environment(config)
-
-    # Create header provider for dynamic credential injection
-    header_provider = create_mcp_header_provider() if use_dynamic_headers else None
+    # Create header provider for JWT pass-through to MCP server
+    header_provider = create_mcp_header_provider()
 
     if config.transport_mode == "stdio":
         return _create_stdio_toolset(config, tool_filter)
@@ -68,7 +61,6 @@ def _create_stdio_toolset(
     server_params = StdioServerParameters(
         command=config.get_stdio_command(),
         args=config.get_stdio_args(),
-        env=config.get_stdio_env(),
     )
 
     connection_params = StdioConnectionParams(server_params=server_params)
@@ -95,7 +87,6 @@ def _create_sse_toolset(
     """
     connection_params = SseConnectionParams(
         url=f"{config.server_url}/sse",
-        headers=config.get_http_headers() if not header_provider else None,
     )
 
     return McpToolset(
