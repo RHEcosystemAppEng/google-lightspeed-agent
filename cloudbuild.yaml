@@ -1,98 +1,263 @@
 # Google Cloud Build Configuration
-# Builds and deploys the Lightspeed Agent to Cloud Run
+# CI/CD pipeline for the Red Hat Lightspeed Agent for Google Cloud
+#
+# Images are built externally by Konflux and pushed to Quay.io.
+# This pipeline pulls pre-built images from Quay, pushes them to GCR
+# (Cloud Run cannot pull from Quay.io directly), and deploys both
+# services to Cloud Run:
+#   1. marketplace-handler - Handles DCR and Pub/Sub events (always running)
+#   2. lightspeed-agent    - A2A agent with MCP sidecar (scales to zero)
+#
+# Prerequisites:
+#   - Run deploy/cloudrun/setup.sh first to configure GCP services
+#   - Update secrets in Secret Manager with actual values
+#   - See deploy/cloudrun/README.md for full setup instructions
+#
+# Required permissions for Cloud Build service account:
+#   - roles/run.admin (deploy Cloud Run services)
+#   - roles/iam.serviceAccountUser (act as runtime service account)
+#   - roles/pubsub.editor (create/update subscriptions)
 #
 # Usage:
+#   gcloud builds submit --config=cloudbuild.yaml
+#
+#   # With custom options:
 #   gcloud builds submit --config=cloudbuild.yaml \
-#     --substitutions=_SERVICE_NAME=lightspeed-agent,_REGION=us-central1
-#
-# Required substitutions:
-#   _SERVICE_NAME: Cloud Run service name
-#   _REGION: Deployment region
-#
-# Optional substitutions:
-#   _IMAGE_TAG: Container image tag (default: latest)
+#     --substitutions=_ALLOW_UNAUTHENTICATED=true,_REGION=us-central1
 
 substitutions:
   _SERVICE_NAME: lightspeed-agent
+  _HANDLER_SERVICE_NAME: marketplace-handler
   _REGION: us-central1
-  _VERTEXAI_LOCATION: global
+  _VERTEXAI_LOCATION: "global"
   _IMAGE_TAG: latest
+  _SERVICE_ACCOUNT_NAME: lightspeed-agent
+  _DB_INSTANCE_NAME: lightspeed-agent-db
+  _VPC_CONNECTOR_NAME: lightspeed-redis-conn
+  _MCP_SOURCE_IMAGE: "quay.io/redhat-services-prod/insights-management-tenant/insights-mcp/red-hat-lightspeed-mcp:latest"
+  _ALLOW_UNAUTHENTICATED: "false"
+  _PUBSUB_INVOKER_NAME: pubsub-invoker
+  _PUBSUB_TOPIC: marketplace-entitlements
+  _PUBSUB_SUBSCRIPTION: ""
+  _AGENT_SOURCE_IMAGE: "quay.io/ecosystem-appeng/google-lightspeed-agent:latest"
+  _HANDLER_SOURCE_IMAGE: "quay.io/ecosystem-appeng/google-marketplace-handler:latest"
+  _SERVICE_CONTROL_SERVICE_NAME: ""
 
 options:
   logging: CLOUD_LOGGING_ONLY
-  machineType: E2_HIGHCPU_8
 
 steps:
   # ==========================================================================
-  # Step 1: Build the container image
+  # COPY PHASE - Pull pre-built images from Quay.io and push to GCR (parallel)
   # ==========================================================================
+
   - name: 'gcr.io/cloud-builders/docker'
-    id: 'build'
+    id: 'copy-agent'
+    entrypoint: 'bash'
     args:
-      - 'build'
-      - '-t'
-      - 'gcr.io/${PROJECT_ID}/${_SERVICE_NAME}:${_IMAGE_TAG}'
-      - '-t'
-      - 'gcr.io/${PROJECT_ID}/${_SERVICE_NAME}:${SHORT_SHA}'
-      - '-f'
-      - 'Containerfile'
-      - '.'
+      - '-c'
+      - |
+        docker pull ${_AGENT_SOURCE_IMAGE} && \
+        docker tag ${_AGENT_SOURCE_IMAGE} gcr.io/${PROJECT_ID}/${_SERVICE_NAME}:${_IMAGE_TAG} && \
+        docker push gcr.io/${PROJECT_ID}/${_SERVICE_NAME}:${_IMAGE_TAG}
+    waitFor: ['-']
+
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'copy-handler'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        docker pull ${_HANDLER_SOURCE_IMAGE} && \
+        docker tag ${_HANDLER_SOURCE_IMAGE} gcr.io/${PROJECT_ID}/${_HANDLER_SERVICE_NAME}:${_IMAGE_TAG} && \
+        docker push gcr.io/${PROJECT_ID}/${_HANDLER_SERVICE_NAME}:${_IMAGE_TAG}
+    waitFor: ['-']
+
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'copy-mcp'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        docker pull ${_MCP_SOURCE_IMAGE} && \
+        docker tag ${_MCP_SOURCE_IMAGE} gcr.io/${PROJECT_ID}/red-hat-lightspeed-mcp:latest && \
+        docker push gcr.io/${PROJECT_ID}/red-hat-lightspeed-mcp:latest
+    waitFor: ['-']
 
   # ==========================================================================
-  # Step 2: Push the container image to Container Registry
+  # DEPLOY PHASE - Deploy services to Cloud Run
+  # Handler deploys first (must be running before agent goes live).
+  # Uses the same YAML configs and sed substitution as deploy.sh.
   # ==========================================================================
-  - name: 'gcr.io/cloud-builders/docker'
-    id: 'push'
-    args:
-      - 'push'
-      - '--all-tags'
-      - 'gcr.io/${PROJECT_ID}/${_SERVICE_NAME}'
-    waitFor:
-      - 'build'
 
-  # ==========================================================================
-  # Step 3: Deploy to Cloud Run
-  # ==========================================================================
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
-    id: 'deploy'
-    entrypoint: 'gcloud'
+    id: 'deploy-handler'
+    entrypoint: 'bash'
     args:
-      - 'run'
-      - 'deploy'
-      - '${_SERVICE_NAME}'
-      - '--image'
-      - 'gcr.io/${PROJECT_ID}/${_SERVICE_NAME}:${_IMAGE_TAG}'
-      - '--region'
-      - '${_REGION}'
-      - '--platform'
-      - 'managed'
-      - '--port'
-      - '8000'
-      - '--cpu'
-      - '2'
-      - '--memory'
-      - '2Gi'
-      - '--min-instances'
-      - '0'
-      - '--max-instances'
-      - '10'
-      - '--timeout'
-      - '300'
-      - '--concurrency'
-      - '80'
-      - '--set-env-vars'
-      - 'GOOGLE_GENAI_USE_VERTEXAI=TRUE,GOOGLE_CLOUD_PROJECT=${PROJECT_ID},GOOGLE_CLOUD_LOCATION=${_VERTEXAI_LOCATION},AGENT_HOST=0.0.0.0,AGENT_PORT=8000,LOG_FORMAT=json'
-      - '--set-secrets'
-      - 'RED_HAT_SSO_CLIENT_ID=redhat-sso-client-id:latest,RED_HAT_SSO_CLIENT_SECRET=redhat-sso-client-secret:latest,DATABASE_URL=database-url:latest,REDIS_URL=redis-url:latest'
-      - '--service-account'
-      - 'lightspeed-agent@${PROJECT_ID}.iam.gserviceaccount.com'
-      - '--allow-unauthenticated'
-    waitFor:
-      - 'push'
+      - '-c'
+      - |
+        sed -e 's|gcr.io/$${PROJECT_ID}/marketplace-handler:latest|gcr.io/${PROJECT_ID}/${_HANDLER_SERVICE_NAME}:${_IMAGE_TAG}|g' \
+            -e 's|$${PROJECT_ID}|${PROJECT_ID}|g' \
+            -e 's|$${REGION}|${_REGION}|g' \
+            -e 's|$${SERVICE_NAME}|${_SERVICE_NAME}|g' \
+            -e 's|$${SERVICE_ACCOUNT_NAME}|${_SERVICE_ACCOUNT_NAME}|g' \
+            -e 's|$${HANDLER_SERVICE_NAME}|${_HANDLER_SERVICE_NAME}|g' \
+            -e 's|$${DB_INSTANCE_NAME}|${_DB_INSTANCE_NAME}|g' \
+            -e 's|$${VPC_CONNECTOR_NAME}|${_VPC_CONNECTOR_NAME}|g' \
+            -e 's|$${SERVICE_CONTROL_SERVICE_NAME}|${_SERVICE_CONTROL_SERVICE_NAME}|g' \
+            deploy/cloudrun/marketplace-handler.yaml > /workspace/handler.yaml
+
+        gcloud run services replace /workspace/handler.yaml \
+            --region=${_REGION} \
+            --project=${PROJECT_ID}
+    waitFor: ['copy-handler']
+
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'deploy-agent'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        sed -e 's|gcr.io/$${PROJECT_ID}/lightspeed-agent:latest|gcr.io/${PROJECT_ID}/${_SERVICE_NAME}:${_IMAGE_TAG}|g' \
+            -e 's|$${MCP_IMAGE}|gcr.io/${PROJECT_ID}/red-hat-lightspeed-mcp:latest|g' \
+            -e 's|$${PROJECT_ID}|${PROJECT_ID}|g' \
+            -e 's|$${REGION}|${_REGION}|g' \
+            -e 's|$${VERTEXAI_LOCATION}|${_VERTEXAI_LOCATION}|g' \
+            -e 's|$${SERVICE_NAME}|${_SERVICE_NAME}|g' \
+            -e 's|$${SERVICE_ACCOUNT_NAME}|${_SERVICE_ACCOUNT_NAME}|g' \
+            -e 's|$${DB_INSTANCE_NAME}|${_DB_INSTANCE_NAME}|g' \
+            -e 's|$${VPC_CONNECTOR_NAME}|${_VPC_CONNECTOR_NAME}|g' \
+            deploy/cloudrun/service.yaml > /workspace/service.yaml
+
+        gcloud run services replace /workspace/service.yaml \
+            --region=${_REGION} \
+            --project=${PROJECT_ID}
+    waitFor: ['copy-agent', 'copy-mcp', 'deploy-handler']
+
+  # ==========================================================================
+  # POST-DEPLOY PHASE - Configure IAM, Pub/Sub, and service URLs
+  # ==========================================================================
+
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'allow-unauthenticated'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        if [ "${_ALLOW_UNAUTHENTICATED}" != "true" ]; then
+          echo "Skipping unauthenticated access (set _ALLOW_UNAUTHENTICATED=true to enable)"
+          exit 0
+        fi
+        echo "Allowing unauthenticated access for both services..."
+        gcloud run services add-iam-policy-binding ${_HANDLER_SERVICE_NAME} \
+            --region=${_REGION} \
+            --project=${PROJECT_ID} \
+            --member="allUsers" \
+            --role="roles/run.invoker" \
+            --quiet
+        gcloud run services add-iam-policy-binding ${_SERVICE_NAME} \
+            --region=${_REGION} \
+            --project=${PROJECT_ID} \
+            --member="allUsers" \
+            --role="roles/run.invoker" \
+            --quiet
+    waitFor: ['deploy-handler', 'deploy-agent']
+
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'configure-pubsub'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        HANDLER_URL=$$(gcloud run services describe ${_HANDLER_SERVICE_NAME} \
+            --region=${_REGION} \
+            --project=${PROJECT_ID} \
+            --format='value(status.url)')
+
+        if [ -z "$$HANDLER_URL" ]; then
+          echo "WARNING: Could not get handler URL, skipping Pub/Sub configuration"
+          exit 0
+        fi
+
+        PUSH_ENDPOINT="$$HANDLER_URL/dcr"
+        INVOKER_SA="${_PUBSUB_INVOKER_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
+        SUBSCRIPTION="${_PUBSUB_SUBSCRIPTION:-${_PUBSUB_TOPIC}-sub}"
+
+        gcloud run services add-iam-policy-binding ${_HANDLER_SERVICE_NAME} \
+            --region=${_REGION} \
+            --project=${PROJECT_ID} \
+            --member="serviceAccount:$$INVOKER_SA" \
+            --role="roles/run.invoker" \
+            --quiet || true
+
+        if gcloud pubsub subscriptions describe "$$SUBSCRIPTION" --project=${PROJECT_ID} &>/dev/null; then
+          echo "Updating existing subscription '$$SUBSCRIPTION'..."
+          gcloud pubsub subscriptions update "$$SUBSCRIPTION" \
+              --push-endpoint="$$PUSH_ENDPOINT" \
+              --push-auth-service-account="$$INVOKER_SA" \
+              --ack-deadline=60 \
+              --project=${PROJECT_ID} \
+              --quiet
+        else
+          echo "Creating push subscription '$$SUBSCRIPTION'..."
+          gcloud pubsub subscriptions create "$$SUBSCRIPTION" \
+              --topic=${_PUBSUB_TOPIC} \
+              --push-endpoint="$$PUSH_ENDPOINT" \
+              --push-auth-service-account="$$INVOKER_SA" \
+              --ack-deadline=60 \
+              --project=${PROJECT_ID}
+        fi
+
+        echo "Pub/Sub push subscription configured:"
+        echo "  Subscription: $$SUBSCRIPTION"
+        echo "  Push endpoint: $$PUSH_ENDPOINT"
+        echo "  Auth SA: $$INVOKER_SA"
+    waitFor: ['deploy-handler']
+
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'update-agent-urls'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        AGENT_URL=$$(gcloud run services describe ${_SERVICE_NAME} \
+            --region=${_REGION} \
+            --project=${PROJECT_ID} \
+            --format='value(status.url)')
+        HANDLER_URL=$$(gcloud run services describe ${_HANDLER_SERVICE_NAME} \
+            --region=${_REGION} \
+            --project=${PROJECT_ID} \
+            --format='value(status.url)')
+
+        if [ -z "$$AGENT_URL" ]; then
+          echo "ERROR: Could not retrieve agent URL"
+          exit 1
+        fi
+
+        ENV_VARS="AGENT_PROVIDER_URL=$$AGENT_URL"
+        if [ -n "$$HANDLER_URL" ]; then
+          ENV_VARS="$$ENV_VARS,MARKETPLACE_HANDLER_URL=$$HANDLER_URL"
+        else
+          echo "WARNING: Could not retrieve handler URL. MARKETPLACE_HANDLER_URL not set."
+          echo "DCR endpoints in the AgentCard will fall back to AGENT_PROVIDER_URL."
+        fi
+
+        echo "Updating agent env vars with service URLs..."
+        gcloud run services update ${_SERVICE_NAME} \
+            --region=${_REGION} \
+            --project=${PROJECT_ID} \
+            --update-env-vars="$$ENV_VARS" \
+            --quiet
+
+        echo "Agent URLs configured:"
+        echo "  AGENT_PROVIDER_URL: $$AGENT_URL"
+        echo "  MARKETPLACE_HANDLER_URL: $$HANDLER_URL"
+    waitFor: ['deploy-handler', 'deploy-agent']
 
 images:
   - 'gcr.io/${PROJECT_ID}/${_SERVICE_NAME}:${_IMAGE_TAG}'
-  - 'gcr.io/${PROJECT_ID}/${_SERVICE_NAME}:${SHORT_SHA}'
+  - 'gcr.io/${PROJECT_ID}/${_HANDLER_SERVICE_NAME}:${_IMAGE_TAG}'
+  - 'gcr.io/${PROJECT_ID}/red-hat-lightspeed-mcp:latest'
 
 tags:
   - 'lightspeed-agent'
