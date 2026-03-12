@@ -107,6 +107,26 @@ export SERVICE_NAME="lightspeed-agent"
 export ENABLE_MARKETPLACE="false"
 ```
 
+**Google Cloud Marketplace deployments:** If you are deploying with marketplace
+integration (`ENABLE_MARKETPLACE=true`, the default), you **must** set
+`PUBSUB_TOPIC` and `PUBSUB_SUBSCRIPTION` **before** running `setup.sh` or
+`deploy.sh`:
+
+```bash
+# Required: fully-qualified Pub/Sub topic provided by Google Cloud Marketplace
+export PUBSUB_TOPIC="projects/<marketplace-project>/topics/<your-marketplace-topic>"
+
+# Required when using a fully-qualified topic: the subscription name is derived
+# from the topic by default (appending "-sub"), which produces an invalid name
+# when the topic is a fully-qualified path.
+export PUBSUB_SUBSCRIPTION="marketplace-events-sub"
+```
+
+If `PUBSUB_TOPIC` is not set, the scripts default to creating a local topic
+named `marketplace-entitlements`, which does **not** receive events from the
+marketplace. Orders will remain stuck in `pending` status because
+entitlement approval events never reach the handler.
+
 ### 2. Run Setup Script
 
 The setup script enables required APIs, creates service accounts (runtime + Pub/Sub invoker), and sets up secrets:
@@ -126,7 +146,8 @@ The setup script enables required APIs, creates service accounts (runtime + Pub/
 | `DB_INSTANCE_NAME` | `lightspeed-agent-db` | Cloud SQL instance name |
 | `VPC_CONNECTOR_NAME` | `lightspeed-redis-conn` | Serverless VPC Access connector for Redis |
 | `PUBSUB_INVOKER_NAME` | `pubsub-invoker` | Pub/Sub invoker SA name |
-| `PUBSUB_TOPIC` | `marketplace-entitlements` | Pub/Sub topic name for marketplace events |
+| `PUBSUB_TOPIC` | `marketplace-entitlements` | Pub/Sub topic for marketplace events. **Must** be set to the fully-qualified topic from Google Cloud Marketplace for production deployments. See [Set Environment Variables](#1-set-environment-variables). |
+| `PUBSUB_SUBSCRIPTION` | `${PUBSUB_TOPIC}-sub` | Pub/Sub subscription name. **Must** be set explicitly when `PUBSUB_TOPIC` is a fully-qualified path, since the default derivation produces an invalid name. |
 | `ENABLE_MARKETPLACE` | `true` | Create Pub/Sub invoker SA and topic for marketplace integration |
 
 ### 3. Set Up Cloud SQL Database
@@ -1769,6 +1790,84 @@ gcloud run services describe lightspeed-agent \
 1. **Secret access denied**: Ensure service account has `secretmanager.secretAccessor` role
 2. **Container fails to start**: Check logs for missing environment variables
 3. **Database connection timeout**: Ensure Cloud SQL connection is configured
+
+### Orders Stuck in Pending Status (Pub/Sub Topic Mismatch)
+
+If marketplace orders remain in `pending` or `pending_approval` status and
+never transition to `active`, the Pub/Sub subscription is likely pointing to
+the wrong topic. This happens when `PUBSUB_TOPIC` was not set to the
+fully-qualified marketplace topic before running the deployment scripts.
+
+**1. Verify the current subscription configuration:**
+
+```bash
+gcloud pubsub subscriptions describe ${PUBSUB_SUBSCRIPTION:-marketplace-entitlements-sub} \
+  --project=$GOOGLE_CLOUD_PROJECT \
+  --format='yaml(topic, pushConfig.pushEndpoint)'
+```
+
+If the `topic` field does not match the fully-qualified topic provided by
+Google Cloud Marketplace, the subscription needs to be recreated.
+
+**2. Delete the misconfigured subscription and recreate it:**
+
+A Pub/Sub subscription's topic cannot be changed after creation, so the
+subscription must be deleted and recreated. The Pub/Sub Invoker SA
+(linked in the Marketplace Producer Portal) must be used to create the
+subscription because it holds the cross-project permissions on the
+marketplace topic.
+
+```bash
+# Set the correct topic and a valid subscription name
+export PUBSUB_TOPIC="projects/<marketplace-project>/topics/<your-marketplace-topic>"
+export PUBSUB_SUBSCRIPTION="marketplace-events-sub"
+export PUBSUB_INVOKER_SA="${PUBSUB_INVOKER_NAME:-pubsub-invoker}@${GOOGLE_CLOUD_PROJECT}.iam.gserviceaccount.com"
+
+# Delete the old subscription
+gcloud pubsub subscriptions delete marketplace-entitlements-sub \
+  --project=$GOOGLE_CLOUD_PROJECT --quiet
+
+# Ensure the invoker SA has roles/pubsub.editor in your project
+# (setup.sh grants this automatically for new deployments)
+gcloud projects add-iam-policy-binding $GOOGLE_CLOUD_PROJECT \
+  --member="serviceAccount:$PUBSUB_INVOKER_SA" \
+  --role="roles/pubsub.editor" --quiet
+
+# Ensure you can impersonate the invoker SA
+gcloud iam service-accounts add-iam-policy-binding "$PUBSUB_INVOKER_SA" \
+  --member="user:$(gcloud config get account)" \
+  --role="roles/iam.serviceAccountTokenCreator" \
+  --project=$GOOGLE_CLOUD_PROJECT --quiet
+
+# Wait a couple of minutes for IAM propagation, then create the subscription
+HANDLER_URL=$(gcloud run services describe ${HANDLER_SERVICE_NAME:-marketplace-handler} \
+  --region=${GOOGLE_CLOUD_LOCATION:-us-central1} \
+  --project=$GOOGLE_CLOUD_PROJECT \
+  --format='value(status.url)')
+
+gcloud pubsub subscriptions create "$PUBSUB_SUBSCRIPTION" \
+  --topic="$PUBSUB_TOPIC" \
+  --push-endpoint="${HANDLER_URL}/dcr" \
+  --push-auth-service-account="$PUBSUB_INVOKER_SA" \
+  --ack-deadline=60 \
+  --project=$GOOGLE_CLOUD_PROJECT \
+  --impersonate-service-account="$PUBSUB_INVOKER_SA"
+```
+
+**3. Verify the fix:**
+
+```bash
+# Confirm the subscription points to the correct topic
+gcloud pubsub subscriptions describe "$PUBSUB_SUBSCRIPTION" \
+  --project=$GOOGLE_CLOUD_PROJECT \
+  --format='yaml(topic, pushConfig.pushEndpoint)'
+
+# Check handler logs for incoming Pub/Sub events
+gcloud run services logs read ${HANDLER_SERVICE_NAME:-marketplace-handler} \
+  --region=${GOOGLE_CLOUD_LOCATION:-us-central1} \
+  --project=$GOOGLE_CLOUD_PROJECT \
+  --limit=50
+```
 
 ## Cleanup / Teardown
 
