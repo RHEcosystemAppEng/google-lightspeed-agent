@@ -1,6 +1,7 @@
 """Header provider for MCP toolset to inject authentication credentials."""
 
 import logging
+from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -12,7 +13,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def create_mcp_header_provider():
+def create_mcp_header_provider() -> Callable[["ReadonlyContext"], dict[str, str]]:
     """Create a header provider function for McpToolset.
 
     The returned function forwards the incoming request's JWT token as an
