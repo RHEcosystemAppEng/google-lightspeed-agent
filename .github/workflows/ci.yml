@@ -52,3 +52,20 @@ jobs:
 
       - name: Build image
         run: podman build -t lightspeed-agent:ci -f Containerfile .
+
+  ci-gate:
+    name: CI Gate
+    if: always()
+    needs: [lint, test, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check all jobs passed
+        run: |
+          if [[ "${{ needs.lint.result }}" != "success" || "${{ needs.test.result }}" != "success" || "${{ needs.build.result }}" != "success" ]]; then
+            echo "One or more CI jobs failed or were cancelled."
+            echo "  lint:  ${{ needs.lint.result }}"
+            echo "  test:  ${{ needs.test.result }}"
+            echo "  build: ${{ needs.build.result }}"
+            exit 1
+          fi
+          echo "All CI jobs passed."
