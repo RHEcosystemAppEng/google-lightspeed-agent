@@ -221,10 +221,13 @@ class Settings(BaseSettings):
         ),
     )
 
-    # Agent required scope for token introspection
+    # Agent required scopes for token introspection (comma-separated)
     agent_required_scope: str = Field(
-        default="agent:insights",
-        description="OAuth scope required in access tokens. Checked via token introspection.",
+        default="api.console,api.ocm",
+        description=(
+            "Comma-separated OAuth scopes required in access tokens."
+            " Checked via token introspection."
+        ),
     )
 
     @property

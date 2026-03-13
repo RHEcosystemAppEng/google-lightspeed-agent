@@ -45,7 +45,11 @@ class TokenIntrospector:
         self._introspection_url = self._settings.keycloak_introspection_endpoint
         self._client_id = self._settings.red_hat_sso_client_id
         self._client_secret = self._settings.red_hat_sso_client_secret
-        self._required_scope = self._settings.agent_required_scope
+        self._required_scopes = [
+            s.strip()
+            for s in self._settings.agent_required_scope.split(",")
+            if s.strip()
+        ]
 
     async def validate_token(self, token: str) -> AuthenticatedUser:
         """Validate a Bearer token via introspection.
@@ -69,11 +73,12 @@ class TokenIntrospector:
         if not data.get("active"):
             raise TokenValidationError("Token is not active")
 
-        # Check required scope
+        # Check required scopes
         scopes = self._parse_scopes(data)
-        if self._required_scope and self._required_scope not in scopes:
+        missing = [s for s in self._required_scopes if s not in scopes]
+        if missing:
             raise InsufficientScopeError(
-                f"Token is missing required scope: {self._required_scope}"
+                f"Token is missing required scope(s): {', '.join(missing)}"
             )
 
         return self._to_user(data, scopes)
@@ -157,7 +162,7 @@ class TokenIntrospector:
             email="dev@example.com",
             name="Development User",
             org_id="dev-org",
-            scopes=["openid", "profile", "email", "agent:insights"],
+            scopes=["openid", "profile", "email", "api.console", "api.ocm"],
             token_exp=datetime.now(UTC).replace(year=2099),
             metadata={"order_id": "dev-order"},
         )
