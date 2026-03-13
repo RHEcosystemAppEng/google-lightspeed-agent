@@ -5,6 +5,7 @@ import json
 import time
 from unittest.mock import AsyncMock, patch
 
+import httpx
 import pytest
 import pytest_asyncio
 from fastapi.testclient import TestClient
@@ -372,7 +373,9 @@ class TestPubSubHandler:
             "account": {"id": "account-xyz"},
         }
 
-        response = client.post("/dcr", json=self._make_pubsub_body(event_data))
+        mock_response = httpx.Response(status_code=200, request=httpx.Request("POST", "https://fake"))
+        with patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_response):
+            response = client.post("/dcr", json=self._make_pubsub_body(event_data))
 
         assert response.status_code == 200
         data = response.json()
@@ -392,7 +395,17 @@ class TestPubSubHandler:
             },
         }
 
-        response = client.post("/dcr", json=self._make_pubsub_body(event_data))
+        mock_post = httpx.Response(status_code=200, request=httpx.Request("POST", "https://fake"))
+        mock_get = httpx.Response(
+            status_code=200,
+            json={"account": "providers/test-provider/accounts/acct-1"},
+            request=httpx.Request("GET", "https://fake"),
+        )
+        with (
+            patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_post),
+            patch("httpx.AsyncClient.get", new_callable=AsyncMock, return_value=mock_get),
+        ):
+            response = client.post("/dcr", json=self._make_pubsub_body(event_data))
 
         assert response.status_code == 200
         data = response.json()
