@@ -246,6 +246,57 @@ class TestProcurementService:
         await service.process_event(event)
 
     @pytest.mark.asyncio
+    async def test_approve_account_ignores_409_conflict(self, service):
+        """Test _approve_account treats 409 ALREADY_EXISTS as success."""
+        mock_response = httpx.Response(
+            status_code=409,
+            text='{"message": "Requested entity already exists", "status": "ALREADY_EXISTS"}',
+            request=httpx.Request("POST", "https://example.com"),
+        )
+        with (
+            patch.object(service, "_settings") as mock_settings,
+            patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_response),
+        ):
+            mock_settings.google_cloud_project = "test-project"
+
+            # Should NOT raise — 409 means a concurrent handler already approved
+            await service._approve_account("account-123")
+
+    @pytest.mark.asyncio
+    async def test_approve_entitlement_ignores_409_conflict(self, service):
+        """Test _approve_entitlement treats 409 ALREADY_EXISTS as success."""
+        mock_response = httpx.Response(
+            status_code=409,
+            text='{"message": "Requested entity already exists", "status": "ALREADY_EXISTS"}',
+            request=httpx.Request("POST", "https://example.com"),
+        )
+        with (
+            patch.object(service, "_settings") as mock_settings,
+            patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_response),
+        ):
+            mock_settings.google_cloud_project = "test-project"
+
+            # Should NOT raise — 409 means a concurrent handler already approved
+            await service._approve_entitlement("entitlement-123")
+
+    @pytest.mark.asyncio
+    async def test_approve_plan_change_ignores_409_conflict(self, service):
+        """Test _approve_plan_change treats 409 ALREADY_EXISTS as success."""
+        mock_response = httpx.Response(
+            status_code=409,
+            text='{"message": "Requested entity already exists", "status": "ALREADY_EXISTS"}',
+            request=httpx.Request("POST", "https://example.com"),
+        )
+        with (
+            patch.object(service, "_settings") as mock_settings,
+            patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_response),
+        ):
+            mock_settings.google_cloud_project = "test-project"
+
+            # Should NOT raise — 409 means a concurrent handler already approved
+            await service._approve_plan_change("entitlement-123", "new-plan")
+
+    @pytest.mark.asyncio
     async def test_approve_entitlement_raises_on_non_200(self, service):
         """Test _approve_entitlement raises RuntimeError on non-200 response."""
         mock_response = httpx.Response(

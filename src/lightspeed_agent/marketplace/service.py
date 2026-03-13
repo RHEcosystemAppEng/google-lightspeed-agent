@@ -505,7 +505,11 @@ class ProcurementService:
 
         if response.status_code == 200:
             logger.info("Approved account: %s", account_id)
-        elif response.status_code == 400:
+        elif response.status_code in (400, 409):
+            # 400 FAILED_PRECONDITION — account not in approvable state
+            # 409 ALREADY_EXISTS — concurrent approval (e.g. race between
+            #     ENTITLEMENT_OFFER_ACCEPTED and ENTITLEMENT_CREATION_REQUESTED)
+            # Both are safe to ignore so Pub/Sub does not retry indefinitely.
             logger.warning(
                 "Cannot approve account %s (already processed?): %s",
                 account_id,
@@ -547,10 +551,11 @@ class ProcurementService:
 
         if response.status_code == 200:
             logger.info("Approved entitlement: %s", entitlement_id)
-        elif response.status_code == 400:
-            # FAILED_PRECONDITION — entitlement is not in an approvable state
-            # (e.g. already approved, cancelled). Log and move on so Pub/Sub
-            # does not retry indefinitely.
+        elif response.status_code in (400, 409):
+            # 400 FAILED_PRECONDITION — entitlement is not in an approvable
+            #     state (e.g. already approved, cancelled).
+            # 409 ALREADY_EXISTS — concurrent approval from parallel handlers.
+            # Both are safe to ignore so Pub/Sub does not retry indefinitely.
             logger.warning(
                 "Cannot approve entitlement %s (already processed?): %s",
                 entitlement_id,
@@ -647,7 +652,8 @@ class ProcurementService:
                 entitlement_id,
                 new_plan,
             )
-        elif response.status_code == 400:
+        elif response.status_code in (400, 409):
+            # Already processed or concurrent approval — safe to ignore.
             logger.warning(
                 "Cannot approve plan change for %s (already processed?): %s",
                 entitlement_id,
