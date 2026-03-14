@@ -128,7 +128,7 @@ class TestTokenIntrospector:
             mock_instance.__aexit__.return_value = None
             mock_client.return_value = mock_instance
 
-            with pytest.raises(InsufficientScopeError, match="api.console"):
+            with pytest.raises(InsufficientScopeError, match=r"api\.console.*api\.ocm"):
                 await introspector.validate_token("no-scope-token")
 
     @pytest.mark.asyncio
