@@ -70,15 +70,14 @@ def create_mcp_header_provider():
             return {"Authorization": f"Bearer {token}"}
 
         if settings.production:
-            logger.error(
+            raise RuntimeError(
                 "No MCP credentials available: production mode requires "
                 "a user JWT but no access token found in request context"
             )
-        else:
-            logger.warning(
-                "No MCP credentials available: lightspeed credentials not "
-                "configured and no access token in request context"
-            )
+        logger.warning(
+            "No MCP credentials available: lightspeed credentials not "
+            "configured and no access token in request context"
+        )
         return {}
 
     return header_provider
