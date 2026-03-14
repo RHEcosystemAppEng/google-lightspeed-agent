@@ -149,7 +149,7 @@ class TestModels:
 
         ext = AgentExtension(
             uri="urn:test:dcr",
-            params={"endpoint": "http://example.com/register"},
+            params={"target_url": "http://example.com/register"},
         )
         caps = AgentCapabilities(
             streaming=True,
