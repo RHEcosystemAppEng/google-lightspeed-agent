@@ -284,6 +284,8 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def _block_skip_jwt_in_production(self) -> Self:
         """Block SKIP_JWT_VALIDATION when running on Cloud Run (K_SERVICE)."""
+        if self.production:
+            return self  # Guard 2 in _enforce_production_guards handles this
         if os.getenv("K_SERVICE") and self.skip_jwt_validation:
             raise ValueError(
                 "SKIP_JWT_VALIDATION=true is not allowed when running on "
