@@ -251,6 +251,14 @@ steps:
     args:
       - '-c'
       - |
+        set -eo pipefail
+
+        # Validate: fully-qualified topic paths require explicit subscription name
+        if [[ "${_PUBSUB_TOPIC}" == projects/* ]] && [[ -z "${_PUBSUB_SUBSCRIPTION}" ]]; then
+          echo "ERROR: When using a fully-qualified topic path, _PUBSUB_SUBSCRIPTION must be explicitly set"
+          exit 1
+        fi
+
         HANDLER_URL=$$(gcloud run services describe ${_HANDLER_SERVICE_NAME} \
             --region=${_REGION} \
             --project=${PROJECT_ID} \
