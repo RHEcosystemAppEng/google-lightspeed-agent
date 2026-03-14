@@ -341,10 +341,9 @@ steps:
         echo "  MARKETPLACE_HANDLER_URL: $$HANDLER_URL"
     waitFor: ['deploy-handler', 'deploy-agent']
 
-images:
-  - 'gcr.io/${PROJECT_ID}/${_SERVICE_NAME}:${_IMAGE_TAG}'
-  - 'gcr.io/${PROJECT_ID}/${_HANDLER_SERVICE_NAME}:${_IMAGE_TAG}'
-  - 'gcr.io/${PROJECT_ID}/red-hat-lightspeed-mcp:latest'
+# NOTE: No 'images' directive — all images are pushed explicitly in build/copy
+# steps above. Using 'images' would conflict with the pre-built image path
+# where Cloud Build doesn't build the images itself.
 
 tags:
   - 'lightspeed-agent'
