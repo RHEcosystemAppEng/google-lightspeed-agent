@@ -394,9 +394,9 @@ fastapi==0.135.1 \
     #   lightspeed-agent (pyproject.toml)
     #   a2a-sdk
     #   google-adk
-google-adk==1.26.0 \
-    --hash=sha256:1a74c6b25f8f4d4098e1a01118b8eefcdf7b3741ba07993093a773bc6775b4d5 \
-    --hash=sha256:29ec8636025848716246228b595749f785ddc83fb3982052ec92ae871f12fcd8
+google-adk==1.27.1 \
+    --hash=sha256:806c72dd6d79b16a1dd86e5874ed48f5a42f2acc0129becbb77487a7629af224 \
+    --hash=sha256:b252b6e2139385fb8b96cc24026f77be83a93a71da877aa3e7e98868a8f5c9d9
     # via lightspeed-agent (pyproject.toml)
 google-api-core==2.30.0 \
     --hash=sha256:02edfa9fab31e17fc0befb5f161b3bf93c9096d99aed584625f38065c511ad9b \
