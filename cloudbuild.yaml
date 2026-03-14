@@ -347,7 +347,7 @@ steps:
         echo "Agent URLs configured:"
         echo "  AGENT_PROVIDER_URL: $$AGENT_URL"
         echo "  MARKETPLACE_HANDLER_URL: $$HANDLER_URL"
-    waitFor: ['deploy-handler', 'deploy-agent']
+    waitFor: ['deploy-handler', 'deploy-agent', 'allow-unauthenticated']
 
 # NOTE: No 'images' directive — all images are pushed explicitly in build/copy
 # steps above. Using 'images' would conflict with the pre-built image path
