@@ -88,7 +88,7 @@ These services are required for production Cloud Run deployments and are configu
 
 | Endpoint | Purpose |
 |----------|---------|
-| `https://www.googleapis.com/service_accounts/v1/metadata/x509/` | Fetches public keys to validate DCR software_statement JWTs from `cloud-agentspace@system.gserviceaccount.com` |
+| `https://www.googleapis.com/service_accounts/v1/metadata/x509/cloud-agentspace@system.gserviceaccount.com` | Fetches public keys to validate DCR software_statement JWTs. This URL also serves as the expected `iss` (issuer) claim in the JWT for verification (see `google_jwt.py:20-23`) |
 
 ## Key Architectural Notes
 
