@@ -32,6 +32,19 @@ The model is configured in `src/lightspeed_agent/config/settings.py` and used vi
 | **Cloud Build** | Container image builds | For deployment | `deploy/cloudrun/deploy.sh` |
 | **Container Registry (gcr.io)** | Container image storage | For deployment | `gcr.io/{PROJECT_ID}/...` |
 
+### Managed GCP Infrastructure
+
+These services are required for production Cloud Run deployments and are configured in `deploy/cloudrun/setup.sh`:
+
+| Service | Purpose | Required | Reference |
+|---------|---------|----------|-----------|
+| **Cloud SQL** | Managed PostgreSQL for production databases | For production | `setup.sh:322`, IAM role `roles/cloudsql.client` |
+| **Secret Manager** | Stores API keys, database URLs, Redis URL, and other secrets | For production | `setup.sh:157-187` |
+| **Cloud Scheduler** | Schedules usage reporting jobs | For marketplace | `setup.sh:80` |
+| **Cloud Logging** | Centralized log collection | For production | IAM role `roles/logging.logWriter` |
+| **Cloud Monitoring** | Metrics and alerting | For production | IAM role `roles/monitoring.metricWriter` |
+| **Serverless VPC Access** | Connects Cloud Run to Cloud Memorystore (Redis) | For production | `setup.sh:85`, `service.yaml:37` |
+
 ## Red Hat Services
 
 | Service | Purpose | Required | Key Config |
