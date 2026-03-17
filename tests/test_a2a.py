@@ -75,6 +75,19 @@ class TestAgentCard:
         skill_ids = [s.id for s in card.skills]
         assert "rhel-advisor" in skill_ids or len(skill_ids) > 0
 
+    def test_agent_card_provider_url_uses_organization_url(self):
+        """Test AgentCard provider.url reflects configurable organization URL."""
+        from lightspeed_agent.config import get_settings
+
+        settings = get_settings()
+        original = settings.agent_provider_organization_url
+        settings.agent_provider_organization_url = "https://custom-org.example.com"
+        try:
+            card = build_agent_card()
+            assert card.provider.url == "https://custom-org.example.com"
+        finally:
+            settings.agent_provider_organization_url = original
+
     def test_get_agent_card_dict(self):
         """Test AgentCard serialization to dict."""
         card_dict = get_agent_card_dict()
