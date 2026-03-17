@@ -335,7 +335,7 @@ class TestGetSessionService:
 
         error_msg = (
             "Failed to create database engine for URL "
-            "'postgresql+psycopg2://sessions:8dnL1i3eo4GtqwUpKKhNVA@"
+            "'postgresql+asyncpg://sessions:8dnL1i3eo4GtqwUpKKhNVA@"
             "/agent_sessions?host=/cloudsql/project:region:instance'"
         )
 
