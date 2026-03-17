@@ -57,14 +57,17 @@ def _get_session_service() -> Any:
         try:
             from google.adk.sessions import DatabaseSessionService
 
-            # ADK's DatabaseSessionService uses synchronous SQLAlchemy,
-            # so we need to convert the async URL to sync format
+            # ADK's DatabaseSessionService uses async SQLAlchemy
+            # (create_async_engine), so ensure the URL uses an async driver
             db_url = session_db_url
-            if "postgresql+asyncpg" in db_url:
-                # Convert asyncpg URL to sync psycopg2 format
-                db_url = db_url.replace("postgresql+asyncpg", "postgresql+psycopg2")
-            elif "postgresql+aiopg" in db_url:
-                db_url = db_url.replace("postgresql+aiopg", "postgresql+psycopg2")
+            if "postgresql+psycopg2" in db_url:
+                # Convert sync psycopg2 URL to async asyncpg format
+                db_url = db_url.replace("postgresql+psycopg2", "postgresql+asyncpg")
+            elif db_url.startswith("postgresql://"):
+                # Plain postgresql:// defaults to psycopg2 (sync); use asyncpg
+                db_url = db_url.replace(
+                    "postgresql://", "postgresql+asyncpg://", 1
+                )
 
             # Log which database is being used (without credentials)
             parsed = urlparse(db_url)
