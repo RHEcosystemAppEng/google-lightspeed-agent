@@ -398,6 +398,7 @@ class TestPubSubHandler:
         }
 
         mock_post = httpx.Response(status_code=200, request=httpx.Request("POST", "https://fake"))
+        # Mock _resolve_account_id response: "providers/{provider}/accounts/{account_id}"
         mock_get = httpx.Response(
             status_code=200,
             json={"account": "providers/test-provider/accounts/acct-1"},
