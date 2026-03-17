@@ -374,13 +374,15 @@ class TestPubSubHandler:
         }
 
         mock_response = httpx.Response(status_code=200, request=httpx.Request("POST", "https://fake"))
-        with patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_response):
+        with patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_response) as mock_post:
             response = client.post("/dcr", json=self._make_pubsub_body(event_data))
 
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "success"
         assert data["orderId"] is None
+        # mock_post is a safety net to prevent real Procurement API calls;
+        # when google_cloud_project is unset the approval is skipped entirely.
 
     @pytest.mark.asyncio
     async def test_entitlement_creation_requested_returns_order_id(self, client):
@@ -396,6 +398,7 @@ class TestPubSubHandler:
         }
 
         mock_post = httpx.Response(status_code=200, request=httpx.Request("POST", "https://fake"))
+        # Mock _resolve_account_id response: "providers/{provider}/accounts/{account_id}"
         mock_get = httpx.Response(
             status_code=200,
             json={"account": "providers/test-provider/accounts/acct-1"},
