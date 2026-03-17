@@ -108,7 +108,7 @@ class GoogleJWTValidator:
         """Initialize the validator.
 
         Args:
-            expected_audience: Expected audience (agent's provider URL).
+            expected_audience: Expected audience (agent provider's organization URL).
                              Uses settings if not provided.
         """
         self._settings = get_settings()
