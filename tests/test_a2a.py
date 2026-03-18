@@ -58,7 +58,7 @@ class TestAgentCard:
         dcr_ext = card.capabilities.extensions[0]
         assert "dcr" in dcr_ext.uri
         assert dcr_ext.params is not None
-        assert "endpoint" in dcr_ext.params
+        assert "target_url" in dcr_ext.params
 
     def test_agent_card_url_points_to_root(self):
         """Test AgentCard URL points to root endpoint."""
@@ -74,6 +74,19 @@ class TestAgentCard:
         assert len(card.skills) > 0
         skill_ids = [s.id for s in card.skills]
         assert "rhel-advisor" in skill_ids or len(skill_ids) > 0
+
+    def test_agent_card_provider_url_uses_organization_url(self):
+        """Test AgentCard provider.url reflects configurable organization URL."""
+        from lightspeed_agent.config import get_settings
+
+        settings = get_settings()
+        original = settings.agent_provider_organization_url
+        settings.agent_provider_organization_url = "https://custom-org.example.com"
+        try:
+            card = build_agent_card()
+            assert card.provider.url == "https://custom-org.example.com"
+        finally:
+            settings.agent_provider_organization_url = original
 
     def test_get_agent_card_dict(self):
         """Test AgentCard serialization to dict."""
@@ -149,7 +162,7 @@ class TestModels:
 
         ext = AgentExtension(
             uri="urn:test:dcr",
-            params={"endpoint": "http://example.com/register"},
+            params={"target_url": "http://example.com/register"},
         )
         caps = AgentCapabilities(
             streaming=True,

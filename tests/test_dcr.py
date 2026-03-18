@@ -122,6 +122,24 @@ class TestModels:
         assert "authorization_code" in client.grant_types
 
 
+class TestGoogleJWTValidator:
+    """Tests for GoogleJWTValidator."""
+
+    def test_audience_uses_organization_url_from_settings(self):
+        """Test that the validator uses agent_provider_organization_url as audience."""
+        from lightspeed_agent.config import get_settings
+        from lightspeed_agent.dcr.google_jwt import GoogleJWTValidator
+
+        settings = get_settings()
+        original = settings.agent_provider_organization_url
+        settings.agent_provider_organization_url = "https://custom-org.example.com"
+        try:
+            validator = GoogleJWTValidator()
+            assert validator._expected_audience == "https://custom-org.example.com"
+        finally:
+            settings.agent_provider_organization_url = original
+
+
 class TestDCRService:
     """Tests for DCR service with database persistence."""
 
@@ -613,8 +631,8 @@ class TestAgentCardDCRExtension:
         dcr_ext = card.capabilities.extensions[0]
         assert "dcr" in dcr_ext.uri
         assert dcr_ext.params is not None
-        assert "endpoint" in dcr_ext.params
-        assert "/dcr" in dcr_ext.params["endpoint"]
+        assert "target_url" in dcr_ext.params
+        assert "/dcr" in dcr_ext.params["target_url"]
 
     @pytest.mark.asyncio
     async def test_agent_card_endpoint_returns_dcr(self, db_session):
@@ -633,7 +651,7 @@ class TestAgentCardDCRExtension:
         assert len(extensions) > 0
         dcr_ext = extensions[0]
         assert "dcr" in dcr_ext["uri"]
-        assert "endpoint" in dcr_ext["params"]
+        assert "target_url" in dcr_ext["params"]
 
 
 class TestKeycloakDCRClient:
