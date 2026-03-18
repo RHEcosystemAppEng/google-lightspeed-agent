@@ -86,11 +86,9 @@ def _build_dcr_extension() -> AgentExtension:
     handler_url = settings.marketplace_handler_url or settings.agent_provider_url
 
     return AgentExtension(
-        uri="urn:google:agent:dcr",
-        description="Dynamic Client Registration for OAuth 2.0",
+        uri="https://cloud.google.com/marketplace/docs/partners/ai-agents/setup-dcr",
         params={
-            "endpoint": f"{handler_url}/dcr",
-            "supportedGrantTypes": ["authorization_code", "refresh_token"],
+            "target_url": f"{handler_url}/dcr",
         },
     )
 
@@ -118,7 +116,7 @@ def build_agent_card() -> AgentCard:
 
     provider = AgentProvider(
         organization="Red Hat",
-        url="https://www.redhat.com",
+        url=settings.agent_provider_organization_url,
     )
 
     oauth_scheme = _build_oauth_security_scheme()
