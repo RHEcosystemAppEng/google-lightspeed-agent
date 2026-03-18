@@ -1,0 +1,98 @@
+{{- if .Values.handler.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "lightspeed-agent.handlerServiceName" . }}
+  labels:
+    {{- include "lightspeed-agent.labels" . | nindent 4 }}
+    app.kubernetes.io/component: handler
+spec:
+  replicas: {{ .Values.handler.replicas }}
+  selector:
+    matchLabels:
+      {{- include "lightspeed-agent.handlerSelectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "lightspeed-agent.handlerSelectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: marketplace-handler
+          image: {{ printf "%s:%s" .Values.handler.image.repository .Values.handler.image.tag }}
+          imagePullPolicy: {{ .Values.handler.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.handler.port }}
+              protocol: TCP
+              name: http
+          envFrom:
+            - configMapRef:
+                name: {{ include "lightspeed-agent.fullname" . }}-config
+          env:
+            - name: GOOGLE_APPLICATION_CREDENTIALS
+              value: /var/run/secrets/gcp/sa-key.json
+            - name: GOOGLE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "lightspeed-agent.fullname" . }}-secrets
+                  key: GOOGLE_API_KEY
+            - name: GOOGLE_CLOUD_PROJECT
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "lightspeed-agent.fullname" . }}-secrets
+                  key: GOOGLE_CLOUD_PROJECT
+                  optional: true
+            - name: RED_HAT_SSO_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "lightspeed-agent.fullname" . }}-secrets
+                  key: RED_HAT_SSO_CLIENT_ID
+            - name: RED_HAT_SSO_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "lightspeed-agent.fullname" . }}-secrets
+                  key: RED_HAT_SSO_CLIENT_SECRET
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "lightspeed-agent.fullname" . }}-secrets
+                  key: DATABASE_URL
+            - name: DCR_INITIAL_ACCESS_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "lightspeed-agent.fullname" . }}-secrets
+                  key: DCR_INITIAL_ACCESS_TOKEN
+            - name: DCR_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "lightspeed-agent.fullname" . }}-secrets
+                  key: DCR_ENCRYPTION_KEY
+          volumeMounts:
+            - name: gcp-sa-key
+              mountPath: /var/run/secrets/gcp
+              readOnly: true
+          resources:
+            {{- toYaml .Values.handler.resources | nindent 12 }}
+          startupProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.handler.port }}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 6
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: {{ .Values.handler.port }}
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.handler.port }}
+            periodSeconds: 30
+            failureThreshold: 3
+      volumes:
+        - name: gcp-sa-key
+          secret:
+            secretName: {{ include "lightspeed-agent.fullname" . }}-gcp-sa-key
+{{- end }}
