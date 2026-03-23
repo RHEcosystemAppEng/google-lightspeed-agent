@@ -137,19 +137,12 @@ class TestAgentLoggingPluginBasic:
         tool = MagicMock()
         tool.name = "get_advisories"
 
-        with patch(
-            "lightspeed_agent.api.a2a.logging_plugin.get_settings"
-        ) as mock_settings:
-            settings = MagicMock()
-            settings.agent_logging_detail = "basic"
-            mock_settings.return_value = settings
-
-            with caplog.at_level(logging.INFO):
-                result = await plugin.before_tool_callback(
-                    tool=tool,
-                    tool_args={"system_id": "abc-123"},
-                    tool_context=MagicMock(),
-                )
+        with caplog.at_level(logging.INFO):
+            result = await plugin.before_tool_callback(
+                tool=tool,
+                tool_args={"system_id": "abc-123"},
+                tool_context=MagicMock(),
+            )
 
         assert result is None
         assert "Tool call started" in caplog.text
@@ -161,20 +154,13 @@ class TestAgentLoggingPluginBasic:
         tool = MagicMock()
         tool.name = "get_advisories"
 
-        with patch(
-            "lightspeed_agent.api.a2a.logging_plugin.get_settings"
-        ) as mock_settings:
-            settings = MagicMock()
-            settings.agent_logging_detail = "basic"
-            mock_settings.return_value = settings
-
-            with caplog.at_level(logging.INFO):
-                result = await plugin.after_tool_callback(
-                    tool=tool,
-                    tool_args={},
-                    tool_context=MagicMock(),
-                    result={"data": "sensitive-info"},
-                )
+        with caplog.at_level(logging.INFO):
+            result = await plugin.after_tool_callback(
+                tool=tool,
+                tool_args={},
+                tool_context=MagicMock(),
+                result={"data": "sensitive-info"},
+            )
 
         assert result is None
         assert "Tool call completed" in caplog.text
@@ -219,19 +205,12 @@ class TestAgentLoggingPluginDetailed:
         tool = MagicMock()
         tool.name = "get_advisories"
 
-        with patch(
-            "lightspeed_agent.api.a2a.logging_plugin.get_settings"
-        ) as mock_settings:
-            settings = MagicMock()
-            settings.agent_logging_detail = "detailed"
-            mock_settings.return_value = settings
-
-            with caplog.at_level(logging.INFO):
-                result = await plugin.before_tool_callback(
-                    tool=tool,
-                    tool_args={"system_id": "abc-123"},
-                    tool_context=MagicMock(),
-                )
+        with caplog.at_level(logging.INFO):
+            result = await plugin.before_tool_callback(
+                tool=tool,
+                tool_args={"system_id": "abc-123"},
+                tool_context=MagicMock(),
+            )
 
         assert result is None
         assert "Tool call started" in caplog.text
@@ -243,20 +222,13 @@ class TestAgentLoggingPluginDetailed:
         tool = MagicMock()
         tool.name = "get_advisories"
 
-        with patch(
-            "lightspeed_agent.api.a2a.logging_plugin.get_settings"
-        ) as mock_settings:
-            settings = MagicMock()
-            settings.agent_logging_detail = "detailed"
-            mock_settings.return_value = settings
-
-            with caplog.at_level(logging.INFO):
-                result = await plugin.after_tool_callback(
-                    tool=tool,
-                    tool_args={},
-                    tool_context=MagicMock(),
-                    result={"advisories": ["CVE-2024-1234"]},
-                )
+        with caplog.at_level(logging.INFO):
+            result = await plugin.after_tool_callback(
+                tool=tool,
+                tool_args={},
+                tool_context=MagicMock(),
+                result={"advisories": ["CVE-2024-1234"]},
+            )
 
         assert result is None
         assert "Tool call completed" in caplog.text
@@ -268,21 +240,14 @@ class TestAgentLoggingPluginDetailed:
         tool = MagicMock()
         tool.name = "get_systems"
 
-        with patch(
-            "lightspeed_agent.api.a2a.logging_plugin.get_settings"
-        ) as mock_settings:
-            settings = MagicMock()
-            settings.agent_logging_detail = "detailed"
-            mock_settings.return_value = settings
-
-            long_result = {"data": "x" * 1000}
-            with caplog.at_level(logging.INFO):
-                result = await plugin.after_tool_callback(
-                    tool=tool,
-                    tool_args={},
-                    tool_context=MagicMock(),
-                    result=long_result,
-                )
+        long_result = {"data": "x" * 1000}
+        with caplog.at_level(logging.INFO):
+            result = await plugin.after_tool_callback(
+                tool=tool,
+                tool_args={},
+                tool_context=MagicMock(),
+                result=long_result,
+            )
 
         assert result is None
         assert "...(truncated)" in caplog.text
@@ -315,51 +280,44 @@ class TestAllCallbacksReturnNone:
         llm_response.model_version = None
         llm_response.content = None
 
-        with patch(
-            "lightspeed_agent.api.a2a.logging_plugin.get_settings"
-        ) as mock_settings:
-            settings = MagicMock()
-            settings.agent_logging_detail = "basic"
-            mock_settings.return_value = settings
-
-            assert await plugin.before_run_callback(invocation_context=ctx) is None
-            assert await plugin.after_run_callback(invocation_context=ctx) is None
-            assert (
-                await plugin.before_model_callback(
-                    callback_context=ctx, llm_request=MagicMock()
-                )
-                is None
+        assert await plugin.before_run_callback(invocation_context=ctx) is None
+        assert await plugin.after_run_callback(invocation_context=ctx) is None
+        assert (
+            await plugin.before_model_callback(
+                callback_context=ctx, llm_request=MagicMock()
             )
-            assert (
-                await plugin.after_model_callback(
-                    callback_context=ctx, llm_response=llm_response
-                )
-                is None
+            is None
+        )
+        assert (
+            await plugin.after_model_callback(
+                callback_context=ctx, llm_response=llm_response
             )
-            assert (
-                await plugin.on_model_error_callback(
-                    callback_context=ctx, llm_request=MagicMock(), error=RuntimeError("test")
-                )
-                is None
+            is None
+        )
+        assert (
+            await plugin.on_model_error_callback(
+                callback_context=ctx, llm_request=MagicMock(), error=RuntimeError("test")
             )
-            assert (
-                await plugin.before_tool_callback(
-                    tool=tool, tool_args={}, tool_context=MagicMock()
-                )
-                is None
+            is None
+        )
+        assert (
+            await plugin.before_tool_callback(
+                tool=tool, tool_args={}, tool_context=MagicMock()
             )
-            assert (
-                await plugin.after_tool_callback(
-                    tool=tool, tool_args={}, tool_context=MagicMock(), result={}
-                )
-                is None
+            is None
+        )
+        assert (
+            await plugin.after_tool_callback(
+                tool=tool, tool_args={}, tool_context=MagicMock(), result={}
             )
-            assert (
-                await plugin.on_tool_error_callback(
-                    tool=tool,
-                    tool_args={},
-                    tool_context=MagicMock(),
-                    error=RuntimeError("test"),
-                )
-                is None
+            is None
+        )
+        assert (
+            await plugin.on_tool_error_callback(
+                tool=tool,
+                tool_args={},
+                tool_context=MagicMock(),
+                error=RuntimeError("test"),
             )
+            is None
+        )
