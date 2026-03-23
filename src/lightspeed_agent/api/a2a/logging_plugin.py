@@ -66,7 +66,7 @@ class AgentLoggingPlugin(BasePlugin):
     # -- model callbacks ------------------------------------------------------
 
     async def before_model_callback(
-        self, *, callback_context: CallbackContext, llm_request: Any
+        self, *, callback_context: CallbackContext, llm_request: LlmRequest
     ) -> Any | None:
         logger.info("LLM call started (agent=%s)", callback_context.agent_name)
         return None
