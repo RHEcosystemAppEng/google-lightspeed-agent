@@ -717,7 +717,8 @@ This mode exercises the full DCR flow -- real OAuth client creation in a locally
    stringData:
      RED_HAT_SSO_CLIENT_ID: "lightspeed-agent"
      RED_HAT_SSO_CLIENT_SECRET: "dummy"
-     DCR_INITIAL_ACCESS_TOKEN: "<the IAT from step 4>"
+     GMA_CLIENT_ID: "<your-gma-client-id>"
+     GMA_CLIENT_SECRET: "<your-gma-client-secret>"
      DCR_ENCRYPTION_KEY: "<your-fernet-key>"
      MARKETPLACE_DATABASE_URL: "postgresql+asyncpg://insights:insights@localhost:5432/lightspeed_agent"
      MARKETPLACE_DB_PASSWORD: "insights"

@@ -102,10 +102,15 @@ spec:
                 secretKeyRef:
                   name: redhat-sso-client-secret
                   key: latest
-            - name: DCR_INITIAL_ACCESS_TOKEN
+            - name: GMA_CLIENT_ID
               valueFrom:
                 secretKeyRef:
-                  name: dcr-initial-access-token
+                  name: gma-client-id
+                  key: latest
+            - name: GMA_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: gma-client-secret
                   key: latest
             - name: DCR_ENCRYPTION_KEY
               valueFrom:

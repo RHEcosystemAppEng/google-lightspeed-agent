@@ -87,10 +87,10 @@ The handler must be started with at least these environment variables:
     # Set TEST_CLIENT_ID and TEST_CLIENT_SECRET on this script.
     DCR_ENABLED=false
 
-    # --- OR: Real DCR against a local Keycloak ---
+    # --- OR: Real DCR via GMA SSO API ---
     # DCR_ENABLED=true
-    # RED_HAT_SSO_ISSUER=http://localhost:8180/realms/test-realm
-    # DCR_INITIAL_ACCESS_TOKEN=<your-keycloak-IAT>
+    # GMA_CLIENT_ID=<your-gma-client-id>
+    # GMA_CLIENT_SECRET=<your-gma-client-secret>
 
     # Always required
     DCR_ENCRYPTION_KEY=<generate with: python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'>
@@ -166,8 +166,8 @@ mode (DCR_ENABLED=false) works without Keycloak.
 
        DCR_ENABLED=true
        SKIP_JWT_VALIDATION=true
-       RED_HAT_SSO_ISSUER=http://host.containers.internal:8180/realms/test-realm
-       DCR_INITIAL_ACCESS_TOKEN=<the IAT from step 4>
+       GMA_CLIENT_ID=<your-gma-client-id>
+       GMA_CLIENT_SECRET=<your-gma-client-secret>
 
 6. Run this script.  The handler will create a real OAuth client in
    your local Keycloak.  Verify at:

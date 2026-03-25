@@ -8,6 +8,7 @@ import pytest_asyncio
 # Set test environment variables before importing application modules
 os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "FALSE"
 os.environ["GOOGLE_API_KEY"] = "test-api-key"
+os.environ.pop("GOOGLE_CLOUD_PROJECT", None)  # Prevent leaking from user's shell
 os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///:memory:"
 os.environ["DEBUG"] = "true"
 os.environ["SKIP_JWT_VALIDATION"] = "true"

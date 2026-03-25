@@ -189,10 +189,10 @@ Gemini Enterprise                     Agent (Marketplace Handler)             Re
 | Claims cannot be parsed | 400 | `invalid_software_statement` | `Invalid claims format: {error}` |
 | Account ID (`sub`) is not ACTIVE | 400 | `unapproved_software_statement` | `Invalid Procurement Account ID: {account_id}` |
 | Order ID is not ACTIVE | 400 | `unapproved_software_statement` | `Invalid Order ID: {order_id}` |
-| Initial Access Token not configured | 400 | `server_error` | `Failed to create OAuth client: DCR_INITIAL_ACCESS_TOKEN not configured` |
-| Keycloak DCR endpoint returns error | 400 | `server_error` | `Failed to create OAuth client: Failed to create OAuth client: {keycloak_error}` |
-| Network error calling Keycloak | 400 | `server_error` | `Failed to create OAuth client: HTTP error calling Keycloak DCR: {error}` |
-| Unexpected error creating client or storing credentials | 400 | `server_error` | `Failed to create client: {error}` |
+| GMA credentials not configured | 400 | `server_error` | `Failed to create OAuth tenant: GMA_CLIENT_ID and GMA_CLIENT_SECRET must be configured` |
+| GMA API returns error | 400 | `server_error` | `Failed to create OAuth tenant: Failed to create GMA tenant: {error}` |
+| Network error calling GMA API | 400 | `server_error` | `Failed to create OAuth tenant: HTTP error calling GMA API: {error}` |
+| Unexpected error creating tenant or storing credentials | 400 | `server_error` | `Failed to create tenant: {error}` |
 | Decryption of previously stored credentials fails | 400 | `server_error` | `Failed to retrieve existing credentials` |
 
 > **Note:** All DCR errors return HTTP 400 regardless of the underlying cause.

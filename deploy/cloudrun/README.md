@@ -274,9 +274,11 @@ echo -n 'your-sso-client-secret' | \
   gcloud secrets versions add redhat-sso-client-secret --data-file=- --project=$GOOGLE_CLOUD_PROJECT
 
 # DCR (Dynamic Client Registration) - Required for Gemini Enterprise integration
-# Initial Access Token from Red Hat SSO (Keycloak) admin
-echo -n 'your-initial-access-token' | \
-  gcloud secrets versions add dcr-initial-access-token --data-file=- --project=$GOOGLE_CLOUD_PROJECT
+# GMA SSO API credentials for tenant creation
+echo -n 'your-gma-client-id' | \
+  gcloud secrets versions add gma-client-id --data-file=- --project=$GOOGLE_CLOUD_PROJECT
+echo -n 'your-gma-client-secret' | \
+  gcloud secrets versions add gma-client-secret --data-file=- --project=$GOOGLE_CLOUD_PROJECT
 
 # Fernet encryption key for DCR client secrets
 # Generate with: python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'
@@ -1604,9 +1606,12 @@ update triggers the new revision deployment.
 **Marketplace handler** (handles DCR requests):
 
 ```bash
-# 1. Store IAT in Secret Manager
-echo -n "$IAT" | \
-  gcloud secrets versions add dcr-initial-access-token \
+# 1. Store GMA credentials in Secret Manager
+echo -n "$GMA_CLIENT_ID" | \
+  gcloud secrets versions add gma-client-id \
+    --data-file=- --project=$GOOGLE_CLOUD_PROJECT
+echo -n "$GMA_CLIENT_SECRET" | \
+  gcloud secrets versions add gma-client-secret \
     --data-file=- --project=$GOOGLE_CLOUD_PROJECT
 
 # 2. Generate and store Fernet encryption key (if not already set)
@@ -1775,9 +1780,12 @@ gcloud run services update lightspeed-agent \
 RED_HAT_SSO_ISSUER=https://sso.redhat.com/auth/realms/redhat-external,\
 SKIP_JWT_VALIDATION=false"
 
-# Restore the production IAT in Secret Manager
-echo -n 'your-production-iat' | \
-  gcloud secrets versions add dcr-initial-access-token \
+# Restore the production GMA credentials in Secret Manager
+echo -n 'your-production-gma-client-id' | \
+  gcloud secrets versions add gma-client-id \
+    --data-file=- --project=$GOOGLE_CLOUD_PROJECT
+echo -n 'your-production-gma-client-secret' | \
+  gcloud secrets versions add gma-client-secret \
     --data-file=- --project=$GOOGLE_CLOUD_PROJECT
 
 # Restore the production SSO credentials in Secret Manager

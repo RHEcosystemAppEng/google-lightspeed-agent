@@ -654,37 +654,173 @@ class TestAgentCardDCRExtension:
         assert "target_url" in dcr_ext["params"]
 
 
-class TestKeycloakDCRClient:
-    """Tests for Keycloak DCR client."""
+class TestGMAClient:
+    """Tests for GMA SSO API client."""
 
-    def test_keycloak_client_response_model(self):
-        """Test KeycloakClientResponse dataclass."""
-        from lightspeed_agent.dcr.keycloak_client import KeycloakClientResponse
+    def test_gma_client_response_model(self):
+        """Test GMAClientResponse dataclass."""
+        from lightspeed_agent.dcr.gma_client import GMAClientResponse
 
-        response = KeycloakClientResponse(
-            client_id="kc-client-123",
-            client_secret="kc-secret-xyz",
-            client_name="gemini-order-456",
-            registration_access_token="rat-token",
-            registration_client_uri="https://sso.example.com/clients/123",
-            redirect_uris=["https://example.com/callback"],
+        response = GMAClientResponse(
+            client_id="gma-client-123",
+            client_secret="gma-secret-xyz",
+            name="gemini-order-456",
+            created_at=1774421600,
         )
 
-        assert response.client_id == "kc-client-123"
-        assert response.client_secret == "kc-secret-xyz"
-        assert response.client_name == "gemini-order-456"
-        assert response.registration_access_token == "rat-token"
+        assert response.client_id == "gma-client-123"
+        assert response.client_secret == "gma-secret-xyz"
+        assert response.name == "gemini-order-456"
+        assert response.created_at == 1774421600
 
-    def test_keycloak_dcr_error(self):
-        """Test KeycloakDCRError exception."""
-        from lightspeed_agent.dcr.keycloak_client import KeycloakDCRError
+    def test_gma_client_error(self):
+        """Test GMAClientError exception."""
+        from lightspeed_agent.dcr.gma_client import GMAClientError
 
-        error = KeycloakDCRError(
-            "Failed to create client",
+        error = GMAClientError(
+            "Failed to create tenant",
             status_code=401,
             details={"error": "unauthorized"},
         )
 
-        assert str(error) == "Failed to create client"
+        assert str(error) == "Failed to create tenant"
         assert error.status_code == 401
         assert error.details["error"] == "unauthorized"
+
+    @pytest.mark.asyncio
+    async def test_gma_client_get_token_success(self):
+        """Test successful token acquisition."""
+        from lightspeed_agent.dcr.gma_client import GMAClient
+
+        mock_response = httpx.Response(
+            status_code=200,
+            json={"access_token": "test-token-abc", "expires_in": 300},
+            request=httpx.Request("POST", "https://sso.example.com/token"),
+        )
+        mock_http = AsyncMock(spec=httpx.AsyncClient)
+        mock_http.post = AsyncMock(return_value=mock_response)
+
+        client = GMAClient(
+            api_base_url="https://sso.example.com/apis/beta/acs/v1/",
+            client_id="test-gma-id",
+            client_secret="test-gma-secret",
+            token_endpoint="https://sso.example.com/token",
+            http_client=mock_http,
+        )
+
+        token = await client.get_token()
+        assert token == "test-token-abc"
+
+    @pytest.mark.asyncio
+    async def test_gma_client_get_token_cached(self):
+        """Test that token is cached on second call."""
+        from lightspeed_agent.dcr.gma_client import GMAClient
+
+        mock_response = httpx.Response(
+            status_code=200,
+            json={"access_token": "cached-token", "expires_in": 300},
+            request=httpx.Request("POST", "https://sso.example.com/token"),
+        )
+        mock_http = AsyncMock(spec=httpx.AsyncClient)
+        mock_http.post = AsyncMock(return_value=mock_response)
+
+        client = GMAClient(
+            api_base_url="https://sso.example.com/apis/beta/acs/v1/",
+            client_id="test-gma-id",
+            client_secret="test-gma-secret",
+            token_endpoint="https://sso.example.com/token",
+            http_client=mock_http,
+        )
+
+        token1 = await client.get_token()
+        token2 = await client.get_token()
+        assert token1 == token2 == "cached-token"
+        # Only one HTTP call should have been made
+        assert mock_http.post.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_gma_client_get_token_missing_credentials(self):
+        """Test error when GMA credentials are not configured."""
+        from lightspeed_agent.dcr.gma_client import GMAClient, GMAClientError
+
+        client = GMAClient(
+            api_base_url="https://sso.example.com/apis/beta/acs/v1/",
+            client_id="",
+            client_secret="",
+            token_endpoint="https://sso.example.com/token",
+        )
+
+        with pytest.raises(GMAClientError, match="GMA_CLIENT_ID"):
+            await client.get_token()
+
+    @pytest.mark.asyncio
+    async def test_gma_client_create_tenant_success(self):
+        """Test successful tenant creation."""
+        from lightspeed_agent.dcr.gma_client import GMAClient
+
+        token_response = httpx.Response(
+            status_code=200,
+            json={"access_token": "test-token", "expires_in": 300},
+            request=httpx.Request("POST", "https://sso.example.com/token"),
+        )
+        tenant_response = httpx.Response(
+            status_code=201,
+            json={
+                "clientId": "new-client-id",
+                "secret": "new-client-secret",
+                "name": "gemini-order-123",
+                "createdAt": 1774421600,
+            },
+            request=httpx.Request("POST", "https://sso.example.com/apis/beta/acs/v1/"),
+        )
+        mock_http = AsyncMock(spec=httpx.AsyncClient)
+        mock_http.post = AsyncMock(side_effect=[token_response, tenant_response])
+
+        client = GMAClient(
+            api_base_url="https://sso.example.com/apis/beta/acs/v1/",
+            client_id="test-gma-id",
+            client_secret="test-gma-secret",
+            token_endpoint="https://sso.example.com/token",
+            http_client=mock_http,
+        )
+
+        result = await client.create_tenant(
+            order_id="123",
+            redirect_uris=["https://example.com/callback"],
+        )
+
+        assert result.client_id == "new-client-id"
+        assert result.client_secret == "new-client-secret"
+        assert result.name == "gemini-order-123"
+        assert result.created_at == 1774421600
+
+    @pytest.mark.asyncio
+    async def test_gma_client_create_tenant_failure(self):
+        """Test tenant creation failure."""
+        from lightspeed_agent.dcr.gma_client import GMAClient, GMAClientError
+
+        token_response = httpx.Response(
+            status_code=200,
+            json={"access_token": "test-token", "expires_in": 300},
+            request=httpx.Request("POST", "https://sso.example.com/token"),
+        )
+        error_response = httpx.Response(
+            status_code=400,
+            json={"error": "invalid_request"},
+            request=httpx.Request("POST", "https://sso.example.com/apis/beta/acs/v1/"),
+        )
+        mock_http = AsyncMock(spec=httpx.AsyncClient)
+        mock_http.post = AsyncMock(side_effect=[token_response, error_response])
+
+        client = GMAClient(
+            api_base_url="https://sso.example.com/apis/beta/acs/v1/",
+            client_id="test-gma-id",
+            client_secret="test-gma-secret",
+            token_endpoint="https://sso.example.com/token",
+            http_client=mock_http,
+        )
+
+        with pytest.raises(GMAClientError) as exc_info:
+            await client.create_tenant(order_id="123")
+
+        assert exc_info.value.status_code == 400

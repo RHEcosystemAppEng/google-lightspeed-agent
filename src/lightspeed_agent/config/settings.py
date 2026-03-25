@@ -175,13 +175,9 @@ class Settings(BaseSettings):
     dcr_enabled: bool = Field(
         default=True,
         description=(
-            "Enable real DCR with Red Hat SSO (Keycloak)."
+            "Enable real DCR with Red Hat SSO via the GMA API."
             " When disabled, uses pre-seeded credentials from the database."
         ),
-    )
-    dcr_initial_access_token: str = Field(
-        default="",
-        description="Keycloak Initial Access Token for creating OAuth clients via DCR",
     )
     dcr_client_name_prefix: str = Field(
         default="gemini-order-",
@@ -195,6 +191,23 @@ class Settings(BaseSettings):
             " 'from cryptography.fernet import Fernet;"
             " print(Fernet.generate_key().decode())')"
         ),
+    )
+
+    # GMA SSO API credentials (for DCR tenant creation)
+    gma_client_id: str = Field(
+        default="",
+        description=(
+            "Client ID for GMA SSO API"
+            " (client_credentials grant with api.iam.clients.gma scope)"
+        ),
+    )
+    gma_client_secret: str = Field(
+        default="",
+        description="Client secret for GMA SSO API",
+    )
+    gma_api_base_url: str = Field(
+        default="https://sso.redhat.com/auth/realms/redhat-external/apis/beta/acs/v1/",
+        description="GMA SSO API base URL for tenant creation",
     )
 
     # Database Configuration
@@ -264,22 +277,6 @@ class Settings(BaseSettings):
     def keycloak_token_endpoint(self) -> str:
         """Get the Keycloak token endpoint URL."""
         return f"{self.red_hat_sso_issuer}/protocol/openid-connect/token"
-
-    @property
-    def keycloak_admin_api_base(self) -> str:
-        """Get the Keycloak Admin REST API base URL.
-
-        Derived from the issuer by inserting /admin before /realms/.
-        E.g. https://host/auth/realms/myrealm -> https://host/auth/admin/realms/myrealm
-        """
-        return self.red_hat_sso_issuer.replace("/realms/", "/admin/realms/", 1)
-
-    @property
-    def keycloak_dcr_endpoint(self) -> str:
-        """Get the Keycloak DCR endpoint URL."""
-        # Red Hat SSO issuer format: https://sso.redhat.com/auth/realms/redhat-external
-        # DCR endpoint: https://sso.redhat.com/auth/realms/redhat-external/clients-registrations/openid-connect
-        return f"{self.red_hat_sso_issuer}/clients-registrations/openid-connect"
 
     # Development Settings
     debug: bool = Field(

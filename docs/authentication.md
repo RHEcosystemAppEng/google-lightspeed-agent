@@ -139,22 +139,23 @@ The `software_statement` JWT from Google contains:
 
 | Mode | Setting | Behavior |
 |------|---------|----------|
-| **Real DCR** | `DCR_ENABLED=true` (default) | Creates actual OAuth clients in Red Hat SSO via Keycloak DCR |
+| **Real DCR** | `DCR_ENABLED=true` (default) | Creates OAuth tenant clients in Red Hat SSO via the GMA API |
 | **Static credentials** | `DCR_ENABLED=false` | Accepts `client_id` and `client_secret` from the DCR request body, validates them against the Red Hat SSO token endpoint, stores them linked to the order, and returns them |
 
-Real DCR requires a `DCR_INITIAL_ACCESS_TOKEN` from the Red Hat SSO admin. Static mode requires the caller to provide pre-registered OAuth credentials in the request body alongside the `software_statement`.
+Real DCR requires `GMA_CLIENT_ID` and `GMA_CLIENT_SECRET` credentials for authenticating against the GMA SSO API with `scope=api.iam.clients.gma`. Static mode requires the caller to provide pre-registered OAuth credentials in the request body alongside the `software_statement`.
 
 ### DCR Configuration
 
 ```bash
 # Real DCR mode
 DCR_ENABLED=true
-DCR_INITIAL_ACCESS_TOKEN="<token-from-keycloak-admin>"
+GMA_CLIENT_ID="<gma-client-id>"
+GMA_CLIENT_SECRET="<gma-client-secret>"
 DCR_CLIENT_NAME_PREFIX="gemini-order-"
 DCR_ENCRYPTION_KEY="<fernet-key>"   # Encrypts stored client secrets
 
-# Red Hat SSO -- DCR endpoint derived as {issuer}/clients-registrations/openid-connect
-RED_HAT_SSO_ISSUER="https://sso.redhat.com/auth/realms/redhat-external"
+# GMA API base URL (default: derived from Red Hat SSO issuer)
+# GMA_API_BASE_URL="https://sso.redhat.com/auth/realms/redhat-external/apis/beta/acs/v1/"
 ```
 
 ### Testing DCR Locally
