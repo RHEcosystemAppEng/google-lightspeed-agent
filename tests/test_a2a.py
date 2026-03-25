@@ -15,7 +15,7 @@ from a2a.types import (
 )
 from fastapi.testclient import TestClient
 
-from lightspeed_agent.api.a2a.a2a_setup import _get_session_service
+from lightspeed_agent.api.a2a.a2a_setup import _get_session_service, _normalize_db_url
 from lightspeed_agent.api.a2a.agent_card import build_agent_card, get_agent_card_dict
 from lightspeed_agent.api.app import create_app
 
@@ -268,6 +268,42 @@ class TestA2AEndpoints:
         data = response.json()
         assert data["jsonrpc"] == "2.0"
         assert "error" in data
+
+
+class TestNormalizeDbUrl:
+    """Tests for _normalize_db_url() async driver normalization."""
+
+    @pytest.mark.parametrize(
+        "input_url,expected",
+        [
+            (
+                "postgres://user:pass@host:5432/db",
+                "postgresql+asyncpg://user:pass@host:5432/db",
+            ),
+            (
+                "postgresql://user:pass@host:5432/db",
+                "postgresql+asyncpg://user:pass@host:5432/db",
+            ),
+            (
+                "postgresql+psycopg://user:pass@host:5432/db",
+                "postgresql+asyncpg://user:pass@host:5432/db",
+            ),
+            (
+                "postgresql+psycopg2://user:pass@host:5432/db",
+                "postgresql+asyncpg://user:pass@host:5432/db",
+            ),
+            (
+                "postgresql+asyncpg://user:pass@host:5432/db",
+                "postgresql+asyncpg://user:pass@host:5432/db",
+            ),
+            (
+                "sqlite:///path/to/db.sqlite",
+                "sqlite:///path/to/db.sqlite",
+            ),
+        ],
+    )
+    def test_sync_schemes_converted(self, input_url, expected):
+        assert _normalize_db_url(input_url) == expected
 
 
 class TestGetSessionService:

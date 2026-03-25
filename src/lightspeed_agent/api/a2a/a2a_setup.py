@@ -30,6 +30,27 @@ from lightspeed_agent.core import create_agent
 logger = logging.getLogger(__name__)
 
 
+def _normalize_db_url(url: str) -> str:
+    """Ensure a database URL uses an async driver for SQLAlchemy.
+
+    ADK's DatabaseSessionService requires ``create_async_engine``, so any
+    synchronous PostgreSQL scheme must be replaced with ``postgresql+asyncpg``.
+    """
+    scheme, remainder = url.split("://", 1)
+    normalized_scheme = scheme.lower()
+
+    sync_postgres_schemes = {
+        "postgres",
+        "postgresql",
+        "postgresql+psycopg",
+        "postgresql+psycopg2",
+    }
+    if normalized_scheme in sync_postgres_schemes:
+        return f"postgresql+asyncpg://{remainder}"
+
+    return url
+
+
 def _get_session_service() -> Any:
     """Get the appropriate session service based on configuration.
 
@@ -60,15 +81,7 @@ def _get_session_service() -> Any:
 
             # ADK's DatabaseSessionService uses async SQLAlchemy
             # (create_async_engine), so ensure the URL uses an async driver
-            db_url = session_db_url
-            if "postgresql+psycopg2" in db_url:
-                # Convert sync psycopg2 URL to async asyncpg format
-                db_url = db_url.replace("postgresql+psycopg2", "postgresql+asyncpg")
-            elif db_url.startswith("postgresql://"):
-                # Plain postgresql:// defaults to psycopg2 (sync); use asyncpg
-                db_url = db_url.replace(
-                    "postgresql://", "postgresql+asyncpg://", 1
-                )
+            db_url = _normalize_db_url(session_db_url)
 
             # Log which database is being used (without credentials)
             parsed = urlparse(db_url)
