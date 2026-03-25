@@ -131,6 +131,14 @@ echo $TOKEN | cut -d. -f2 | base64 -d 2>/dev/null | jq .scope
 
 **Fix**: Ensure the `api.console` and `api.ocm` Client Scopes exist in Keycloak and are assigned to the client that issued the token.
 
+### Disallowed Scope (403 Forbidden)
+
+**Symptom**: `Token carries disallowed scope(s): <scope_name>`
+
+The token contains scopes outside the `AGENT_ALLOWED_SCOPES` allowlist.
+
+**Fix**: Either add the scope to `AGENT_ALLOWED_SCOPES` or request a token without the extra scopes. All permitted scopes must be explicitly listed.
+
 ### OAuth Callback Errors
 
 **Symptom**: Callback fails with error
