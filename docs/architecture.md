@@ -130,7 +130,7 @@ The main AI agent FastAPI application, providing:
 Handles all authentication and authorization:
 
 - **Token Introspection**: Validates tokens via Keycloak introspection endpoint (RFC 7662)
-- **Scope Checking**: Checks for required `api.console` and `api.ocm` scopes
+- **Scope Checking**: Checks for required `api.console` and `api.ocm` scopes; rejects tokens carrying scopes outside the configured allowlist
 - **Bypass for Discovery**: `/.well-known/agent.json` is public per A2A spec
 
 ### Agent Core
@@ -336,7 +336,7 @@ src/lightspeed_agent/
 
 - A2A query endpoints require valid Bearer token from Red Hat SSO
 - Tokens validated via Keycloak introspection endpoint (RFC 7662)
-- Required `api.console` and `api.ocm` scopes checked; returns 403 if missing
+- Required `api.console` and `api.ocm` scopes checked; returns 403 if missing or if token carries disallowed scopes
 
 ### Public Endpoints
 

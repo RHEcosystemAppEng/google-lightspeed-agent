@@ -496,6 +496,7 @@ Gemini Enterprise                  Lightspeed Agent                      Red Hat
      |                                    |                                       |
      |                                    |-- Verify "active" == true             |
      |                                    |-- Verify required scopes present      |
+     |                                    |-- Verify no disallowed scopes         |
      |                                    |                                       |
      |                                    |-- Resolve order:                      |
      |                                    |   azp (ge-client-id)                  |
@@ -584,6 +585,19 @@ Gemini Enterprise                  Lightspeed Agent                      Red Hat
      |                                    |                                       |
      |   --- OR ---                       |                                       |
      |                                    |                                       |
+     |                                    |<-- { "active": true,                  |
+     |                                    |      "scope": "openid api.console     |
+     |                                    |        api.ocm admin.super" } --------|
+     |                                    |   (disallowed scopes present)         |
+     |                                    |                                       |
+     |<-- 403 { code: -32003,             |                                       |
+     |   message: "Forbidden",            |                                       |
+     |   detail: "Token carries           |                                       |
+     |     disallowed scope(s):           |                                       |
+     |     admin.super" } ---------------|                                       |
+     |                                    |                                       |
+     |   --- OR ---                       |                                       |
+     |                                    |                                       |
      |                                    |-- Look up azp → order_id              |
      |                                    |   FAIL: client not in credentials DB  |
      |                                    |         or order not ACTIVE           |
@@ -602,6 +616,7 @@ Gemini Enterprise                  Lightspeed Agent                      Red Hat
 | Introspection endpoint returns non-200 | 401 | -32001 | `Introspection request failed (HTTP {status})` |
 | Network error calling introspection endpoint | 401 | -32001 | `HTTP error calling introspection endpoint: {error}` |
 | Token missing required scope(s) | 403 | -32003 | `Token is missing required scope(s): api.console, api.ocm` |
+| Token carries disallowed scope(s) | 403 | -32003 | `Token carries disallowed scope(s): <scope_name>` |
 | `azp` client ID not found in credentials DB | 403 | -32003 | `No active order found for this client` |
 | Order ID not found in entitlements DB | 403 | -32003 | `No active order found for this client` |
 | Order state is not `ACTIVE` | 403 | -32003 | `No active order found for this client` |
