@@ -30,14 +30,14 @@ The deployment consists of **two separate Cloud Run services** plus **Cloud Memo
            ▼                                                 ▼
 ┌──────────────────────────────────────────────┐    ┌──────────────────────┐
 │   Lightspeed Agent Service (Port 8000)       │    │  Red Hat SSO         │
-│   ─────────────────────────────────────      │    │  (Keycloak)          │
+│   ─────────────────────────────────────      │    │  (GMA SSO API)       │
 │  ┌──────────────────┐   ┌──────────────────┐ │    │                      │
 │  │ Lightspeed Agent │   │ Lightspeed MCP   │ │    │  Production:         │
 │  │                  │   │ Server (8081)    │ │    │   sso.redhat.com     │
 │  │  - Gemini 2.5    │   │                  │ │    │                      │
-│  │  - A2A protocol  │◄-►│ - Advisor tools  │ │    │  Testing:            │
-│  │  - OAuth 2.0     │   │ - Inventory tools│ │    │   Keycloak on        │
-│  │                  │   │ - Vuln. tools    │ │    │   Cloud Run          │
+│  │  - A2A protocol  │◄-►│ - Advisor tools  │ │    │                      │
+│  │  - OAuth 2.0     │   │ - Inventory tools│ │    │                      │
+│  │                  │   │ - Vuln. tools    │ │    │                      │
 │  └──────────────────┘   └────────┬─────────┘ │    └──────────────────────┘
 │                                  │           │
 └──────────────────────────────────┼───────────┘
@@ -274,9 +274,11 @@ echo -n 'your-sso-client-secret' | \
   gcloud secrets versions add redhat-sso-client-secret --data-file=- --project=$GOOGLE_CLOUD_PROJECT
 
 # DCR (Dynamic Client Registration) - Required for Gemini Enterprise integration
-# Initial Access Token from Red Hat SSO (Keycloak) admin
-echo -n 'your-initial-access-token' | \
-  gcloud secrets versions add dcr-initial-access-token --data-file=- --project=$GOOGLE_CLOUD_PROJECT
+# GMA SSO API credentials for tenant creation
+echo -n 'your-gma-client-id' | \
+  gcloud secrets versions add gma-client-id --data-file=- --project=$GOOGLE_CLOUD_PROJECT
+echo -n 'your-gma-client-secret' | \
+  gcloud secrets versions add gma-client-secret --data-file=- --project=$GOOGLE_CLOUD_PROJECT
 
 # Fernet encryption key for DCR client secrets
 # Generate with: python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'
@@ -612,7 +614,7 @@ Client                     Agent                   MCP Server        console.red
 
 ## Authentication
 
-The agent uses **Red Hat SSO** (Keycloak) for authentication via **token
+The agent uses **Red Hat SSO** for authentication via **token
 introspection** (RFC 7662).  Requests to the A2A endpoint (POST /) require a
 Bearer token that is active and carries the `api.console` and `api.ocm` scopes.
 
@@ -621,7 +623,7 @@ Bearer token that is active and carries the `api.console` and `api.ocm` scopes.
 ```
 ┌──────────┐    ┌───────────────┐    ┌──────────────┐    ┌──────────────┐    ┌──────────────────┐
 │  Client  │    │Lightspeed Agt │    │ Red Hat SSO  │    │  MCP Server  │    │console.redhat.com│
-│(Gemini)  │    │  (port 8000)  │    │  (Keycloak)  │    │  (port 8080) │    │ (Insights APIs)  │
+│(Gemini)  │    │  (port 8000)  │    │ (Red Hat SSO)│    │  (port 8080) │    │ (Insights APIs)  │
 └────┬─────┘    └──────┬────────┘    └──────┬───────┘    └──────┬───────┘    └────────┬─────────┘
      │                 │                    │                   │                     │
      │  ── Obtain Token (directly from SSO) ──                 │                     │
@@ -1161,44 +1163,27 @@ This setting is also configurable in `service.yaml` via the
 ## Testing DCR on Cloud Run
 
 This section explains how to test the DCR (Dynamic Client Registration) flow
-against a deployed marketplace handler. Two options are available:
-
-- **Option A: Static Credentials** — no Keycloak needed, caller provides
-  `client_id` and `client_secret` in the DCR request body
-- **Option B: Real DCR with Keycloak on Cloud Run** — exercises the full flow
-  with a temporary Keycloak instance creating real OAuth clients
+against a deployed marketplace handler using **static credentials** mode.
+The caller provides `client_id` and `client_secret` in the DCR request body.
 
 ```
-Option A: Static Credentials              Option B: Real DCR with Keycloak
-
-┌──────────────┐                         ┌──────────────┐
-│  Test Script │                         │  Test Script │
-│  (local)     │                         │  (local)     │
-└──────┬───────┘                         └──────┬───────┘
-       │ POST /dcr                              │ POST /dcr
-       │ (software_statement JWT                │ (software_statement JWT)
-       │  + client_id + client_secret)          │ + Cloud Run ID token
-       │ + Cloud Run ID token                   │
-       ▼                                        ▼
-┌──────────────────────┐                 ┌──────────────────────┐
-│  Marketplace Handler │                 │  Marketplace Handler │
-│  (Cloud Run)         │                 │  (Cloud Run)         │
-│                      │                 │                      │
-│  DCR_ENABLED=false   │                 │  DCR_ENABLED=true    │
-│  Validates, stores   │                 │                      │
-│  and returns creds   │                 └──────────┬───────────┘
-└──────────────────────┘                            │ POST /clients-registrations
-                                                    │ (Bearer IAT)
-                                                    ▼
-                                         ┌──────────────────────┐
-                                         │  Keycloak            │
-                                         │  (Cloud Run)         │
-                                         │                      │
-                                         │  --allow-unauth      │
-                                         │  (required: handler  │
-                                         │   sends IAT in       │
-                                         │   Authorization hdr) │
-                                         └──────────────────────┘
+┌──────────────┐
+│  Test Script │
+│  (local)     │
+└──────┬───────┘
+       │ POST /dcr
+       │ (software_statement JWT
+       │  + client_id + client_secret)
+       │ + Cloud Run ID token
+       ▼
+┌──────────────────────┐
+│  Marketplace Handler │
+│  (Cloud Run)         │
+│                      │
+│  DCR_ENABLED=false   │
+│  Validates, stores   │
+│  and returns creds   │
+└──────────────────────┘
 ```
 
 Both options require `SKIP_JWT_VALIDATION=true` on the handler to accept test
@@ -1221,9 +1206,9 @@ gcloud iam service-accounts keys create dcr-test-key.json \
   --project=$GOOGLE_CLOUD_PROJECT
 ```
 
-### Option A: Static Credentials (No Keycloak)
+### Static Credentials Mode
 
-This mode skips Keycloak client creation. The caller provides `client_id` and
+This mode skips GMA SSO API client creation. The caller provides `client_id` and
 `client_secret` in the DCR request body alongside the `software_statement`.
 The handler validates them (skipped with `SKIP_JWT_VALIDATION=true`), encrypts
 and stores them linked to the order, and returns them. No pre-seeding required.
@@ -1307,487 +1292,6 @@ python scripts/seed_dcr_clients.py list
 
 # Delete an entry
 python scripts/seed_dcr_clients.py delete --order-id order-12345 --confirm
-```
-
-### Option B: Real DCR with Keycloak on Cloud Run
-
-This mode exercises the full DCR flow — real OAuth client creation in a
-temporary Keycloak instance on Cloud Run.
-
-#### 1. Copy the Keycloak Image to GCR
-
-Cloud Run doesn't support pulling images from Quay.io directly. Copy the
-Keycloak image to Google Container Registry (GCR):
-
-```bash
-# Pull from Quay.io
-docker pull quay.io/keycloak/keycloak:26.0
-
-# Tag for GCR
-docker tag quay.io/keycloak/keycloak:26.0 \
-  gcr.io/$GOOGLE_CLOUD_PROJECT/keycloak:26.0
-
-# Push to GCR
-docker push gcr.io/$GOOGLE_CLOUD_PROJECT/keycloak:26.0
-```
-
-#### 2. Deploy Keycloak on Cloud Run
-
-The service **must** allow unauthenticated access. The marketplace handler sends
-`Authorization: Bearer <IAT>` (the Keycloak Initial Access Token) when calling
-the DCR endpoint. If Cloud Run IAM authentication is enabled, it intercepts this
-header expecting a Google ID token and rejects the request with a 401 before it
-ever reaches Keycloak.
-
-Since the service will be publicly accessible, generate a strong admin password:
-
-```bash
-# Generate a random admin password
-KC_ADMIN_PASSWORD=$(python3 -c "import secrets; print(secrets.token_urlsafe(24))")
-echo "Keycloak admin password: $KC_ADMIN_PASSWORD"
-# Save this — you'll need it for the admin API calls below
-```
-
-Deploy the service:
-
-```bash
-gcloud run deploy keycloak-test \
-  --image=gcr.io/$GOOGLE_CLOUD_PROJECT/keycloak:26.0 \
-  --args="start-dev" \
-  --port=8080 \
-  --set-env-vars="KC_BOOTSTRAP_ADMIN_USERNAME=admin,KC_BOOTSTRAP_ADMIN_PASSWORD=$KC_ADMIN_PASSWORD,KC_PROXY_HEADERS=xforwarded,KC_HTTP_ENABLED=true" \
-  --min-instances=1 \
-  --max-instances=1 \
-  --memory=1Gi \
-  --cpu=1 \
-  --region=$GOOGLE_CLOUD_LOCATION \
-  --project=$GOOGLE_CLOUD_PROJECT \
-  --allow-unauthenticated
-```
-
-> **Note:** `--allow-unauthenticated` requires `run.services.setIamPolicy`
-> permission. If you get a `PERMISSION_DENIED` error, ask a project admin to
-> run the deploy command above or grant you `roles/run.admin` on the project.
->
-> **Security:** Delete this service after testing (see step 7). Do not leave a
-> publicly accessible Keycloak instance running.
->
-> **Why `KC_PROXY_HEADERS=xforwarded`?** Cloud Run terminates HTTPS and forwards
-> HTTP to the container. This setting tells Keycloak to trust the `X-Forwarded-*`
-> headers so it generates `https://` URLs in tokens and discovery endpoints.
->
-> **Why `--min-instances=1`?** Keycloak's `start-dev` mode uses an in-memory H2
-> database. Data is lost on cold starts, so keep at least one instance alive.
-
-#### 3. Get the Keycloak URL
-
-```bash
-KEYCLOAK_URL=$(gcloud run services describe keycloak-test \
-  --region=$GOOGLE_CLOUD_LOCATION \
-  --project=$GOOGLE_CLOUD_PROJECT \
-  --format='value(status.url)')
-echo "Keycloak URL: $KEYCLOAK_URL"
-```
-
-Verify it's accessible:
-
-```bash
-curl -s "$KEYCLOAK_URL/realms/master" \
-  | python3 -c "import sys,json; print(json.load(sys.stdin)['realm'])"
-# Should print: master
-```
-
-#### 4. Create a Test Realm and Generate an IAT
-
-```bash
-# Get admin token
-ADMIN_TOKEN=$(curl -s -X POST \
-  "$KEYCLOAK_URL/realms/master/protocol/openid-connect/token" \
-  -d "client_id=admin-cli" \
-  -d "username=admin" \
-  -d "password=$KC_ADMIN_PASSWORD" \
-  -d "grant_type=password" \
-  | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
-
-# Create test realm
-curl -s -X POST "$KEYCLOAK_URL/admin/realms" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"realm": "test-realm", "enabled": true}'
-
-# Generate Initial Access Token (IAT) for DCR
-IAT=$(curl -s -X POST \
-  "$KEYCLOAK_URL/admin/realms/test-realm/clients-initial-access" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"count": 100, "expiration": 86400}' \
-  | python3 -c "import sys,json; print(json.load(sys.stdin)['token'])")
-echo "Initial Access Token: $IAT"
-```
-
-#### 5. Create the `api.console` and `api.ocm` Scopes and Resource Server Client
-
-The agent validates tokens via introspection and checks for the `api.console`
-and `api.ocm` scopes.  The scopes must exist in the realm **before** DCR
-creates clients that reference them.
-
-**Create the `api.console` and `api.ocm` client scopes:**
-
-```bash
-# Get a fresh admin token (the one from step 4 expires after 60s)
-ADMIN_TOKEN=$(curl -s -X POST \
-  "$KEYCLOAK_URL/realms/master/protocol/openid-connect/token" \
-  -d "client_id=admin-cli" \
-  -d "username=admin" \
-  -d "password=$KC_ADMIN_PASSWORD" \
-  -d "grant_type=password" \
-  | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
-
-# Create the scope
-curl -s -X POST "$KEYCLOAK_URL/admin/realms/test-realm/client-scopes" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "api.console",
-    "protocol": "openid-connect",
-    "attributes": {"include.in.token.scope": "true"}
-  }'
-
-# Create the api.ocm scope
-curl -s -X POST "$KEYCLOAK_URL/admin/realms/test-realm/client-scopes" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "api.ocm",
-    "protocol": "openid-connect",
-    "attributes": {"include.in.token.scope": "true"}
-  }'
-
-# Allow api.console and api.ocm in the DCR client registration policy.
-# Keycloak restricts which scopes can be requested during DCR.
-# Get the "authenticated" Allowed Client Scopes policy and add
-# api.console and api.ocm to it.
-POLICY=$(curl -s \
-  "$KEYCLOAK_URL/admin/realms/test-realm/components?type=org.keycloak.services.clientregistration.policy.ClientRegistrationPolicy" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  | python3 -c "
-import sys, json
-for p in json.load(sys.stdin):
-    if p.get('providerId') == 'allowed-client-templates' and p.get('subType') == 'authenticated':
-        p['config']['allowed-client-scopes'] = ['api.console', 'api.ocm']
-        print(json.dumps(p))
-        break
-")
-POLICY_ID=$(echo "$POLICY" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
-
-curl -s -X PUT \
-  "$KEYCLOAK_URL/admin/realms/test-realm/components/$POLICY_ID" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d "$POLICY"
-```
-
-**Create the Resource Server client** (provides `RED_HAT_SSO_CLIENT_ID` / `SECRET`):
-
-```bash
-# Create the client
-curl -s -X POST "$KEYCLOAK_URL/admin/realms/test-realm/clients" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "clientId": "lightspeed-agent",
-    "enabled": true,
-    "clientAuthenticatorType": "client-secret",
-    "serviceAccountsEnabled": true,
-    "directAccessGrantsEnabled": false
-  }'
-
-# Get the client UUID
-CLIENT_UUID=$(curl -s "$KEYCLOAK_URL/admin/realms/test-realm/clients?clientId=lightspeed-agent" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['id'])")
-
-# Get the client secret
-CLIENT_SECRET=$(curl -s "$KEYCLOAK_URL/admin/realms/test-realm/clients/$CLIENT_UUID/client-secret" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  | python3 -c "import sys,json; print(json.load(sys.stdin)['value'])")
-
-echo "RED_HAT_SSO_CLIENT_ID=lightspeed-agent"
-echo "RED_HAT_SSO_CLIENT_SECRET=$CLIENT_SECRET"
-```
-
-**Assign `api.console` and `api.ocm` to the Resource Server client:**
-
-```bash
-# Get the scope UUID
-SCOPE_UUID=$(curl -s "$KEYCLOAK_URL/admin/realms/test-realm/client-scopes" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  | python3 -c "import sys,json; print([s['id'] for s in json.load(sys.stdin) if s['name']=='api.console'][0])")
-
-# Add as optional scope to the client
-curl -s -X PUT \
-  "$KEYCLOAK_URL/admin/realms/test-realm/clients/$CLIENT_UUID/optional-client-scopes/$SCOPE_UUID" \
-  -H "Authorization: Bearer $ADMIN_TOKEN"
-
-# Get the api.ocm scope UUID
-SCOPE_UUID=$(curl -s "$KEYCLOAK_URL/admin/realms/test-realm/client-scopes" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  | python3 -c "import sys,json; print([s['id'] for s in json.load(sys.stdin) if s['name']=='api.ocm'][0])")
-
-# Add as optional scope to the client
-curl -s -X PUT \
-  "$KEYCLOAK_URL/admin/realms/test-realm/clients/$CLIENT_UUID/optional-client-scopes/$SCOPE_UUID" \
-  -H "Authorization: Bearer $ADMIN_TOKEN"
-```
-
-**Grant `manage-clients` role to the Resource Server service account:**
-
-Keycloak's OIDC DCR endpoint does not enable `serviceAccountsEnabled` on
-newly created clients.  After DCR, the agent uses the Admin API to fix
-this, which requires the `manage-clients` role.
-
-```bash
-# Get the service account user for lightspeed-agent
-SA_USER_ID=$(curl -s \
-  "$KEYCLOAK_URL/admin/realms/test-realm/clients/$CLIENT_UUID/service-account-user" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
-
-# Get the realm-management client UUID
-RM_UUID=$(curl -s \
-  "$KEYCLOAK_URL/admin/realms/test-realm/clients?clientId=realm-management" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['id'])")
-
-# Get the manage-clients role definition
-MANAGE_CLIENTS_ROLE=$(curl -s \
-  "$KEYCLOAK_URL/admin/realms/test-realm/clients/$RM_UUID/roles/manage-clients" \
-  -H "Authorization: Bearer $ADMIN_TOKEN")
-
-# Assign the role to the service account
-curl -s -X POST \
-  "$KEYCLOAK_URL/admin/realms/test-realm/users/$SA_USER_ID/role-mappings/clients/$RM_UUID" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d "[$MANAGE_CLIENTS_ROLE]"
-```
-
-Store the client credentials in Secret Manager:
-
-```bash
-echo -n "lightspeed-agent" | \
-  gcloud secrets versions add redhat-sso-client-id \
-    --data-file=- --project=$GOOGLE_CLOUD_PROJECT
-
-echo -n "$CLIENT_SECRET" | \
-  gcloud secrets versions add redhat-sso-client-secret \
-    --data-file=- --project=$GOOGLE_CLOUD_PROJECT
-```
-
-> **Note:** Keycloak assigns the `api.console` and `api.ocm` scopes to DCR-created
-> clients because the DCR request includes `"scope": "api.console api.ocm"` and
-> the scope is in the Allowed Client Scopes registration policy (configured
-> above).  However, Keycloak does **not** enable `serviceAccountsEnabled`
-> from the DCR `grant_types` field.  After DCR, the agent automatically
-> enables it via the Admin API (using the `manage-clients` role granted
-> above).
-
-#### 6. Configure the Marketplace Handler and Agent
-
-Update the secrets in Secret Manager first, then update the service env vars.
-The `gcloud run services update` command deploys a new revision that picks up
-both the env var changes and the updated secrets — no separate restart is needed.
-
-**Important:** Update secrets **before** the env vars, because the env var
-update triggers the new revision deployment.
-
-**Marketplace handler** (handles DCR requests):
-
-```bash
-# 1. Store IAT in Secret Manager
-echo -n "$IAT" | \
-  gcloud secrets versions add dcr-initial-access-token \
-    --data-file=- --project=$GOOGLE_CLOUD_PROJECT
-
-# 2. Generate and store Fernet encryption key (if not already set)
-FERNET_KEY=$(python3 -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')
-echo -n "$FERNET_KEY" | \
-  gcloud secrets versions add dcr-encryption-key \
-    --data-file=- --project=$GOOGLE_CLOUD_PROJECT
-
-# 3. Update handler env vars (this deploys a new revision, picking up the
-#    updated secrets above and pointing the handler to the test Keycloak)
-#    RED_HAT_SSO_CLIENT_ID/SECRET are read from Secret Manager (updated in
-#    step 5) — do NOT pass them as --update-env-vars or Cloud Run will
-#    reject the conflicting type.
-gcloud run services update marketplace-handler \
-  --region=$GOOGLE_CLOUD_LOCATION \
-  --project=$GOOGLE_CLOUD_PROJECT \
-  --update-env-vars="\
-RED_HAT_SSO_ISSUER=$KEYCLOAK_URL/realms/test-realm,\
-SKIP_JWT_VALIDATION=true,\
-DCR_ENABLED=true"
-```
-
-**Agent** (introspects tokens against the test Keycloak):
-
-The agent needs the Resource Server credentials from step 5 to call the
-introspection endpoint.  The secrets were already updated above; now point
-the agent to the test Keycloak:
-
-```bash
-gcloud run services update lightspeed-agent \
-  --region=$GOOGLE_CLOUD_LOCATION \
-  --project=$GOOGLE_CLOUD_PROJECT \
-  --update-env-vars="\
-RED_HAT_SSO_ISSUER=$KEYCLOAK_URL/realms/test-realm,\
-SKIP_JWT_VALIDATION=false,\
-MCP_TRANSPORT_MODE=http"
-```
-
-> The agent reads `RED_HAT_SSO_CLIENT_ID` and `RED_HAT_SSO_CLIENT_SECRET` from
-> Secret Manager (set in step 5).  `SKIP_JWT_VALIDATION=false` ensures the
-> agent actually introspects tokens instead of bypassing validation.
-> `MCP_TRANSPORT_MODE=http` tells the agent to connect to the MCP server
-> sidecar via HTTP (the default `service.yaml` already sets this, but it
-> must be explicit if the agent was deployed separately).
-
-#### 7. Run the Test Script
-
-The marketplace handler requires Cloud Run IAM authentication by default
-(setting `--allow-unauthenticated` requires `run.services.setIamPolicy`
-permission which may not be available). The test script automatically fetches
-an ID token using your `gcloud` credentials:
-
-```bash
-# Get the handler URL
-HANDLER_URL=$(gcloud run services describe marketplace-handler \
-  --region=$GOOGLE_CLOUD_LOCATION \
-  --project=$GOOGLE_CLOUD_PROJECT \
-  --format='value(status.url)')
-
-# Run with key file signing
-export MARKETPLACE_HANDLER_URL=$HANDLER_URL
-export TEST_SA_KEY_FILE=dcr-test-key.json
-# Generate a fresh order ID for each test run
-export TEST_ORDER_ID="order-$(uuidgen || python3 -c 'import uuid; print(uuid.uuid4())')"
-# Don't set SKIP_CLOUD_RUN_AUTH -- script fetches an ID token automatically
-
-python scripts/test_deployed_dcr.py
-```
-
-> **Note:** If the handler was deployed with `--allow-unauthenticated`, you can
-> set `export SKIP_CLOUD_RUN_AUTH=true` to skip ID token authentication.
-
-Expected output:
-
-```
-<<< 201
-{
-  "client_id": "e2a91c94-...",
-  "client_secret": "UGH3iMkY...",
-  "client_secret_expires_at": 0
-}
-
-DCR succeeded.
-```
-
-#### 8. Verify in Keycloak
-
-Check that the OAuth client was created:
-
-```bash
-# Get fresh admin token
-ADMIN_TOKEN=$(curl -s -X POST \
-  "$KEYCLOAK_URL/realms/master/protocol/openid-connect/token" \
-  -d "client_id=admin-cli" \
-  -d "username=admin" \
-  -d "password=$KC_ADMIN_PASSWORD" \
-  -d "grant_type=password" \
-  | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
-
-# List DCR-created clients in test-realm
-# Note: 'name' is the human-readable name (gemini-order-*),
-#       'clientId' is the OAuth client_id (a UUID generated by Keycloak)
-curl -s "$KEYCLOAK_URL/admin/realms/test-realm/clients" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  | python3 -c "
-import sys, json
-clients = json.load(sys.stdin)
-for c in clients:
-    if c.get('name', '').startswith('gemini-order-'):
-        print(f\"  {c['name']} (client_id={c['clientId']})\")
-"
-```
-
-#### 9. Test the Agent with DCR Credentials
-
-Use the `client_id` and `client_secret` returned by the DCR response (step 7)
-to obtain an access token and send a message to the agent:
-
-```bash
-# Get a token and send a test message
-python scripts/test_a2a_auth.py \
-  --client-id <CLIENT_ID_FROM_DCR> \
-  --client-secret <CLIENT_SECRET_FROM_DCR> \
-  --issuer $KEYCLOAK_URL/realms/test-realm \
-  --agent-url $AGENT_URL \
-  --message "What systems have critical advisories?"
-```
-
-The script requests `scope=openid api.console api.ocm` via `client_credentials`
-grant, then sends an A2A `message/send` request with the resulting Bearer token.
-
-To just get a token (e.g. for pasting into the A2A Inspector):
-
-```bash
-python scripts/test_a2a_auth.py \
-  --client-id <CLIENT_ID_FROM_DCR> \
-  --client-secret <CLIENT_SECRET_FROM_DCR> \
-  --issuer $KEYCLOAK_URL/realms/test-realm
-```
-
-Copy the printed token into the A2A Inspector's "Bearer Token" field and
-connect to `$AGENT_URL`.
-
-#### 10. Clean Up
-
-```bash
-# Delete the test Keycloak service
-gcloud run services delete keycloak-test \
-  --region=$GOOGLE_CLOUD_LOCATION \
-  --project=$GOOGLE_CLOUD_PROJECT \
-  --quiet
-
-# Restore handler to production configuration
-gcloud run services update marketplace-handler \
-  --region=$GOOGLE_CLOUD_LOCATION \
-  --project=$GOOGLE_CLOUD_PROJECT \
-  --update-env-vars="\
-RED_HAT_SSO_ISSUER=https://sso.redhat.com/auth/realms/redhat-external,\
-SKIP_JWT_VALIDATION=false"
-
-# Restore agent to production configuration
-gcloud run services update lightspeed-agent \
-  --region=$GOOGLE_CLOUD_LOCATION \
-  --project=$GOOGLE_CLOUD_PROJECT \
-  --update-env-vars="\
-RED_HAT_SSO_ISSUER=https://sso.redhat.com/auth/realms/redhat-external,\
-SKIP_JWT_VALIDATION=false"
-
-# Restore the production IAT in Secret Manager
-echo -n 'your-production-iat' | \
-  gcloud secrets versions add dcr-initial-access-token \
-    --data-file=- --project=$GOOGLE_CLOUD_PROJECT
-
-# Restore the production SSO credentials in Secret Manager
-echo -n 'your-production-client-id' | \
-  gcloud secrets versions add redhat-sso-client-id \
-    --data-file=- --project=$GOOGLE_CLOUD_PROJECT
-
-echo -n 'your-production-client-secret' | \
-  gcloud secrets versions add redhat-sso-client-secret \
-    --data-file=- --project=$GOOGLE_CLOUD_PROJECT
 ```
 
 ### Test Script Reference

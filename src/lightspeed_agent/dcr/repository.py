@@ -58,6 +58,26 @@ class DCRClientRepository:
                 return self._model_to_entity(model)
             return None
 
+    async def delete_by_order_id(self, order_id: str) -> bool:
+        """Delete a registered client by order_id.
+
+        Args:
+            order_id: The marketplace order ID.
+
+        Returns:
+            True if a client was deleted, False if not found.
+        """
+        async with get_session() as session:
+            result = await session.execute(
+                select(DCRClientModel).where(DCRClientModel.order_id == order_id)
+            )
+            model = result.scalar_one_or_none()
+            if model:
+                await session.delete(model)
+                logger.info("Deleted DCR client for order_id=%s", order_id)
+                return True
+            return False
+
     async def create(
         self,
         client_id: str,
@@ -80,7 +100,7 @@ class DCRClientRepository:
             redirect_uris: OAuth redirect URIs.
             grant_types: OAuth grant types.
             registration_access_token_encrypted: Encrypted registration access token.
-            keycloak_client_uuid: Keycloak's internal client UUID.
+            keycloak_client_uuid: SSO internal client UUID (legacy column name).
             metadata: Additional metadata.
 
         Returns:

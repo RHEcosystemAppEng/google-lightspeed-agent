@@ -160,8 +160,10 @@ DCR allows Google Cloud Marketplace customers to automatically register as OAuth
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `DCR_ENABLED` | `true` | `true`: real DCR via Red Hat SSO (Keycloak). `false`: accepts static `client_id`/`client_secret` from the DCR request body, validates them against the token endpoint, and stores them. |
-| `DCR_INITIAL_ACCESS_TOKEN` | - | Initial access token for Red Hat SSO DCR endpoint |
+| `DCR_ENABLED` | `true` | `true`: real DCR via GMA SSO API. `false`: accepts static `client_id`/`client_secret` from the DCR request body, validates them against the token endpoint, and stores them. |
+| `GMA_CLIENT_ID` | - | Client ID for GMA SSO API (client_credentials grant with `api.iam.clients.gma` scope) |
+| `GMA_CLIENT_SECRET` | - | Client secret for GMA SSO API |
+| `GMA_API_BASE_URL` | `https://sso.redhat.com/auth/realms/redhat-external/apis/beta/acs/v1/` | GMA SSO API base URL |
 | `DCR_ENCRYPTION_KEY` | - | Fernet key for encrypting stored client secrets |
 | `DCR_CLIENT_NAME_PREFIX` | `gemini-order-` | Prefix for generated client names |
 
@@ -175,7 +177,8 @@ python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().d
 
 ```bash
 DCR_ENABLED=true
-DCR_INITIAL_ACCESS_TOKEN=your-keycloak-initial-access-token
+GMA_CLIENT_ID=your-gma-client-id
+GMA_CLIENT_SECRET=your-gma-client-secret
 DCR_ENCRYPTION_KEY=your-generated-fernet-key
 DCR_CLIENT_NAME_PREFIX=gemini-order-
 ```

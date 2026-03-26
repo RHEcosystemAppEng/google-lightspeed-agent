@@ -32,13 +32,13 @@ The system uses a **two-service architecture** to handle marketplace integration
 │  ┌─────────────────────────────────────────────────────────────────────┐    │
 │  │                    Hybrid /dcr Endpoint                             │    │
 │  │  - Pub/Sub Events → Approve accounts and entitlements               │    │
-│  │  - DCR Requests → Validate order, create OAuth clients via Keycloak │    │
+│  │  - DCR Requests → Validate order, create OAuth clients via GMA API  │    │
 │  └─────────────────────────────────────────────────────────────────────┘    │
 │                              │                                              │
 │                              ▼                                              │
 │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────────────────┐  │
 │  │   PostgreSQL    │  │   Red Hat SSO   │  │   Google Procurement API    │  │
-│  │   (Orders, DCR) │  │   (Keycloak)    │  │   (Entitlement Approval)    │  │
+│  │   (Orders, DCR) │  │   (GMA SSO API) │  │   (Entitlement Approval)    │  │
 │  └─────────────────┘  └─────────────────┘  └─────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────────────────────┘
                                 ▲
@@ -100,7 +100,7 @@ The AgentCard (served by the Agent on port 8000) advertises DCR support and poin
 }
 ```
 
-For the complete DCR flow, JWT validation, Keycloak integration, security considerations, and local testing instructions, see [Authentication - DCR](authentication.md#dynamic-client-registration-dcr).
+For the complete DCR flow, JWT validation, security considerations, and local testing instructions, see [Authentication - DCR](authentication.md#dynamic-client-registration-dcr).
 
 ## Procurement Integration
 

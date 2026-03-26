@@ -136,21 +136,6 @@ spec:
                 secretKeyRef:
                   name: session-database-url
                   key: latest
-            # DCR (Dynamic Client Registration) Configuration
-            - name: DCR_ENABLED
-              value: "true"
-            - name: DCR_CLIENT_NAME_PREFIX
-              value: "gemini-order-"
-            - name: DCR_INITIAL_ACCESS_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: dcr-initial-access-token
-                  key: latest
-            - name: DCR_ENCRYPTION_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: dcr-encryption-key
-                  key: latest
             # Rate Limiting (Redis-backed, required for API Server)
             - name: RATE_LIMIT_REDIS_URL
               valueFrom:

@@ -79,7 +79,7 @@ data:
   AGENT_LOGGING_DETAIL: "detailed"
 
   # DCR (Dynamic Client Registration) Configuration
-  # Set to "true" to enable real DCR with Red Hat SSO (Keycloak)
+  # Set to "true" to enable real DCR with Red Hat SSO via GMA SSO API
   # When "false", accepts static credentials (client_id/client_secret) from the DCR request body
   DCR_ENABLED: "true"
   DCR_CLIENT_NAME_PREFIX: "gemini-order-"

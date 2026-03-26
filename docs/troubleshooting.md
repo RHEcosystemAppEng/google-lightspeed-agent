@@ -103,7 +103,7 @@ echo $TOKEN | cut -d. -f2 | base64 -d 2>/dev/null | jq .
 | Issue | Cause | Solution |
 |-------|-------|----------|
 | Token not active | Token expired or revoked | Get new token via OAuth or `client_credentials` |
-| Introspection failed | Agent can't reach Keycloak | Check `RED_HAT_SSO_ISSUER` and network |
+| Introspection failed | Agent can't reach Red Hat SSO | Check `RED_HAT_SSO_ISSUER` and network |
 | Wrong credentials | Agent client_id/secret invalid | Check `RED_HAT_SSO_CLIENT_ID/SECRET` |
 
 **Test Introspection Endpoint**:
@@ -129,7 +129,7 @@ echo $TOKEN | cut -d. -f2 | base64 -d 2>/dev/null | jq .scope
 
 **Required Scopes**: `api.console` and `api.ocm` (configurable via `AGENT_REQUIRED_SCOPE`)
 
-**Fix**: Ensure the `api.console` and `api.ocm` Client Scopes exist in Keycloak and are assigned to the client that issued the token.
+**Fix**: Ensure the `api.console` and `api.ocm` Client Scopes exist in Red Hat SSO and are assigned to the client that issued the token.
 
 ### Disallowed Scope (403 Forbidden)
 
@@ -426,7 +426,7 @@ open http://localhost:8000/docs
 | Message | Meaning | Action |
 |---------|---------|--------|
 | `Token validation failed` | Invalid/inactive token | Check token and introspection endpoint |
-| `Insufficient scope` | Missing `api.console` or `api.ocm` | Add scopes to client in Keycloak |
+| `Insufficient scope` | Missing `api.console` or `api.ocm` | Add scopes to client in Red Hat SSO |
 | `Tool execution failed` | MCP error | Check MCP server |
 | `Rate limit exceeded` | Too many requests | Wait or upgrade |
 | `Database connection failed` | DB unreachable | Check database |

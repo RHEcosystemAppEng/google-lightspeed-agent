@@ -1,17 +1,20 @@
 """DCR service for handling Dynamic Client Registration requests."""
 
+from __future__ import annotations
+
 import logging
+from typing import TYPE_CHECKING
 
 import httpx
 from cryptography.fernet import Fernet, InvalidToken
 
 from lightspeed_agent.config import get_settings
-from lightspeed_agent.dcr.google_jwt import GoogleJWTValidator, get_google_jwt_validator
-from lightspeed_agent.dcr.keycloak_client import (
-    KeycloakDCRClient,
-    KeycloakDCRError,
-    get_keycloak_dcr_client,
+from lightspeed_agent.dcr.gma_client import (
+    GMAClient,
+    GMAClientError,
+    get_gma_client,
 )
+from lightspeed_agent.dcr.google_jwt import GoogleJWTValidator, get_google_jwt_validator
 from lightspeed_agent.dcr.models import (
     DCRError,
     DCRErrorCode,
@@ -21,7 +24,9 @@ from lightspeed_agent.dcr.models import (
     RegisteredClient,
 )
 from lightspeed_agent.dcr.repository import DCRClientRepository, get_dcr_client_repository
-from lightspeed_agent.marketplace.service import ProcurementService, get_procurement_service
+
+if TYPE_CHECKING:
+    from lightspeed_agent.marketplace.service import ProcurementService
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +41,8 @@ class DCRService:
     - Returns RFC 7591 compliant responses
 
     Modes:
-    - DCR_ENABLED=true: Creates real OAuth clients in Red Hat SSO (Keycloak)
+    - DCR_ENABLED=true: Creates real OAuth tenant clients in Red Hat SSO
+      via the GMA API
     - DCR_ENABLED=false: Accepts static credentials (client_id + client_secret)
       provided in the DCR request body. Validates them against the Red Hat SSO
       token endpoint, stores them, and returns them.
@@ -46,7 +52,7 @@ class DCRService:
         self,
         jwt_validator: GoogleJWTValidator | None = None,
         procurement_service: ProcurementService | None = None,
-        keycloak_client: KeycloakDCRClient | None = None,
+        gma_client: GMAClient | None = None,
         client_repository: DCRClientRepository | None = None,
     ) -> None:
         """Initialize the DCR service.
@@ -54,12 +60,16 @@ class DCRService:
         Args:
             jwt_validator: Google JWT validator.
             procurement_service: Procurement service for validation.
-            keycloak_client: Keycloak DCR client for real DCR.
+            gma_client: GMA client for real DCR tenant creation.
             client_repository: Repository for storing client mappings.
         """
         self._jwt_validator = jwt_validator or get_google_jwt_validator()
-        self._procurement_service = procurement_service or get_procurement_service()
-        self._keycloak_client = keycloak_client
+        if procurement_service is None:
+            from lightspeed_agent.marketplace.service import get_procurement_service
+
+            procurement_service = get_procurement_service()
+        self._procurement_service = procurement_service
+        self._gma_client = gma_client
         self._client_repository = client_repository or get_dcr_client_repository()
         self._settings = get_settings()
 
@@ -71,11 +81,11 @@ class DCRService:
             except Exception as e:
                 logger.error("Invalid DCR encryption key: %s", e)
 
-    def _get_keycloak_client(self) -> KeycloakDCRClient:
-        """Get the Keycloak DCR client (lazy initialization)."""
-        if self._keycloak_client is None:
-            self._keycloak_client = get_keycloak_dcr_client()
-        return self._keycloak_client
+    def _get_gma_client(self) -> GMAClient:
+        """Get the GMA client (lazy initialization)."""
+        if self._gma_client is None:
+            self._gma_client = get_gma_client()
+        return self._gma_client
 
     def _encrypt_secret(self, secret: str) -> str:
         """Encrypt a client secret for storage.
@@ -193,7 +203,7 @@ class DCRService:
         Returns:
             True if the credentials are valid, False otherwise.
         """
-        token_url = self._settings.keycloak_token_endpoint
+        token_url = self._settings.sso_token_endpoint
         logger.info("Validating static credentials for client_id=%s", client_id)
 
         try:
@@ -336,7 +346,7 @@ class DCRService:
         self,
         claims: GoogleJWTClaims,
     ) -> DCRResponse | DCRError:
-        """Create a real OAuth client in Red Hat SSO (Keycloak).
+        """Create a real OAuth tenant client in Red Hat SSO via the GMA API.
 
         Args:
             claims: Validated JWT claims.
@@ -345,23 +355,19 @@ class DCRService:
             DCRResponse with new credentials, or DCRError on failure.
         """
         logger.info(
-            "Creating real OAuth client in Keycloak for order: %s",
+            "Creating OAuth tenant client via GMA API for order: %s",
             claims.order_id,
         )
 
         try:
-            keycloak_client = self._get_keycloak_client()
-            response = await keycloak_client.create_client(
+            gma_client = self._get_gma_client()
+            response = await gma_client.create_tenant(
                 order_id=claims.order_id,
                 redirect_uris=claims.auth_app_redirect_uris,
-                grant_types=["authorization_code", "refresh_token", "client_credentials"],
             )
 
-            # Encrypt secrets for storage
+            # Encrypt secret for storage
             encrypted_secret = self._encrypt_secret(response.client_secret)
-            encrypted_rat = None
-            if response.registration_access_token:
-                encrypted_rat = self._encrypt_secret(response.registration_access_token)
 
             # Store client mapping in database
             await self._client_repository.create(
@@ -369,20 +375,18 @@ class DCRService:
                 client_secret_encrypted=encrypted_secret,
                 order_id=claims.order_id,
                 account_id=claims.account_id,
-                redirect_uris=response.redirect_uris,
+                redirect_uris=claims.auth_app_redirect_uris,
                 grant_types=["authorization_code", "refresh_token", "client_credentials"],
-                registration_access_token_encrypted=encrypted_rat,
-                keycloak_client_uuid=None,  # Could extract from registration_client_uri
                 metadata={
                     "iss": claims.iss,
                     "aud": claims.aud,
-                    "client_name": response.client_name,
-                    "registration_client_uri": response.registration_client_uri,
+                    "client_name": response.name,
+                    "registration_mode": "gma",
                 },
             )
 
             logger.info(
-                "Successfully created OAuth client for order %s: client_id=%s",
+                "Successfully created OAuth tenant client for order %s: client_id=%s",
                 claims.order_id,
                 response.client_id,
             )
@@ -393,18 +397,59 @@ class DCRService:
                 client_secret_expires_at=0,
             )
 
-        except KeycloakDCRError as e:
-            logger.exception("Keycloak DCR error: %s", e)
+        except GMAClientError as e:
+            logger.exception("GMA API error: %s", e)
+            if e.status_code and e.status_code < 500:
+                return DCRError(
+                    error=DCRErrorCode.INVALID_REDIRECT_URI,
+                    error_description=f"Failed to create OAuth tenant client: {e}",
+                )
             return DCRError(
                 error=DCRErrorCode.SERVER_ERROR,
-                error_description=f"Failed to create OAuth client: {e}",
+                error_description=f"Failed to create OAuth tenant client: {e}",
             )
         except Exception as e:
-            logger.exception("Unexpected error creating client: %s", e)
+            logger.exception("Unexpected error creating OAuth tenant client: %s", e)
             return DCRError(
                 error=DCRErrorCode.SERVER_ERROR,
-                error_description=f"Failed to create client: {e}",
+                error_description=f"Failed to create OAuth tenant client: {e}",
             )
+
+    async def delete_client(self, order_id: str) -> None:
+        """Delete an OAuth client associated with a marketplace order.
+
+        For GMA-created clients, deletes the tenant from Red Hat SSO via the
+        GMA API before removing the local DB record. For static credentials,
+        only the local record is removed.
+
+        Args:
+            order_id: The marketplace order ID (entitlement ID).
+
+        Raises:
+            GMAClientError: If the GMA API deletion fails (caller should retry).
+        """
+        client = await self._client_repository.get_by_order_id(order_id)
+        if not client:
+            logger.info("No DCR client found for order_id=%s, nothing to delete", order_id)
+            return
+
+        registration_mode = client.metadata.get("registration_mode")
+
+        if registration_mode == "gma":
+            logger.info(
+                "Deleting GMA tenant for order %s: client_id=%s",
+                order_id,
+                client.client_id,
+            )
+            gma_client = self._get_gma_client()
+            await gma_client.delete_tenant(client.client_id)
+
+        await self._client_repository.delete_by_order_id(order_id)
+        logger.info(
+            "Deleted DCR client for order %s (mode=%s)",
+            order_id,
+            registration_mode,
+        )
 
     async def get_client(self, client_id: str) -> RegisteredClient | None:
         """Get a registered client by client_id.
