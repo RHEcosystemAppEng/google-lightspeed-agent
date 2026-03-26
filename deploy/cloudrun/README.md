@@ -667,6 +667,7 @@ Bearer token that is active and carries the `api.console` and `api.ocm` scopes.
 | `MARKETPLACE_HANDLER_URL` | URL of the marketplace-handler service. Used to build the DCR endpoints in the AgentCard. If empty, falls back to `AGENT_PROVIDER_URL`. Set automatically by `deploy.sh`. |
 | `AGENT_PROVIDER_ORGANIZATION_URL` | Provider's organization website URL (default: `https://www.redhat.com`). Used in AgentCard `provider.url` and as the expected JWT audience for Google DCR `software_statement` validation. Set in YAML configs, not changed by `deploy.sh`. |
 | `AGENT_REQUIRED_SCOPE` | Comma-separated OAuth scopes required in tokens (default: `api.console,api.ocm`) |
+| `AGENT_ALLOWED_SCOPES` | Comma-separated allowlist of permitted scopes (default: `openid,profile,email,api.console,api.ocm`). Tokens with scopes outside this list are rejected (403). |
 
 ### Development Mode
 
@@ -1127,6 +1128,24 @@ gcloud run services update ${SERVICE_NAME:-lightspeed-agent} \
 
 This setting is also configurable in `service.yaml` via the
 `AGENT_REQUIRED_SCOPE` environment variable.
+
+**"Token carries disallowed scope(s): ..."**
+
+The agent enforces a scope allowlist (`AGENT_ALLOWED_SCOPES`) to prevent tokens
+with elevated privileges from being forwarded to downstream services.  If the
+token carries scopes not in the allowlist, you will see a 403 error.
+
+Add the missing scope(s) to the allowlist:
+
+```bash
+gcloud run services update ${SERVICE_NAME:-lightspeed-agent} \
+  --region=$GOOGLE_CLOUD_LOCATION \
+  --project=$GOOGLE_CLOUD_PROJECT \
+  --update-env-vars="AGENT_ALLOWED_SCOPES=openid,profile,email,api.console,api.ocm,your.extra.scope"
+```
+
+This setting is also configurable in `service.yaml` via the
+`AGENT_ALLOWED_SCOPES` environment variable.
 
 **Empty response or connection refused**
 

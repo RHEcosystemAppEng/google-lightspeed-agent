@@ -196,6 +196,10 @@ mismatch issues when tokens are issued by DCR-created clients (each has its own
 5. **Check Scope**: Agent checks that the required scopes (`api.console` and
    `api.ocm`) are present in the token's `scope` field.  If any are missing,
    the agent returns **403 Forbidden**.
+6. **Check Allowed Scopes**: Agent checks that the token does not carry scopes
+   outside the configured allowlist (`AGENT_ALLOWED_SCOPES`).  If disallowed
+   scopes are present, the agent returns **403 Forbidden**.  This prevents
+   tokens with elevated privileges from being forwarded to downstream services.
 6. **Build User**: Agent maps the introspection response to an
    `AuthenticatedUser` for downstream use.
 
@@ -222,6 +226,19 @@ must be:
 
 The required scopes are configurable via `AGENT_REQUIRED_SCOPE` (comma-separated,
 default: `api.console,api.ocm`).
+
+### Allowed Scopes (Scope Allowlist)
+
+In addition to checking that required scopes are present, the agent enforces an
+**allowlist** of permitted scopes via `AGENT_ALLOWED_SCOPES` (comma-separated,
+default: `openid,profile,email,api.console,api.ocm`).  Tokens carrying scopes
+outside this list are rejected with **403 Forbidden**.
+
+This is a defense-in-depth measure: since the agent forwards the caller's JWT
+to the MCP sidecar and downstream APIs, restricting scopes prevents tokens with
+elevated privileges from being exercised against those services.
+
+All permitted scopes must be explicitly listed in `AGENT_ALLOWED_SCOPES`.
 
 ### Introspection Response Fields
 
@@ -287,6 +304,10 @@ RED_HAT_SSO_CLIENT_SECRET=your-client-secret
 
 # Required scopes checked during token introspection (comma-separated, default: api.console,api.ocm)
 AGENT_REQUIRED_SCOPE=api.console,api.ocm
+
+# Allowed scopes allowlist (comma-separated, default: openid,profile,email,api.console,api.ocm)
+# Tokens carrying scopes outside this list are rejected (HTTP 403).
+AGENT_ALLOWED_SCOPES=openid,profile,email,api.console,api.ocm
 ```
 
 ### Registering an OAuth Client
@@ -517,6 +538,7 @@ pytest tests/test_auth.py --cov=lightspeed_agent.auth
 | 401 | Token not active | Introspection returned `active: false` (expired, revoked, or invalid) |
 | 401 | Introspection failed | HTTP error calling introspection endpoint |
 | 403 | Insufficient scope | Token is active but missing required scope(s) (`api.console`, `api.ocm`) |
+| 403 | Disallowed scope | Token carries scope(s) outside the configured allowlist (`AGENT_ALLOWED_SCOPES`) |
 
 ### Error Response Format
 

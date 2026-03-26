@@ -31,6 +31,10 @@ class InsufficientScopeError(Exception):
     """Raised when a token is valid but lacks the required scope (HTTP 403)."""
 
 
+class DisallowedScopeError(Exception):
+    """Raised when a token carries scopes outside the allowed set (HTTP 403)."""
+
+
 class TokenIntrospector:
     """Validate Bearer tokens via the Keycloak introspection endpoint.
 
@@ -46,6 +50,7 @@ class TokenIntrospector:
         self._client_id = self._settings.red_hat_sso_client_id
         self._client_secret = self._settings.red_hat_sso_client_secret
         self._required_scopes = self._settings.required_scopes_list
+        self._allowed_scopes = self._settings.allowed_scopes_list
 
     async def validate_token(self, token: str) -> AuthenticatedUser:
         """Validate a Bearer token via introspection.
@@ -75,6 +80,13 @@ class TokenIntrospector:
         if missing:
             raise InsufficientScopeError(
                 f"Token is missing required scope(s): {', '.join(missing)}"
+            )
+
+        # Check that token does not carry scopes beyond the allowlist
+        disallowed = [s for s in scopes if s not in self._allowed_scopes]
+        if disallowed:
+            raise DisallowedScopeError(
+                f"Token carries disallowed scope(s): {', '.join(disallowed)}"
             )
 
         return self._to_user(data, scopes)
