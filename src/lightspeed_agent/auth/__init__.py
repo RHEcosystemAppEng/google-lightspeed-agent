@@ -11,6 +11,7 @@ from lightspeed_agent.auth.dependencies import (
     require_scope,
 )
 from lightspeed_agent.auth.introspection import (
+    DisallowedScopeError,
     InsufficientScopeError,
     TokenIntrospector,
     TokenValidationError,
@@ -31,6 +32,7 @@ __all__ = [
     "TokenIntrospector",
     "TokenValidationError",
     "InsufficientScopeError",
+    "DisallowedScopeError",
     "get_token_introspector",
     # Middleware
     "AuthenticationMiddleware",

@@ -236,10 +236,24 @@ class Settings(BaseSettings):
         ),
     )
 
+    # Agent allowed scopes (comma-separated allowlist)
+    agent_allowed_scopes: str = Field(
+        default="openid,profile,email,api.console,api.ocm",
+        description=(
+            "Comma-separated allowlist of OAuth scopes permitted in access tokens."
+            " Tokens carrying scopes outside this list are rejected (HTTP 403)."
+        ),
+    )
+
     @property
     def required_scopes_list(self) -> list[str]:
         """Parse comma-separated agent_required_scope into a list."""
         return [s.strip() for s in self.agent_required_scope.split(",") if s.strip()]
+
+    @property
+    def allowed_scopes_list(self) -> list[str]:
+        """Parse comma-separated agent_allowed_scopes into a list."""
+        return [s.strip() for s in self.agent_allowed_scopes.split(",") if s.strip()]
 
     @property
     def keycloak_introspection_endpoint(self) -> str:

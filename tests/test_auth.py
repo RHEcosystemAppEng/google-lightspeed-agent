@@ -9,6 +9,7 @@ import pytest
 
 from lightspeed_agent.auth import AuthenticatedUser
 from lightspeed_agent.auth.introspection import (
+    DisallowedScopeError,
     InsufficientScopeError,
     TokenIntrospector,
     TokenValidationError,
@@ -193,6 +194,50 @@ class TestTokenIntrospector:
         assert user.client_id == "dev-client"
         assert "api.console" in user.scopes
         assert "api.ocm" in user.scopes
+
+    @pytest.mark.asyncio
+    async def test_disallowed_scope_rejected(self, introspector):
+        """Test that a token with scopes outside the allowlist raises DisallowedScopeError."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "active": True,
+            "sub": "user-123",
+            "scope": "openid api.console api.ocm admin.superpower",
+            "exp": int(time.time()) + 3600,
+        }
+
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_instance = AsyncMock()
+            mock_instance.post.return_value = mock_response
+            mock_instance.__aenter__.return_value = mock_instance
+            mock_instance.__aexit__.return_value = None
+            mock_client.return_value = mock_instance
+
+            with pytest.raises(DisallowedScopeError, match="admin.superpower"):
+                await introspector.validate_token("extra-scope-token")
+
+    @pytest.mark.asyncio
+    async def test_all_allowed_scopes_accepted(self, introspector):
+        """Test that a token with only allowed scopes passes validation."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "active": True,
+            "sub": "user-123",
+            "scope": "openid profile email api.console api.ocm",
+            "exp": int(time.time()) + 3600,
+        }
+
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_instance = AsyncMock()
+            mock_instance.post.return_value = mock_response
+            mock_instance.__aenter__.return_value = mock_instance
+            mock_instance.__aexit__.return_value = None
+            mock_client.return_value = mock_instance
+
+            user = await introspector.validate_token("good-token")
+            assert set(user.scopes) == {"openid", "profile", "email", "api.console", "api.ocm"}
 
     @pytest.mark.asyncio
     async def test_azp_preferred_over_client_id(self, introspector):
