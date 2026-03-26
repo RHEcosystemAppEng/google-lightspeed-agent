@@ -18,7 +18,7 @@ This agent provides AI-powered access to Red Hat Insights services, enabling nat
 - Built with Google ADK and Gemini 2.5 Flash
 - A2A protocol support with SSE streaming for multi-agent ecosystems
 - OAuth 2.0 authentication via Red Hat SSO
-- Dynamic Client Registration (DCR) with Red Hat SSO (Keycloak)
+- Dynamic Client Registration (DCR) with Red Hat SSO via GMA SSO API
 - Google Cloud Marketplace integration (Gemini Enterprise)
 - PostgreSQL persistence for production deployments
 - Usage tracking and reporting to Google Cloud Service Control
@@ -252,7 +252,7 @@ lightspeed_agent/
         ├── core/               # Agent definition (ADK)
         ├── db/                 # Database models (SQLAlchemy)
         ├── dcr/                # Dynamic Client Registration
-        │   ├── keycloak_client.py  # Red Hat SSO DCR client
+        │   ├── gma_client.py       # GMA SSO API client
         │   └── service.py          # DCR business logic
         ├── marketplace/        # Google Marketplace integration & handler service
         │   ├── app.py              # Handler FastAPI app (port 8001)
@@ -537,7 +537,7 @@ For development without real tokens, set `SKIP_JWT_VALIDATION: "true"` in the co
 
 ### Testing DCR Locally
 
-The Dynamic Client Registration (DCR) flow can be tested locally without admin access to the production Red Hat SSO. There are two modes: **static credentials** (no Keycloak needed) and **real DCR** against a local Keycloak instance.
+The Dynamic Client Registration (DCR) flow can be tested locally without admin access to the production Red Hat SSO. The **static credentials** mode allows testing without a real SSO connection.
 
 Both modes require `SKIP_JWT_VALIDATION=true` on the marketplace handler so it accepts JWTs signed by your own GCP service account instead of Google's production `cloud-agentspace` account.
 
@@ -585,9 +585,9 @@ Both modes require `SKIP_JWT_VALIDATION=true` on the marketplace handler so it a
    python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'
    ```
 
-#### Option A: Static Credentials (No Keycloak)
+#### Static Credentials Mode
 
-This mode skips Keycloak client creation. Instead, the caller provides pre-registered `client_id` and `client_secret` in the DCR request body alongside the `software_statement`. The handler validates them (skipped with `SKIP_JWT_VALIDATION=true`), stores them linked to the order, and returns them.
+This mode skips OAuth client creation via the GMA SSO API. Instead, the caller provides pre-registered `client_id` and `client_secret` in the DCR request body alongside the `software_statement`. The handler validates them (skipped with `SKIP_JWT_VALIDATION=true`), stores them linked to the order, and returns them.
 
 1. **Copy the secrets template and edit it:**
    ```bash
@@ -637,142 +637,6 @@ This mode skips Keycloak client creation. Instead, the caller provides pre-regis
    ```bash
    podman kube down deploy/podman/marketplace-handler-pod.yaml
    ```
-
-#### Option B: Real DCR with Local Keycloak
-
-This mode exercises the full DCR flow -- real OAuth client creation in a locally-controlled Keycloak instance.
-
-1. **Start Keycloak in Podman:**
-   ```bash
-   podman run -d \
-     --name keycloak-test \
-     -p 8180:8080 \
-     -e KC_BOOTSTRAP_ADMIN_USERNAME=admin \
-     -e KC_BOOTSTRAP_ADMIN_PASSWORD=admin \
-     -e KC_HTTP_ENABLED=true \
-     -e KC_HOSTNAME=host.containers.internal \
-     -e KC_HOSTNAME_PORT=8180 \
-     -e KC_HOSTNAME_STRICT=true \
-     quay.io/keycloak/keycloak:26.0 start-dev --http-port=8080
-   ```
-
-   > **Why these hostname settings?** The marketplace handler container reaches
-   > Keycloak via `host.containers.internal:8180`, but you interact with Keycloak
-   > from the host via `localhost:8180`. With `KC_HOSTNAME_STRICT=true`, Keycloak
-   > uses a consistent issuer (`http://host.containers.internal:8180/...`) for all
-   > tokens regardless of which hostname the request arrives on. Without this, the
-   > IAT (Initial Access Token) would have a `localhost` issuer that mismatches
-   > when the handler presents it via `host.containers.internal`, causing
-   > "Failed decode token" errors.
-
-2. **Disable SSL requirement and create the test realm:**
-
-   Since `KC_HOSTNAME_STRICT=true` treats `localhost` requests as external,
-   you must disable the SSL requirement via `kcadm.sh` from inside the container:
-
-   ```bash
-   # Authenticate kcadm.sh (uses internal port 8080)
-   podman exec keycloak-test /opt/keycloak/bin/kcadm.sh \
-     config credentials --server http://localhost:8080 \
-     --realm master --user admin --password admin
-
-   # Disable SSL on master realm
-   podman exec keycloak-test /opt/keycloak/bin/kcadm.sh \
-     update realms/master -s sslRequired=NONE
-
-   # Create test-realm with SSL disabled
-   podman exec keycloak-test /opt/keycloak/bin/kcadm.sh \
-     create realms -s realm=test-realm -s enabled=true -s sslRequired=NONE
-   ```
-
-3. **Get an admin token:**
-   ```bash
-   ADMIN_TOKEN=$(curl -s -X POST \
-     "http://localhost:8180/realms/master/protocol/openid-connect/token" \
-     -d "client_id=admin-cli" \
-     -d "username=admin" \
-     -d "password=admin" \
-     -d "grant_type=password" \
-     | python -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
-   ```
-
-4. **Generate an Initial Access Token (IAT) for DCR:**
-   ```bash
-   IAT=$(curl -s -X POST \
-     "http://localhost:8180/admin/realms/test-realm/clients-initial-access" \
-     -H "Authorization: Bearer $ADMIN_TOKEN" \
-     -H "Content-Type: application/json" \
-     -d '{"count": 100, "expiration": 86400}' \
-     | python -c "import sys,json; print(json.load(sys.stdin)['token'])")
-   echo "Initial Access Token: $IAT"
-   ```
-
-5. **Copy the secrets template and configure for local Keycloak:**
-   ```bash
-   cp deploy/podman/lightspeed-agent-secret.yaml deploy/podman/my-secrets.yaml
-   ```
-
-   Edit `deploy/podman/my-secrets.yaml`:
-   ```yaml
-   stringData:
-     RED_HAT_SSO_CLIENT_ID: "lightspeed-agent"
-     RED_HAT_SSO_CLIENT_SECRET: "dummy"
-     DCR_INITIAL_ACCESS_TOKEN: "<the IAT from step 4>"
-     DCR_ENCRYPTION_KEY: "<your-fernet-key>"
-     MARKETPLACE_DATABASE_URL: "postgresql+asyncpg://insights:insights@localhost:5432/lightspeed_agent"
-     MARKETPLACE_DB_PASSWORD: "insights"
-   ```
-
-6. **Update the configmap** in `deploy/podman/lightspeed-agent-configmap.yaml`:
-   ```yaml
-   DCR_ENABLED: "true"
-   SKIP_JWT_VALIDATION: "true"
-   RED_HAT_SSO_ISSUER: "http://host.containers.internal:8180/realms/test-realm"
-   ```
-
-   Note: Use `host.containers.internal` so the handler container can reach Keycloak running on the host.
-
-7. **Start the marketplace handler pod:**
-   ```bash
-   podman kube play deploy/podman/my-secrets.yaml
-   podman kube play \
-     --configmap deploy/podman/lightspeed-agent-configmap.yaml \
-     deploy/podman/marketplace-handler-pod.yaml
-   ```
-
-8. **Run the test script:**
-   ```bash
-   # Method A (key file):
-   export TEST_SA_KEY_FILE=dcr-test-key.json
-   python scripts/test_dcr.py
-
-   # Method B (IAM API):
-   export TEST_SERVICE_ACCOUNT=dcr-test@<PROJECT>.iam.gserviceaccount.com
-   python scripts/test_dcr.py
-   ```
-
-   The handler will create a real OAuth client in your local Keycloak. You can verify it at http://localhost:8180/admin -> test-realm -> Clients.
-
-9. **You can also test Keycloak DCR directly** (bypassing the handler entirely):
-   ```bash
-   curl -s -X POST \
-     "http://localhost:8180/realms/test-realm/clients-registrations/openid-connect" \
-     -H "Authorization: Bearer $IAT" \
-     -H "Content-Type: application/json" \
-     -d '{
-       "client_name": "gemini-order-test-123",
-       "redirect_uris": ["https://gemini.google.com/callback"],
-       "grant_types": ["authorization_code", "refresh_token"],
-       "token_endpoint_auth_method": "client_secret_basic",
-       "application_type": "web"
-     }'
-   ```
-
-10. **Clean up:**
-    ```bash
-    podman kube down deploy/podman/marketplace-handler-pod.yaml
-    podman stop keycloak-test && podman rm keycloak-test
-    ```
 
 #### Test Script Reference
 

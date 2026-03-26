@@ -33,7 +33,7 @@
 #   │  - POST /dcr            │     │  - POST / (A2A)         │
 #   │  - Pub/Sub push         │     │  - /.well-known/agent   │
 #   │  - Account approval     │     │  - OAuth flow           │
-#   │  - Keycloak DCR         │     │  - MCP sidecar          │
+#   │  - GMA SSO API          │     │  - MCP sidecar          │
 #   └─────────────────────────┘     └─────────────────────────┘
 #
 # Prerequisites:
