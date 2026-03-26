@@ -898,3 +898,94 @@ class TestGMAClient:
             await client.create_tenant(order_id="123")
 
         assert exc_info.value.status_code == 400
+
+    @pytest.mark.asyncio
+    async def test_gma_client_create_tenant_invalid_redirect_uri(self):
+        """Test that invalid redirect URIs are rejected before calling the API."""
+        from lightspeed_agent.dcr.gma_client import GMAClient, GMAClientError
+
+        client = GMAClient(
+            api_base_url="https://sso.example.com/apis/beta/acs/v1/",
+            client_id="test-gma-id",
+            client_secret="test-gma-secret",
+            token_endpoint="https://sso.example.com/token",
+        )
+
+        with pytest.raises(GMAClientError) as exc_info:
+            await client.create_tenant(
+                order_id="123",
+                redirect_uris=["http://evil.com/callback"],
+            )
+
+        assert exc_info.value.status_code == 400
+        assert "Invalid redirect URI" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_gma_client_create_tenant_localhost_redirect_allowed(self):
+        """Test that http://localhost redirect URIs are allowed."""
+        from lightspeed_agent.dcr.gma_client import GMAClient
+
+        token_response = httpx.Response(
+            status_code=200,
+            json={"access_token": "test-token", "expires_in": 300},
+            request=httpx.Request("POST", "https://sso.example.com/token"),
+        )
+        tenant_response = httpx.Response(
+            status_code=201,
+            json={
+                "clientId": "new-client-id",
+                "secret": "new-client-secret",
+                "name": "gemini-order-123",
+                "createdAt": 1774421600,
+            },
+            request=httpx.Request("POST", "https://sso.example.com/apis/beta/acs/v1/"),
+        )
+        mock_http = AsyncMock(spec=httpx.AsyncClient)
+        mock_http.post = AsyncMock(side_effect=[token_response, tenant_response])
+
+        client = GMAClient(
+            api_base_url="https://sso.example.com/apis/beta/acs/v1/",
+            client_id="test-gma-id",
+            client_secret="test-gma-secret",
+            token_endpoint="https://sso.example.com/token",
+            http_client=mock_http,
+        )
+
+        result = await client.create_tenant(
+            order_id="123",
+            redirect_uris=["http://localhost:8080/callback"],
+        )
+
+        assert result.client_id == "new-client-id"
+
+    @pytest.mark.asyncio
+    async def test_gma_client_delete_tenant_404_is_idempotent(self):
+        """Test that deleting a non-existent tenant (404) succeeds silently."""
+        from lightspeed_agent.dcr.gma_client import GMAClient
+
+        token_response = httpx.Response(
+            status_code=200,
+            json={"access_token": "test-token", "expires_in": 300},
+            request=httpx.Request("POST", "https://sso.example.com/token"),
+        )
+        not_found_response = httpx.Response(
+            status_code=404,
+            json={"error": "not_found"},
+            request=httpx.Request(
+                "DELETE", "https://sso.example.com/apis/beta/acs/v1/client-123"
+            ),
+        )
+        mock_http = AsyncMock(spec=httpx.AsyncClient)
+        mock_http.post = AsyncMock(return_value=token_response)
+        mock_http.delete = AsyncMock(return_value=not_found_response)
+
+        client = GMAClient(
+            api_base_url="https://sso.example.com/apis/beta/acs/v1/",
+            client_id="test-gma-id",
+            client_secret="test-gma-secret",
+            token_endpoint="https://sso.example.com/token",
+            http_client=mock_http,
+        )
+
+        # Should NOT raise — 404 means already deleted
+        await client.delete_tenant("client-123")

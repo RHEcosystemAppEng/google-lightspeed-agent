@@ -12,6 +12,7 @@ if TYPE_CHECKING:
 import httpx
 
 from lightspeed_agent.config import get_settings
+from lightspeed_agent.dcr.gma_client import GMAClientError
 from lightspeed_agent.marketplace.models import (
     Entitlement,
     EntitlementState,
@@ -413,7 +414,14 @@ class ProcurementService:
         """Delete the OAuth client associated with a marketplace order.
 
         Delegates to DCRService which handles GMA API deletion (if applicable)
-        and local DB cleanup. Errors propagate so Pub/Sub retries the event.
+        and local DB cleanup.
+
+        Client errors (4xx from GMA API) are logged and swallowed since retrying
+        won't fix them (e.g. bad client_id, permission denied). Server errors
+        (5xx, network failures) propagate so Pub/Sub retries the event.
+
+        Note: Pub/Sub retry policy (backoff, max attempts, dead-letter topic)
+        is configured at the subscription level in the deployment infrastructure.
 
         Args:
             order_id: The marketplace order/entitlement ID.
@@ -421,6 +429,20 @@ class ProcurementService:
         try:
             dcr_service = self._get_dcr_service()
             await dcr_service.delete_client(order_id)
+        except GMAClientError as e:
+            if e.status_code and e.status_code < 500:
+                logger.error(
+                    "Non-retryable GMA error deleting OAuth client for order %s "
+                    "(status=%s): %s",
+                    order_id,
+                    e.status_code,
+                    e,
+                )
+                return
+            logger.exception(
+                "Failed to delete OAuth client for order %s", order_id
+            )
+            raise
         except Exception:
             logger.exception(
                 "Failed to delete OAuth client for order %s", order_id

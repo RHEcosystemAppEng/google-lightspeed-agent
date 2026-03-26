@@ -30,7 +30,7 @@ The system consists of **two separate services**:
 │  │  ┌──────────────────────────────────────────────────────────────────────┐ │  │
 │  │  │                    Hybrid /dcr Endpoint                              │ │  │
 │  │  │  - Pub/Sub Events → Approve accounts and entitlements                 │ │  │
-│  │  │  - DCR Requests → Create OAuth clients via Keycloak                  │ │  │
+│  │  │  - DCR Requests → Create OAuth clients via GMA SSO API               │ │  │
 │  │  └──────────────────────────────────────────────────────────────────────┘ │  │
 │  └───────────────────────────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────────────────────────┘
@@ -39,8 +39,8 @@ The system consists of **two separate services**:
          ▼                                                    ▼
 ┌─────────────────┐                                  ┌─────────────────────────┐
 │   PostgreSQL    │                                  │    Red Hat SSO          │
-│   Database      │◀──────────────────────────────▶│    (Keycloak)           │
-│  - Accounts     │                                  │  - DCR Endpoint         │
+│   Database      │◀──────────────────────────────▶│                         │
+│  - Accounts     │                                  │  - GMA SSO API          │
 │  - Entitlements │                                  │  - OIDC/OAuth           │
 │  - DCR Clients  │                                  └─────────────────────────┘
 └─────────────────┘
@@ -129,7 +129,7 @@ The main AI agent FastAPI application, providing:
 
 Handles all authentication and authorization:
 
-- **Token Introspection**: Validates tokens via Keycloak introspection endpoint (RFC 7662)
+- **Token Introspection**: Validates tokens via Red Hat SSO introspection endpoint (RFC 7662)
 - **Scope Checking**: Checks for required `api.console` and `api.ocm` scopes; rejects tokens carrying scopes outside the configured allowlist
 - **Bypass for Discovery**: `/.well-known/agent.json` is public per A2A spec
 
@@ -192,7 +192,7 @@ This flow happens when an admin configures the agent in Gemini Enterprise:
 2. Gemini sends POST /dcr with software_statement JWT
 3. Handler validates Google's JWT signature
 4. Handler verifies order_id matches a provisioned entitlement
-5. Handler calls Red Hat SSO DCR to create OAuth client
+5. Handler calls GMA SSO API to create OAuth tenant client
 6. Handler stores client mapping in PostgreSQL
 7. Handler returns client_id, client_secret to Gemini
 8. Gemini stores credentials for future OAuth flows
@@ -216,7 +216,7 @@ This flow happens when an admin configures the agent in Gemini Enterprise:
 
 ### Flow 3: Client Authentication
 
-Clients obtain access tokens directly from Red Hat SSO (Keycloak) using their
+Clients obtain access tokens directly from Red Hat SSO using their
 DCR-issued credentials. The agent does not participate in token issuance — it
 acts purely as a Resource Server.
 
@@ -263,7 +263,7 @@ src/lightspeed_agent/
 │   └── models.py              # ORM models (accounts, entitlements, DCR clients, usage)
 ├── dcr/                        # Dynamic Client Registration
 │   ├── google_jwt.py          # Google JWT validation
-│   ├── keycloak_client.py     # Keycloak DCR API client
+│   ├── gma_client.py          # GMA SSO API client
 │   ├── models.py              # DCR Pydantic models
 │   ├── repository.py          # PostgreSQL repository
 │   └── service.py             # DCR business logic
@@ -335,7 +335,7 @@ src/lightspeed_agent/
 ### Authentication
 
 - A2A query endpoints require valid Bearer token from Red Hat SSO
-- Tokens validated via Keycloak introspection endpoint (RFC 7662)
+- Tokens validated via Red Hat SSO introspection endpoint (RFC 7662)
 - Required `api.console` and `api.ocm` scopes checked; returns 403 if missing or if token carries disallowed scopes
 
 ### Public Endpoints
@@ -419,15 +419,15 @@ The system uses PostgreSQL for persistence. For production deployments, the mark
 
 ## Architecture Decision Records
 
-### ADR-1: Real DCR with Red Hat SSO (Keycloak)
+### ADR-1: Real DCR with Red Hat SSO (GMA SSO API)
 
 **Status**: Accepted
 
-**Context**: Google Cloud Marketplace requires agents to implement DCR (RFC 7591) to create OAuth client credentials for each marketplace order. Options considered: (1) return tracking credentials without creating real OAuth clients, or (2) create actual OAuth clients in Red Hat SSO via its DCR API.
+**Context**: Google Cloud Marketplace requires agents to implement DCR (RFC 7591) to create OAuth client credentials for each marketplace order. Options considered: (1) return tracking credentials without creating real OAuth clients, or (2) create actual OAuth clients in Red Hat SSO via the GMA SSO API.
 
-**Decision**: Implement real DCR with Red Hat SSO (Keycloak). Each order gets a real, functioning OAuth client with proper OAuth 2.0 flow and per-order isolation.
+**Decision**: Implement real DCR with Red Hat SSO via the GMA SSO API. Each order gets a real, functioning OAuth client with proper OAuth 2.0 flow and per-order isolation.
 
-**Consequences**: Requires DCR to be enabled on the Red Hat SSO realm and an Initial Access Token from the admin. More complex setup but more robust architecture.
+**Consequences**: Requires GMA API credentials (`GMA_CLIENT_ID` / `GMA_CLIENT_SECRET`) with `api.iam.clients.gma` scope. More complex setup but more robust architecture.
 
 ### ADR-2: PostgreSQL for Persistence
 
@@ -445,6 +445,6 @@ The system uses PostgreSQL for persistence. For production deployments, the mark
 
 **Context**: Not all deployments have DCR enabled on Red Hat SSO, and development/testing environments may not need real DCR.
 
-**Decision**: Make DCR mode configurable via `DCR_ENABLED`. When `true` (default), real OAuth clients are created in Keycloak. When `false`, static credentials from environment variables are returned.
+**Decision**: Make DCR mode configurable via `DCR_ENABLED`. When `true` (default), real OAuth clients are created via the GMA SSO API. When `false`, static credentials from environment variables are returned.
 
 **Consequences**: Two code paths to maintain. Clear documentation needed for each mode. See [Authentication](authentication.md#dynamic-client-registration-dcr) for details.

@@ -209,6 +209,10 @@ class Settings(BaseSettings):
         default="https://sso.redhat.com/auth/realms/redhat-external/apis/beta/acs/v1/",
         description="GMA SSO API base URL for tenant creation",
     )
+    gma_api_timeout: int = Field(
+        default=30,
+        description="Timeout in seconds for GMA API requests",
+    )
 
     # Database Configuration
     # Marketplace database: stores accounts, entitlements, DCR clients, usage records
@@ -269,13 +273,13 @@ class Settings(BaseSettings):
         return [s.strip() for s in self.agent_allowed_scopes.split(",") if s.strip()]
 
     @property
-    def keycloak_introspection_endpoint(self) -> str:
-        """Get the Keycloak token introspection endpoint URL."""
+    def sso_introspection_endpoint(self) -> str:
+        """Get the Red Hat SSO token introspection endpoint URL."""
         return f"{self.red_hat_sso_issuer}/protocol/openid-connect/token/introspect"
 
     @property
-    def keycloak_token_endpoint(self) -> str:
-        """Get the Keycloak token endpoint URL."""
+    def sso_token_endpoint(self) -> str:
+        """Get the Red Hat SSO token endpoint URL."""
         return f"{self.red_hat_sso_issuer}/protocol/openid-connect/token"
 
     # Development Settings

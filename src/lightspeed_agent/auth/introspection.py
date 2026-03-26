@@ -1,7 +1,7 @@
-"""Token validation via Keycloak token introspection (RFC 7662).
+"""Token validation via Red Hat SSO token introspection (RFC 7662).
 
 Instead of verifying JWT signatures locally with JWKS, this module POSTs
-the Bearer token to the Keycloak introspection endpoint and checks the
+the Bearer token to the Red Hat SSO introspection endpoint and checks the
 ``active`` flag and required scope.  The agent authenticates to the
 introspection endpoint using its own client credentials (Resource Server
 pattern), so tokens issued to *any* client in the realm can be validated.
@@ -36,17 +36,17 @@ class DisallowedScopeError(Exception):
 
 
 class TokenIntrospector:
-    """Validate Bearer tokens via the Keycloak introspection endpoint.
+    """Validate Bearer tokens via the Red Hat SSO introspection endpoint.
 
     The agent authenticates to the introspection endpoint with its own
     ``RED_HAT_SSO_CLIENT_ID`` / ``RED_HAT_SSO_CLIENT_SECRET`` (HTTP Basic
-    Auth).  Keycloak returns ``{"active": true/false, …}``; we then check
+    Auth).  Red Hat SSO returns ``{"active": true/false, …}``; we then check
     that the required scope is present.
     """
 
     def __init__(self, settings: Settings | None = None) -> None:
         self._settings = settings or get_settings()
-        self._introspection_url = self._settings.keycloak_introspection_endpoint
+        self._introspection_url = self._settings.sso_introspection_endpoint
         self._client_id = self._settings.red_hat_sso_client_id
         self._client_secret = self._settings.red_hat_sso_client_secret
         self._required_scopes = self._settings.required_scopes_list

@@ -100,7 +100,7 @@ class DCRClientRepository:
             redirect_uris: OAuth redirect URIs.
             grant_types: OAuth grant types.
             registration_access_token_encrypted: Encrypted registration access token.
-            keycloak_client_uuid: Keycloak's internal client UUID.
+            keycloak_client_uuid: SSO internal client UUID (legacy column name).
             metadata: Additional metadata.
 
         Returns:

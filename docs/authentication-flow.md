@@ -14,7 +14,7 @@ through to authenticated API calls.
 | **Customer User** | End user who interacts with the agent through Gemini Enterprise |
 | **Google Cloud Marketplace** | Subscription and entitlement management |
 | **Gemini Enterprise** | Google's AI platform that acts as the **OAuth 2.0 Client** |
-| **Red Hat SSO (Keycloak)** | The **OAuth 2.0 Authorization Server** that issues and validates tokens |
+| **Red Hat SSO** | The **OAuth 2.0 Authorization Server** that issues and validates tokens |
 | **Lightspeed Agent** | The **OAuth 2.0 Resource Server** that serves A2A requests |
 | **Agent (Marketplace Handler)** | Manages marketplace subscriptions, entitlements, and credential registration (DCR / static) |
 | **Red Hat Lightspeed MCP Server** | Downstream tool server that provides access to Red Hat Lightspeed APIs |
@@ -99,7 +99,7 @@ When `DCR_ENABLED=true`, Gemini Enterprise automatically creates OAuth client
 credentials by calling the agent's DCR endpoint.
 
 ```
-Gemini Enterprise                     Agent (Marketplace Handler)             Red Hat SSO (Keycloak)
+Gemini Enterprise                     Agent (Marketplace Handler)             Red Hat SSO (GMA SSO API)
      |                                          |                                    |
      |-- POST /dcr                              |                                    |
      |   { software_statement: <Google JWT> } ->|                                    |
@@ -113,15 +113,11 @@ Gemini Enterprise                     Agent (Marketplace Handler)             Re
      |                                          |-- Validate account_id is ACTIVE    |
      |                                          |-- Validate order_id is ACTIVE      |
      |                                          |                                    |
-     |                                          |-- POST /clients-registrations/     |
-     |                                          |        openid-connect ------------>|
-     |                                          |   (Initial Access Token auth)      |
+     |                                          |-- POST /apis/beta/acs/v1/ -------->|
+     |                                          |   (GMA client_credentials auth)    |
      |                                          |                                    |-- Create OAuth
-     |                                          |                                    |   client
-     |                                          |<-- { client_id, client_secret } ---|
-     |                                          |                                    |
-     |                                          |-- Enable service accounts -------->|
-     |                                          |   (Admin API)                      |
+     |                                          |                                    |   tenant
+     |                                          |<-- { clientId, secret } -----------|
      |                                          |                                    |
      |                                          |-- Encrypt & store credentials      |
      |                                          |   (linked to order_id)             |
@@ -142,21 +138,18 @@ Gemini Enterprise                     Agent (Marketplace Handler)             Re
      and `auth_app_redirect_uris`.
 3. Cross-references with the marketplace database to confirm both the account
    and the order are in `ACTIVE` state.
-4. Calls the Keycloak DCR endpoint to create a new OAuth client with:
-   - `grant_types`: `authorization_code`, `refresh_token`, `client_credentials`
-   - `token_endpoint_auth_method`: `client_secret_basic`
-   - `redirect_uris`: from the Google JWT claims
-   - `scope`: `api.console api.ocm`
-5. Enables service accounts on the new client via the Keycloak Admin API (for
-   `client_credentials` grant support).
-6. Encrypts the `client_secret` (Fernet symmetric encryption) and stores the
+4. Calls the GMA SSO API to create a new OAuth tenant client with:
+   - `name`: prefixed with `DCR_CLIENT_NAME_PREFIX` + order ID
+   - `redirectUris`: from the Google JWT claims
+   - `orgId`: the marketplace order ID
+5. Encrypts the `client_secret` (Fernet symmetric encryption) and stores the
    mapping `order_id → client_id` in the database.
-7. Returns the `client_id` and `client_secret` to Gemini Enterprise.
+6. Returns the `client_id` and `client_secret` to Gemini Enterprise.
 
 **Error paths (Option A):**
 
 ```
-Gemini Enterprise                     Agent (Marketplace Handler)             Red Hat SSO (Keycloak)
+Gemini Enterprise                     Agent (Marketplace Handler)             Red Hat SSO
      |                                          |                                    |
      |-- POST /dcr                              |                                    |
      |   { software_statement: <bad JWT> } ---->|                                    |
@@ -304,7 +297,7 @@ The same JWT validation and account/order state errors from Option A apply.
 In addition, static credential mode has these specific errors:
 
 ```
-Gemini Enterprise           Agent (Marketplace Handler)           Red Hat SSO (Keycloak)
+Gemini Enterprise           Agent (Marketplace Handler)           Red Hat SSO
      |                                 |                                    |
      |-- POST /dcr                     |                                    |
      |   { software_statement,         |                                    |
@@ -350,12 +343,12 @@ Gemini Enterprise. Authentication uses the **OAuth 2.0 Authorization Code
 flow** where:
 
 - **Client**: Gemini Enterprise
-- **Authorization Server**: Red Hat SSO (Keycloak)
+- **Authorization Server**: Red Hat SSO
 - **Resource Server**: The Lightspeed Agent
 - **Resource Owner**: The customer user (with Red Hat credentials)
 
 ```
-Customer User          Gemini Enterprise            Red Hat SSO (Keycloak)           Lightspeed Agent
+Customer User          Gemini Enterprise            Red Hat SSO           Lightspeed Agent
      |                       |                              |                              |
      |-- Use agent --------->|                              |                              |
      |                       |                              |                              |
@@ -466,7 +459,7 @@ introspection endpoint using its **own** client credentials (the Resource
 Server pattern).
 
 ```
-Gemini Enterprise                  Lightspeed Agent                      Red Hat SSO (Keycloak)
+Gemini Enterprise                  Lightspeed Agent                      Red Hat SSO
      |                                    |                                       |
      |-- POST /                           |                                       |
      |   Authorization: Bearer <token>    |                                       |
@@ -548,7 +541,7 @@ Gemini Enterprise                  Lightspeed Agent                      Red Hat
 **Error paths:**
 
 ```
-Gemini Enterprise                  Lightspeed Agent                      Red Hat SSO (Keycloak)
+Gemini Enterprise                  Lightspeed Agent                      Red Hat SSO
      |                                    |                                       |
      |-- POST /                           |                                       |
      |   (no Authorization header) ------>|                                       |

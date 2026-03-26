@@ -1,6 +1,9 @@
 """DCR service for handling Dynamic Client Registration requests."""
 
+from __future__ import annotations
+
 import logging
+from typing import TYPE_CHECKING
 
 import httpx
 from cryptography.fernet import Fernet, InvalidToken
@@ -21,7 +24,9 @@ from lightspeed_agent.dcr.models import (
     RegisteredClient,
 )
 from lightspeed_agent.dcr.repository import DCRClientRepository, get_dcr_client_repository
-from lightspeed_agent.marketplace.service import ProcurementService, get_procurement_service
+
+if TYPE_CHECKING:
+    from lightspeed_agent.marketplace.service import ProcurementService
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +64,11 @@ class DCRService:
             client_repository: Repository for storing client mappings.
         """
         self._jwt_validator = jwt_validator or get_google_jwt_validator()
-        self._procurement_service = procurement_service or get_procurement_service()
+        if procurement_service is None:
+            from lightspeed_agent.marketplace.service import get_procurement_service
+
+            procurement_service = get_procurement_service()
+        self._procurement_service = procurement_service
         self._gma_client = gma_client
         self._client_repository = client_repository or get_dcr_client_repository()
         self._settings = get_settings()
@@ -194,7 +203,7 @@ class DCRService:
         Returns:
             True if the credentials are valid, False otherwise.
         """
-        token_url = self._settings.keycloak_token_endpoint
+        token_url = self._settings.sso_token_endpoint
         logger.info("Validating static credentials for client_id=%s", client_id)
 
         try:
@@ -346,7 +355,7 @@ class DCRService:
             DCRResponse with new credentials, or DCRError on failure.
         """
         logger.info(
-            "Creating OAuth tenant via GMA API for order: %s",
+            "Creating OAuth tenant client via GMA API for order: %s",
             claims.order_id,
         )
 
@@ -377,7 +386,7 @@ class DCRService:
             )
 
             logger.info(
-                "Successfully created OAuth tenant for order %s: client_id=%s",
+                "Successfully created OAuth tenant client for order %s: client_id=%s",
                 claims.order_id,
                 response.client_id,
             )
@@ -390,15 +399,20 @@ class DCRService:
 
         except GMAClientError as e:
             logger.exception("GMA API error: %s", e)
+            if e.status_code and e.status_code < 500:
+                return DCRError(
+                    error=DCRErrorCode.INVALID_REDIRECT_URI,
+                    error_description=f"Failed to create OAuth tenant client: {e}",
+                )
             return DCRError(
                 error=DCRErrorCode.SERVER_ERROR,
-                error_description=f"Failed to create OAuth tenant: {e}",
+                error_description=f"Failed to create OAuth tenant client: {e}",
             )
         except Exception as e:
-            logger.exception("Unexpected error creating tenant: %s", e)
+            logger.exception("Unexpected error creating OAuth tenant client: %s", e)
             return DCRError(
                 error=DCRErrorCode.SERVER_ERROR,
-                error_description=f"Failed to create tenant: {e}",
+                error_description=f"Failed to create OAuth tenant client: {e}",
             )
 
     async def delete_client(self, order_id: str) -> None:

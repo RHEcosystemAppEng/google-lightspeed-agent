@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Admin CLI for seeding per-customer DCR client credentials.
 
-Seeds pre-created Keycloak client credentials into the dcr_clients table
+Seeds pre-created OAuth client credentials into the dcr_clients table
 so that different customers get different credentials when DCR requests
 come in with DCR_ENABLED=false.
 

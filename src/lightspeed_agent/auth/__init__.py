@@ -1,6 +1,6 @@
 """Authentication and authorization module.
 
-This module validates Bearer tokens via Keycloak token introspection (RFC 7662)
+This module validates Bearer tokens via Red Hat SSO token introspection (RFC 7662)
 and checks for the required scopes (``api.console``, ``api.ocm``).  The agent acts as a
 Resource Server — it does not proxy OAuth flows.
 """

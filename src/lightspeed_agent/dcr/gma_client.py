@@ -73,9 +73,10 @@ class GMAClient:
             raise ValueError(
                 "GMA_CLIENT_ID and GMA_CLIENT_SECRET must be set when using GMAClient"
             )
-        self._token_endpoint = token_endpoint or settings.keycloak_token_endpoint
+        self._token_endpoint = token_endpoint or settings.sso_token_endpoint
         self._client_name_prefix = client_name_prefix or settings.dcr_client_name_prefix
         self._http_client = http_client
+        self._timeout = float(settings.gma_api_timeout)
 
         # Token cache
         self._access_token: str | None = None
@@ -119,7 +120,7 @@ class GMAClient:
                             "client_secret": self._client_secret,
                             "scope": "api.iam.clients.gma",
                         },
-                        timeout=30.0,
+                        timeout=self._timeout,
                     )
 
             if response.status_code == 200:
@@ -171,8 +172,17 @@ class GMAClient:
             GMAClientResponse with tenant credentials.
 
         Raises:
-            GMAClientError: If tenant creation fails.
+            GMAClientError: If tenant creation fails or redirect URIs are invalid.
         """
+        if redirect_uris:
+            for uri in redirect_uris:
+                if not uri.startswith(("https://", "http://localhost")):
+                    raise GMAClientError(
+                        f"Invalid redirect URI: {uri}. "
+                        "Must start with 'https://' or 'http://localhost'.",
+                        status_code=400,
+                    )
+
         token = await self.get_token()
         tenant_name = f"{self._client_name_prefix}{order_id}"
 
@@ -202,7 +212,7 @@ class GMAClient:
                         self._api_base_url,
                         json=request_body,
                         headers=headers,
-                        timeout=30.0,
+                        timeout=self._timeout,
                     )
 
             if response.status_code == 201:
@@ -226,13 +236,16 @@ class GMAClient:
                 error_data = {"error": response.text}
 
             logger.error(
-                "Failed to create GMA tenant: status=%d, error=%s",
+                "Failed to create GMA tenant '%s' for order %s: status=%d, error=%s",
+                tenant_name,
+                order_id,
                 response.status_code,
                 error_data,
             )
             raise GMAClientError(
-                f"Failed to create GMA tenant: "
-                f"{error_data.get('error', 'Unknown error')}",
+                f"Failed to create GMA tenant '{tenant_name}' for order {order_id}: "
+                f"{error_data.get('error', 'Unknown error')} "
+                f"(HTTP {response.status_code})",
                 status_code=response.status_code,
                 details=error_data,
             )
@@ -272,7 +285,7 @@ class GMAClient:
                         self._api_base_url,
                         params={"orgId": org_id},
                         headers=headers,
-                        timeout=30.0,
+                        timeout=self._timeout,
                     )
 
             if response.status_code == 200:
@@ -309,7 +322,7 @@ class GMAClient:
         """
         token = await self.get_token()
         headers = {"Authorization": f"Bearer {token}"}
-        url = f"{self._api_base_url}{client_id}"
+        url = f"{self._api_base_url}/{client_id}"
 
         try:
             if self._http_client:
@@ -319,11 +332,16 @@ class GMAClient:
                     response = await client.delete(
                         url,
                         headers=headers,
-                        timeout=30.0,
+                        timeout=self._timeout,
                     )
 
-            if response.status_code == 204:
-                logger.info("Deleted GMA tenant: %s", client_id)
+            if response.status_code in (204, 404):
+                if response.status_code == 404:
+                    logger.info(
+                        "GMA tenant already deleted (404): %s", client_id
+                    )
+                else:
+                    logger.info("Deleted GMA tenant: %s", client_id)
                 return
 
             error_data = {}

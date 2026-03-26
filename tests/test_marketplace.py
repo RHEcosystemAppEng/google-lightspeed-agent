@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, patch
 import httpx
 import pytest
 
+from lightspeed_agent.dcr.gma_client import GMAClientError
 from lightspeed_agent.marketplace.models import (
     Account,
     AccountInfo,
@@ -618,3 +619,66 @@ class TestProcurementService:
         mock_dcr.delete_client.assert_awaited_once_with("order-delete")
         updated = await service._entitlement_repo.get("order-delete")
         assert updated.state == EntitlementState.DELETED
+
+    @pytest.mark.asyncio
+    async def test_delete_oauth_client_swallows_client_errors(self, service):
+        """Test that 4xx GMA errors are swallowed (non-retryable)."""
+        ent = Entitlement(
+            id="order-bad-client",
+            account_id="account-1",
+            state=EntitlementState.ACTIVE,
+            provider_id="provider-1",
+        )
+        await service._entitlement_repo.create(ent)
+
+        event = ProcurementEvent(
+            event_id="event-bad",
+            event_type=ProcurementEventType.ENTITLEMENT_CANCELLED,
+            provider_id="provider-1",
+            entitlement=EntitlementInfo(
+                id="order-bad-client",
+                cancellation_reason="Test",
+            ),
+        )
+
+        mock_dcr = AsyncMock()
+        mock_dcr.delete_client.side_effect = GMAClientError(
+            "Permission denied", status_code=403
+        )
+        service._dcr_service = mock_dcr
+
+        # Should NOT raise — 4xx errors are non-retryable
+        await service.process_event(event)
+
+        mock_dcr.delete_client.assert_awaited_once_with("order-bad-client")
+
+    @pytest.mark.asyncio
+    async def test_delete_oauth_client_propagates_server_errors(self, service):
+        """Test that 5xx GMA errors propagate for Pub/Sub retry."""
+        ent = Entitlement(
+            id="order-server-err",
+            account_id="account-1",
+            state=EntitlementState.ACTIVE,
+            provider_id="provider-1",
+        )
+        await service._entitlement_repo.create(ent)
+
+        event = ProcurementEvent(
+            event_id="event-server-err",
+            event_type=ProcurementEventType.ENTITLEMENT_CANCELLED,
+            provider_id="provider-1",
+            entitlement=EntitlementInfo(
+                id="order-server-err",
+                cancellation_reason="Test",
+            ),
+        )
+
+        mock_dcr = AsyncMock()
+        mock_dcr.delete_client.side_effect = GMAClientError(
+            "Internal server error", status_code=500
+        )
+        service._dcr_service = mock_dcr
+
+        # Should raise — 5xx errors are retryable
+        with pytest.raises(GMAClientError):
+            await service.process_event(event)
