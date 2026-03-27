@@ -60,7 +60,7 @@ class Settings(BaseSettings):
     )
     mcp_server_url: str = Field(
         default="http://localhost:8080",
-        description="MCP server URL for http/sse modes",
+        description="MCP server URL for http/sse modes (use HTTPS URL for Cloud Run production)",
     )
     mcp_read_only: bool = Field(
         default=True,

@@ -4,7 +4,7 @@ Deploy the Red Hat Lightspeed Agent for Google Cloud to Google Cloud Run for pro
 
 ## Architecture
 
-The deployment consists of **two separate Cloud Run services** plus **Cloud Memorystore for Redis** (for rate limiting):
+The deployment consists of **three separate Cloud Run services** plus **Cloud Memorystore for Redis** (for rate limiting):
 
 ```
                               Google Cloud Marketplace
@@ -28,25 +28,32 @@ The deployment consists of **two separate Cloud Run services** plus **Cloud Memo
            │                                                 │
            │ Shared PostgreSQL Database                      │ DCR (create OAuth clients)
            ▼                                                 ▼
-┌──────────────────────────────────────────────┐    ┌──────────────────────┐
-│   Lightspeed Agent Service (Port 8000)       │    │  Red Hat SSO         │
-│   ─────────────────────────────────────      │    │  (GMA SSO API)       │
-│  ┌──────────────────┐   ┌──────────────────┐ │    │                      │
-│  │ Lightspeed Agent │   │ Lightspeed MCP   │ │    │  Production:         │
-│  │                  │   │ Server (8081)    │ │    │   sso.redhat.com     │
-│  │  - Gemini 2.5    │   │                  │ │    │                      │
-│  │  - A2A protocol  │◄-►│ - Advisor tools  │ │    │                      │
-│  │  - OAuth 2.0     │   │ - Inventory tools│ │    │                      │
-│  │                  │   │ - Vuln. tools    │ │    │                      │
-│  └──────────────────┘   └────────┬─────────┘ │    └──────────────────────┘
-│                                  │           │
-└──────────────────────────────────┼───────────┘
-                                   │
-                                   ▼
-                          ┌──────────────────┐
-                          │console.redhat.com│
-                          │ (Insights APIs)  │
-                          └──────────────────┘
+┌──────────────────────────────┐                    ┌──────────────────────┐
+│   Lightspeed Agent Service   │                    │  Red Hat SSO         │
+│   (Port 8000)                │                    │  (GMA SSO API)       │
+│  ┌──────────────────┐        │                    │                      │
+│  │ Lightspeed Agent │        │     HTTPS          │  Production:         │
+│  │  - Gemini 2.5    │────────┼──────────────┐     │   sso.redhat.com     │
+│  │  - A2A protocol  │        │              │     │                      │
+│  │  - OAuth 2.0     │        │              │     │                      │
+│  └──────────────────┘        │              │     │                      │
+└──────────────────────────────┘              │     │                      │
+                                              │     └──────────────────────┘
+                                              ▼
+                               ┌──────────────────────────┐
+                               │ MCP Server Service       │
+                               │ (ingress: internal)      │
+                               │                          │
+                               │ - Advisor tools          │
+                               │ - Inventory tools        │
+                               │ - Vulnerability tools    │
+                               └────────────┬─────────────┘
+                                            │
+                                            ▼
+                                   ┌──────────────────┐
+                                   │console.redhat.com│
+                                   │ (Insights APIs)  │
+                                   └──────────────────┘
 ```
 
 ### Service Responsibilities
@@ -54,15 +61,19 @@ The deployment consists of **two separate Cloud Run services** plus **Cloud Memo
 | Service | Port | Purpose | Scaling |
 |---------|------|---------|---------|
 | **Marketplace Handler** | 8001 | Pub/Sub events, DCR | Always on (minScale=1) |
+| **MCP Server** | 8080 | Red Hat Insights API tools | Scale to zero (stateless) |
 | **Lightspeed Agent** | 8000 | A2A queries, user interactions | Scale to zero |
 
 ### Deployment Order
 
 1. **Set up Cloud Memorystore Redis and VPC connector** - Required for agent rate limiting (see [Redis Setup](#redis-setup-for-rate-limiting))
 2. **Deploy Marketplace Handler first** - Must be running to receive provisioning events
-3. **Deploy Agent after provisioning** - Can be deployed when customers are ready to use the agent
+3. **Deploy MCP Server** - Must be running before the agent can call Insights APIs
+4. **Deploy Agent after provisioning** - Can be deployed when customers are ready to use the agent
 
-The MCP server runs as a sidecar in the Agent service. The agent forwards the caller's JWT token to the MCP server, which uses it to authenticate with console.redhat.com on behalf of the user (see [MCP Authentication](#mcp-authentication)).
+The MCP server runs as a separate Cloud Run service with `ingress: internal`, reachable only by the agent's service account. The agent connects to it over HTTPS. The agent forwards the caller's JWT token to the MCP server, which uses it to authenticate with console.redhat.com on behalf of the user (see [MCP Authentication](#mcp-authentication)).
+
+> **Note:** The `MCP_SERVER_URL` in `service.yaml` is a placeholder. `deploy.sh` auto-discovers the MCP service URL after deployment and sets it on the agent.
 
 ## Service Accounts
 
@@ -346,25 +357,21 @@ deployed first** so its URL is known when the agent is configured.
 ./deploy/cloudrun/deploy.sh --service handler --allow-unauthenticated
 ```
 
-**Step 2: Get the handler URL and set `MARKETPLACE_HANDLER_URL`**
+**Step 2: Deploy the MCP server**
 
 ```bash
-# Get the marketplace handler URL
-HANDLER_URL=$(gcloud run services describe ${HANDLER_SERVICE_NAME:-marketplace-handler} \
-  --region=$GOOGLE_CLOUD_LOCATION \
-  --project=$GOOGLE_CLOUD_PROJECT \
-  --format='value(status.url)')
-echo "Handler URL: $HANDLER_URL"
-
-# Export it so deploy.sh can set it on the agent service
-export MARKETPLACE_HANDLER_URL="$HANDLER_URL"
+./deploy/cloudrun/deploy.sh --service mcp
 ```
+
+The MCP service is deployed with `ingress: internal` — it is only reachable by
+the agent's service account within the same GCP project. `deploy.sh` grants
+`roles/run.invoker` on the MCP service to the agent's service account only.
 
 **Step 3: Deploy the agent**
 
-The deploy script automatically sets `AGENT_PROVIDER_URL` (agent base URL)
-and `MARKETPLACE_HANDLER_URL` on the agent service using the actual
-Cloud Run URLs after deployment. `AGENT_PROVIDER_ORGANIZATION_URL`
+The deploy script automatically sets `AGENT_PROVIDER_URL` (agent base URL),
+`MARKETPLACE_HANDLER_URL`, and `MCP_SERVER_URL` on the agent service using the
+actual Cloud Run URLs after deployment. `AGENT_PROVIDER_ORGANIZATION_URL`
 (the provider's website, used as the JWT audience for DCR) is set in the
 YAML configs and does not change per deployment.
 
@@ -396,7 +403,7 @@ curl -s $AGENT_URL/.well-known/agent.json | jq '.capabilities.extensions'
 
 | Flag | Description |
 |------|-------------|
-| `--service <service>` | Which service to deploy: `all` (default), `handler`, `agent` |
+| `--service <service>` | Which service to deploy: `all` (default), `handler`, `mcp`, `agent` |
 | `--image <image>` | Container image for the agent (default: `gcr.io/$PROJECT_ID/lightspeed-agent:latest`) |
 | `--handler-image <image>` | Container image for the marketplace handler (default: `gcr.io/$PROJECT_ID/marketplace-handler:latest`) |
 | `--mcp-image <image>` | Container image for the MCP server (default: `gcr.io/$PROJECT_ID/red-hat-lightspeed-mcp:latest`) |
@@ -408,8 +415,9 @@ curl -s $AGENT_URL/.well-known/agent.json | jq '.capabilities.extensions'
 | Service | YAML Config | Description |
 |---------|-------------|-------------|
 | `handler` | `marketplace-handler.yaml` | Pub/Sub events, DCR requests |
-| `agent` | `service.yaml` | A2A queries with MCP sidecar |
-| `all` | Both | Deploy both services |
+| `mcp` | `mcp-service.yaml` | Red Hat Insights MCP tools (internal) |
+| `agent` | `service.yaml` | A2A queries, user interactions |
+| `all` | All three | Deploy all services |
 
 The deploy script performs variable substitution on the YAML configs
 (`${PROJECT_ID}`, `${REGION}`, image references, etc.) and deploys using
@@ -424,7 +432,7 @@ sed -e "s|\${PROJECT_ID}|$GOOGLE_CLOUD_PROJECT|g" \
     -e "s|\${VPC_CONNECTOR_NAME}|${VPC_CONNECTOR_NAME:-lightspeed-redis-conn}|g" \
     -e "s|\${SERVICE_NAME}|${SERVICE_NAME:-lightspeed-agent}|g" \
     -e "s|\${SERVICE_ACCOUNT_NAME}|${SERVICE_ACCOUNT_NAME:-lightspeed-agent}|g" \
-    -e "s|\${MCP_IMAGE}|${MCP_IMAGE:-gcr.io/$GOOGLE_CLOUD_PROJECT/insights-mcp:latest}|g" \
+    -e "s|\${MCP_SERVICE_NAME}|${MCP_SERVICE_NAME:-rh-lightspeed-mcp}|g" \
     deploy/cloudrun/service.yaml | \
     gcloud run services replace - --region=$GOOGLE_CLOUD_LOCATION --project=$GOOGLE_CLOUD_PROJECT
 ```
@@ -453,14 +461,18 @@ The agent uses Cloud Memorystore for Redis for distributed rate limiting. Requir
 
 The service uses a VPC connector to reach the Redis instance. Set `VPC_CONNECTOR_NAME` (default: `lightspeed-redis-conn`) when deploying. See [Rate Limiting — Testing](../../docs/rate-limiting.md#testing-rate-limiting) for how to validate rate limiting.
 
-### MCP Server Sidecar
+### MCP Server Service
 
 | Setting | Value | Description |
 |---------|-------|-------------|
 | CPU | 1 | vCPUs allocated |
 | Memory | 512Mi | Memory limit |
-| Port | 8080 | Internal MCP port |
+| Port | 8080 | MCP server port |
 | Image | `gcr.io/$PROJECT_ID/red-hat-lightspeed-mcp:latest` | MCP server image (copied from Quay.io) |
+| Ingress | `internal` | Only reachable from same GCP project |
+| IAM | Agent SA only | Only the agent's service account has `roles/run.invoker` |
+| Min Instances | 0 | Scale to zero when idle |
+| Max Instances | 4 | Should be >= agent maxScale (each agent makes concurrent MCP calls) |
 
 ### Copying the MCP Image to GCR
 
@@ -491,7 +503,7 @@ This step is required before running `deploy.sh`. The deploy script defaults to 
 
 ### Customizing MCP Server Configuration
 
-The MCP server configuration is hardcoded in `deploy/cloudrun/service.yaml` because Cloud Run does not support environment variable expansion in the `args` field (unlike Kubernetes/Podman).
+The MCP server configuration is hardcoded in `deploy/cloudrun/mcp-service.yaml` because Cloud Run does not support environment variable expansion in the `args` field (unlike Kubernetes/Podman).
 
 **Current MCP server settings:**
 ```yaml
@@ -506,10 +518,10 @@ args:
 
 **To change MCP server settings:**
 
-1. Edit `deploy/cloudrun/service.yaml` directly:
+1. Edit `deploy/cloudrun/mcp-service.yaml` directly:
    ```bash
-   vim deploy/cloudrun/service.yaml
-   # Find the "insights-mcp" container section
+   vim deploy/cloudrun/mcp-service.yaml
+   # Find the "rh-lightspeed-mcp" container section
    # Modify the args array as needed
    ```
 
@@ -520,10 +532,10 @@ args:
 
 3. Redeploy after making changes:
    ```bash
-   ./deploy/cloudrun/deploy.sh --service agent
+   ./deploy/cloudrun/deploy.sh --service mcp
    ```
 
-**Note**: If you change the MCP server port, you must also update the `MCP_SERVER_URL` environment variable in the agent container to match.
+**Note**: If you change the MCP server port, you must also update the `MCP_SERVER_URL` environment variable on the agent service to match.
 
 ### Alternative: Use Docker Hub
 
@@ -573,13 +585,13 @@ docker push docker.io/YOUR_USERNAME/red-hat-lightspeed-mcp:latest
 
 ## How the MCP Server Works
 
-The MCP server runs as a sidecar container alongside the agent:
+The MCP server runs as a separate Cloud Run service (`rh-lightspeed-mcp`) with `ingress: internal`:
 
-1. **Agent Container** (port 8000): Handles A2A requests, uses Gemini for AI
-2. **MCP Server Container** (port 8080): Provides tools for Red Hat Insights APIs
+1. **Agent Service** (port 8000): Handles A2A requests, uses Gemini for AI
+2. **MCP Server Service** (port 8080): Provides tools for Red Hat Insights APIs
 
 When the agent needs to access Insights data (e.g., system vulnerabilities, recommendations):
-1. Agent calls MCP tools via HTTP to `localhost:8080`
+1. Agent calls MCP tools via HTTPS to the MCP service URL
 2. Agent forwards credentials to the MCP server via HTTP headers (see below)
 3. MCP server authenticates with console.redhat.com
 4. MCP server calls the appropriate Insights API
@@ -623,7 +635,7 @@ Bearer token that is active and carries the `api.console` and `api.ocm` scopes.
 ```
 ┌──────────┐    ┌───────────────┐    ┌──────────────┐    ┌──────────────┐    ┌──────────────────┐
 │  Client  │    │Lightspeed Agt │    │ Red Hat SSO  │    │  MCP Server  │    │console.redhat.com│
-│(Gemini)  │    │  (port 8000)  │    │ (Red Hat SSO)│    │  (port 8080) │    │ (Insights APIs)  │
+│(Gemini)  │    │  (port 8000)  │    │ (Red Hat SSO)│    │  (internal)  │    │ (Insights APIs)  │
 └────┬─────┘    └──────┬────────┘    └──────┬───────┘    └──────┬───────┘    └────────┬─────────┘
      │                 │                    │                   │                     │
      │  ── Obtain Token (directly from SSO) ──                 │                     │
@@ -814,12 +826,10 @@ curl -H "Authorization: Bearer $(gcloud auth print-identity-token)" \
 
 The local proxy handles Google Cloud Run authentication, allowing you to test with just your Red Hat SSO token.
 
-**Important:** The MCP sidecar inside Cloud Run uses port 8080. To avoid port conflicts, run the proxy on a different port (e.g., 8099).
-
 **1. Start the local proxy:**
 
 ```bash
-# Start proxy on localhost:8099 (NOT 8080 - that's used by MCP sidecar)
+# Start proxy on localhost:8099
 gcloud run services proxy lightspeed-agent \
   --region=$GOOGLE_CLOUD_LOCATION \
   --project=$GOOGLE_CLOUD_PROJECT \
@@ -1012,10 +1022,6 @@ fuser -k 8099/tcp
 ```
 
 **Note:** The proxy doesn't create any cloud resources - it only runs locally on your machine. Stopping the proxy (Ctrl+C) is sufficient to clean up.
-
-**Why port 8099 instead of 8080?**
-
-The MCP sidecar inside Cloud Run uses port 8080 internally. If you run the proxy on port 8080, the agent will try to connect to the proxy instead of the MCP sidecar, causing "Failed to create MCP session" errors. Using port 8099 (or any other port except 8080) avoids this conflict.
 
 ### Testing Without Proxy (Direct Cloud Run Access)
 
@@ -1442,7 +1448,7 @@ To remove all resources created by the setup and deploy scripts:
 ```
 
 This will delete:
-- Cloud Run services (lightspeed-agent, marketplace-handler)
+- Cloud Run services (lightspeed-agent, marketplace-handler, rh-lightspeed-mcp)
 - Pub/Sub topic and subscription
 - Secret Manager secrets
 - Service accounts (runtime + Pub/Sub invoker) and IAM bindings

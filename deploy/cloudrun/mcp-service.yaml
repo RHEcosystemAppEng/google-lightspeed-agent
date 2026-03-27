@@ -1,0 +1,70 @@
+# Cloud Run Service Configuration for MCP Server
+#
+# Standalone Cloud Run service for the Red Hat Lightspeed MCP Server.
+# Provides MCP tools for interacting with Red Hat Insights APIs
+# (Advisor, Inventory, Vulnerability, Remediations, etc.)
+#
+# Security:
+#   - ingress: internal -- only reachable from services in the same GCP project
+#   - IAM: only the agent's service account has roles/run.invoker
+#   - The agent sends its Google ID token via X-Serverless-Authorization
+#     so Cloud Run validates the caller without consuming the Authorization
+#     header, which carries the Red Hat SSO JWT that the MCP binary needs
+#     to call console.redhat.com on behalf of the user.
+#   - HTTPS is automatic -- all Cloud Run service URLs use https://
+#
+# Note: Cloud Run doesn't support Quay.io directly. Copy the image to GCR:
+#   docker pull quay.io/redhat-services-prod/insights-management-tenant/insights-mcp/red-hat-lightspeed-mcp:latest
+#   docker tag quay.io/.../red-hat-lightspeed-mcp:latest gcr.io/${PROJECT_ID}/red-hat-lightspeed-mcp:latest
+#   docker push gcr.io/${PROJECT_ID}/red-hat-lightspeed-mcp:latest
+#
+# Usage:
+#   gcloud run services replace deploy/cloudrun/mcp-service.yaml \
+#     --region=us-central1 --project=YOUR_PROJECT_ID
+
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: ${MCP_SERVICE_NAME}
+  labels:
+    app: ${MCP_SERVICE_NAME}
+    component: mcp
+  annotations:
+    run.googleapis.com/description: "Red Hat Lightspeed MCP Server - Insights API tools for the Lightspeed Agent"
+    run.googleapis.com/ingress: internal
+    run.googleapis.com/launch-stage: GA
+spec:
+  template:
+    metadata:
+      annotations:
+        # Scaling: stateless, can scale to zero.
+        # maxScale should be >= the agent's maxScale because each agent
+        # instance can issue multiple concurrent MCP tool calls.
+        autoscaling.knative.dev/minScale: "0"
+        autoscaling.knative.dev/maxScale: "4"
+        run.googleapis.com/cpu-throttling: "false"
+        run.googleapis.com/startup-cpu-boost: "true"
+    spec:
+      containerConcurrency: 80
+      timeoutSeconds: 300
+      serviceAccountName: ${SERVICE_ACCOUNT_NAME}@${PROJECT_ID}.iam.gserviceaccount.com
+      containers:
+        - name: rh-lightspeed-mcp
+          image: ${MCP_IMAGE}
+          ports:
+            - name: http1
+              containerPort: 8080
+          args:
+            - "--readonly"
+            - "http"
+            - "--port"
+            - "8080"
+            - "--host"
+            - "0.0.0.0"
+          resources:
+            limits:
+              cpu: "1"
+              memory: 512Mi
+  traffic:
+    - percent: 100
+      latestRevision: true

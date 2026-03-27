@@ -359,7 +359,7 @@ echo "   docker pull quay.io/redhat-services-prod/insights-management-tenant/ins
 echo "   docker tag quay.io/redhat-services-prod/insights-management-tenant/insights-mcp/red-hat-lightspeed-mcp:latest gcr.io/$PROJECT_ID/red-hat-lightspeed-mcp:latest"
 echo "   docker push gcr.io/$PROJECT_ID/red-hat-lightspeed-mcp:latest"
 echo ""
-echo "4. Build and deploy the agent (includes MCP sidecar):"
+echo "4. Build and deploy the services:"
 echo "   ./deploy/cloudrun/deploy.sh --build --service all --allow-unauthenticated"
 echo ""
 echo "5. Get the service URL:"

@@ -42,6 +42,7 @@ REGION="${GOOGLE_CLOUD_LOCATION:-us-central1}"
 SERVICE_NAME="${SERVICE_NAME:-lightspeed-agent}"
 SERVICE_ACCOUNT_NAME="${SERVICE_ACCOUNT_NAME:-${SERVICE_NAME}}"
 HANDLER_SERVICE_NAME="${HANDLER_SERVICE_NAME:-marketplace-handler}"
+MCP_SERVICE_NAME="${MCP_SERVICE_NAME:-rh-lightspeed-mcp}"
 DB_INSTANCE_NAME="${DB_INSTANCE_NAME:-lightspeed-agent-db}"
 SERVICE_ACCOUNT="${SERVICE_ACCOUNT_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
 
@@ -79,7 +80,7 @@ fi
 
 log_warn "This will delete the following resources from project: $PROJECT_ID"
 echo ""
-echo "  - Cloud Run services: $SERVICE_NAME, $HANDLER_SERVICE_NAME"
+echo "  - Cloud Run services: $SERVICE_NAME, $HANDLER_SERVICE_NAME, $MCP_SERVICE_NAME"
 echo "  - Pub/Sub topic: $PUBSUB_TOPIC"
 echo "  - Pub/Sub subscription: $PUBSUB_SUBSCRIPTION"
 echo "  - Secrets: redhat-sso-client-id, redhat-sso-client-secret, database-url,"
@@ -127,6 +128,17 @@ if gcloud run services describe "$HANDLER_SERVICE_NAME" --region="$REGION" --pro
     log_info "Cloud Run service '$HANDLER_SERVICE_NAME' deleted"
 else
     log_info "Cloud Run service '$HANDLER_SERVICE_NAME' does not exist, skipping"
+fi
+
+# Delete MCP server service
+if gcloud run services describe "$MCP_SERVICE_NAME" --region="$REGION" --project="$PROJECT_ID" &>/dev/null; then
+    gcloud run services delete "$MCP_SERVICE_NAME" \
+        --region="$REGION" \
+        --project="$PROJECT_ID" \
+        --quiet
+    log_info "Cloud Run service '$MCP_SERVICE_NAME' deleted"
+else
+    log_info "Cloud Run service '$MCP_SERVICE_NAME' does not exist, skipping"
 fi
 
 # =============================================================================
@@ -264,7 +276,7 @@ log_info "Cleanup complete!"
 log_info "=========================================="
 echo ""
 echo "The following resources have been removed:"
-echo "  - Cloud Run services ($SERVICE_NAME, $HANDLER_SERVICE_NAME)"
+echo "  - Cloud Run services ($SERVICE_NAME, $HANDLER_SERVICE_NAME, $MCP_SERVICE_NAME)"
 echo "  - Pub/Sub topic and subscription"
 echo "  - Secret Manager secrets"
 echo "  - Service accounts (runtime + Pub/Sub invoker) and IAM bindings"

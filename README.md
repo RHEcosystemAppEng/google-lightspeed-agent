@@ -46,24 +46,34 @@ The system consists of **two separate services**:
                                  │
                                  │ Shared PostgreSQL
                                  ▼
-┌────────────────────────────────────────────────────────────────────────┐
-│                    Lightspeed Agent (Port 8000)                        │
-│                     ──────────────────────────                         │
-│  ┌─────────────────────┐      ┌─────────────────────────────┐          │
-│  │  Lightspeed Agent   │ HTTP │   Red Hat Lightspeed MCP    │          │
-│  │   (Gemini + ADK)    │◄────►│   Server (Sidecar)          │          │
-│  │                     │      │                             │          │
-│  │   - A2A protocol    │      │   - Advisor, Inventory      │          │
-│  │   - OAuth 2.0       │      │   - Vulnerability, Patch    │          │
-│  │   - Session mgmt    │      │   - Remediations            │          │
-│  └─────────────────────┘      └──────────────┬──────────────┘          │
-└──────────────────────────────────────────────┼─────────────────────────┘
-                                               │
-                                               ▼
-                                       ┌───────────────────┐
-                                       │ console.redhat.com│
-                                       │ (Insights APIs)   │
-                                       └───────────────────┘
+┌─────────────────────────────────────┐
+│    Lightspeed Agent (Port 8000)    │
+│     ──────────────────────────     │
+│  ┌─────────────────────┐           │
+│  │  Lightspeed Agent   │           │
+│  │   (Gemini + ADK)    │           │
+│  │                     │           │
+│  │   - A2A protocol    │           │
+│  │   - OAuth 2.0       │           │
+│  │   - Session mgmt    │           │
+│  └──────────┬──────────┘           │
+└─────────────┼──────────────────────┘
+              │ HTTPS
+              ▼
+┌─────────────────────────────────────┐
+│  Red Hat Lightspeed MCP Server     │
+│  (Cloud Run - ingress: internal)   │
+│                                     │
+│   - Advisor, Inventory              │
+│   - Vulnerability, Patch            │
+│   - Remediations                    │
+└──────────────┬──────────────────────┘
+               │
+               ▼
+       ┌───────────────────┐
+       │ console.redhat.com│
+       │ (Insights APIs)   │
+       └───────────────────┘
 ```
 
 ### Service Responsibilities
@@ -696,10 +706,10 @@ This separation ensures:
 
 ### How the MCP Server Works
 
-The MCP server runs as a sidecar container and provides tools for the agent to interact with Red Hat Insights APIs:
+The MCP server runs as a separate Cloud Run service and provides tools for the agent to interact with Red Hat Insights APIs:
 
 1. **Agent receives a request** (e.g., "Show me my system vulnerabilities")
-2. **Agent calls MCP tools** via HTTP to the MCP server (localhost:8081), forwarding the caller's JWT token in the Authorization header
+2. **Agent calls MCP tools** via HTTPS to the MCP server, forwarding the caller's JWT token in the Authorization header
 3. **MCP server authenticates** with console.redhat.com using the forwarded JWT token
 4. **MCP server calls Insights APIs** and returns results to the agent
 5. **Agent formats the response** and returns it to the user

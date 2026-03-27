@@ -1,8 +1,12 @@
 # Cloud Run Service Configuration
 # Declarative configuration for the Lightspeed Agent service
 #
-# This deploys the agent with the MCP server as a sidecar container.
-# The MCP server provides tools for interacting with Red Hat Insights APIs.
+# The MCP server runs as a separate Cloud Run service (see mcp-service.yaml).
+# The agent connects to it over HTTPS using the MCP_SERVER_URL env var,
+# which is set automatically by deploy.sh after deployment.
+#
+# IMPORTANT: Deploy the MCP service BEFORE the agent so that deploy.sh can
+# discover the MCP URL and set MCP_SERVER_URL on the agent.
 #
 # Usage:
 #   gcloud run services replace deploy/cloudrun/service.yaml \
@@ -102,11 +106,13 @@ spec:
             - name: SKIP_JWT_VALIDATION
               value: "false"
             # MCP Configuration
-            # The agent connects to the MCP sidecar container over HTTP
+            # The agent connects to the MCP server (separate Cloud Run service).
+            # MCP_SERVER_URL is auto-discovered and set by deploy.sh after
+            # the MCP service is deployed.  The placeholder below is overwritten.
             - name: MCP_TRANSPORT_MODE
               value: "http"
             - name: MCP_SERVER_URL
-              value: "http://localhost:8080"
+              value: "https://MCP-SERVICE-URL-SET-BY-DEPLOY-SH"
             - name: MCP_READ_ONLY
               value: "true"
             # Secrets from Secret Manager
@@ -164,36 +170,6 @@ spec:
               port: 8000
             periodSeconds: 30
             failureThreshold: 3
-
-        # =====================================================================
-        # Red Hat Lightspeed MCP Server (Sidecar)
-        # =====================================================================
-        # Provides MCP tools for interacting with Red Hat Insights APIs
-        # (Advisor, Inventory, Vulnerability, Remediations, etc.)
-        #
-        # Authentication: The agent forwards the caller's JWT token to the
-        # MCP server via the Authorization header.  The MCP server uses this
-        # token to authenticate with console.redhat.com on behalf of the user.
-        #
-        # Sidecar container - no ports section (only main container can expose port)
-        #
-        # Note: Cloud Run doesn't support Quay.io directly. Copy the image to GCR:
-        #   docker pull quay.io/redhat-services-prod/insights-management-tenant/insights-mcp/red-hat-lightspeed-mcp:latest
-        #   docker tag quay.io/.../red-hat-lightspeed-mcp:latest gcr.io/${PROJECT_ID}/red-hat-lightspeed-mcp:latest
-        #   docker push gcr.io/${PROJECT_ID}/red-hat-lightspeed-mcp:latest
-        - name: insights-mcp
-          image: ${MCP_IMAGE}
-          args:
-            - "--readonly"
-            - "http"
-            - "--port"
-            - "8080"
-            - "--host"
-            - "0.0.0.0"
-          resources:
-            limits:
-              cpu: "1"
-              memory: 512Mi
   traffic:
     - percent: 100
       latestRevision: true
