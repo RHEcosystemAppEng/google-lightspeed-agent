@@ -1,5 +1,6 @@
 """Redis-backed rate limiting middleware with global limits."""
 
+import logging
 import math
 import time
 import uuid
@@ -13,6 +14,8 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
 from lightspeed_agent.config import get_settings
+
+logger = logging.getLogger(__name__)
 
 
 class RedisRateLimiter:
@@ -140,6 +143,7 @@ return {1, "ok", min_remaining_minute, min_remaining_hour, 0, 0}
                 unique_member,
             )
         except RedisError as exc:
+            logger.error("Redis rate limiter check failed: %s", exc)
             raise RuntimeError("Redis rate limiter check failed") from exc
 
         allowed = bool(int(result[0]))
@@ -231,6 +235,10 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         try:
             allowed, status = await self._limiter.is_allowed(principal_keys=principals)
         except RuntimeError:
+            logger.error(
+                "Rate limiter backend unavailable, returning 503 (principals=%s)",
+                principals,
+            )
             return JSONResponse(
                 status_code=503,
                 content={
@@ -240,6 +248,15 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             )
 
         if not allowed:
+            logger.warning(
+                "Rate limit exceeded: principal=%s, limit=%s, "
+                "requests_minute=%s, requests_hour=%s, retry_after=%s",
+                status.get("limited_principal"),
+                status.get("exceeded"),
+                status.get("requests_this_minute"),
+                status.get("requests_this_hour"),
+                status.get("retry_after"),
+            )
             return self._rate_limit_response(status)
 
         # Process request
