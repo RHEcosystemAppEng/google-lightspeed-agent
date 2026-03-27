@@ -68,8 +68,9 @@ auth:
   # Skip JWT validation entirely (development only — do NOT enable in production)
   skipJwtValidation: false
   # Skip marketplace order-id validation while keeping JWT introspection.
-  # Should be true for OpenShift deployments without the Marketplace handler.
-  skipOrderValidation: true
+  # When the marketplace handler is disabled, order validation code is not
+  # executed regardless of this setting.
+  skipOrderValidation: false
 
 # ---------------------------------------------------------------------------
 # Rate limiting (Redis-backed)
@@ -107,6 +108,9 @@ postgresql:
     repository: registry.redhat.io/rhel9/postgresql-16
     tag: latest
     pullPolicy: IfNotPresent
+  # Session storage backend: "database" persists sessions in PostgreSQL,
+  # "memory" uses in-memory sessions (lost on pod restart).
+  sessionBackend: database
   user: sessions
   database: agent_sessions
   storage:
@@ -207,5 +211,8 @@ secrets:
   dcrInitialAccessToken: ""
   # Fernet key for encrypting stored client secrets
   dcrEncryptionKey: ""
+  # GMA SSO API credentials for DCR tenant creation (handler only)
+  gmaClientId: ""
+  gmaClientSecret: ""
   # Base64-encoded GCP service account key JSON (for ADC outside Cloud Run)
   gcpServiceAccountKey: ""

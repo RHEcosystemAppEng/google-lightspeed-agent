@@ -32,6 +32,7 @@ data:
   AGENT_PORT: {{ .Values.agent.port | quote }}
 
   # Session PostgreSQL Configuration
+  SESSION_BACKEND: {{ .Values.postgresql.sessionBackend | quote }}
   SESSION_DB_USER: {{ .Values.postgresql.user | quote }}
   SESSION_DB_NAME: {{ .Values.postgresql.database | quote }}
 
