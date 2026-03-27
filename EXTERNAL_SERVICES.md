@@ -82,8 +82,8 @@ These services are required for production Cloud Run deployments and are configu
 |----------|-------|---------|
 | `registry.access.redhat.com` | `ubi9/python-312-minimal` | Base image for agent & handler |
 | `registry.redhat.io` | `rhel9/postgresql-16` | PostgreSQL for Podman deployments |
-| `quay.io` | `redhat-services-prod/insights-management-tenant/insights-mcp/red-hat-lightspeed-mcp:latest` | MCP server sidecar (Podman deployments) |
-| `ghcr.io` | `redhatinsights/red-hat-lightspeed-mcp:latest` | MCP server sidecar (default in code) |
+| `quay.io` | `redhat-services-prod/insights-management-tenant/insights-mcp/red-hat-lightspeed-mcp:latest` | MCP server sidecar (source registry, Podman deployments) |
+| `gcr.io` | `{PROJECT_ID}/red-hat-lightspeed-mcp:latest` | MCP server sidecar (uploaded from quay.io for Cloud Run deployments) |
 | `quay.io` | `fedora/redis-7` | Redis for rate limiting (production uses Cloud Memorystore) |
 
 ## Google JWT Validation Endpoint
