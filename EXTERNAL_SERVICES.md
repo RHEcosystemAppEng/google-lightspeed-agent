@@ -43,6 +43,8 @@ These services are required for production Cloud Run deployments and are configu
 | **Cloud Scheduler** | Schedules usage reporting jobs | For marketplace | `setup.sh:80` |
 | **Cloud Logging** | Centralized log collection | For production | IAM role `roles/logging.logWriter` |
 | **Cloud Monitoring** | Metrics and alerting | For production | IAM role `roles/monitoring.metricWriter` |
+| **Cloud Memorystore** | Managed Redis instance for rate limiting | For production | `setup.sh:85` |
+| **Cloud Storage** | Stores the agent card JSON file for agent publishing | For production | Required for Agent Builder |
 | **Serverless VPC Access** | Connects Cloud Run to Cloud Memorystore (Redis) | For production | `setup.sh:85`, `service.yaml:37` |
 
 ## Red Hat Services
