@@ -519,9 +519,9 @@ google-cloud-resource-manager==1.16.0 \
     --hash=sha256:cc938f87cc36c2672f062b1e541650629e0d954c405a4dac35ceedee70c267c3 \
     --hash=sha256:fb9a2ad2b5053c508e1c407ac31abfd1a22e91c32876c1892830724195819a28
     # via google-cloud-aiplatform
-google-cloud-secret-manager==2.26.0 \
-    --hash=sha256:0d1d6f76327685a0ed78a4cf50f289e1bfbbe56026ed0affa98663b86d6d50d6 \
-    --hash=sha256:940a5447a6ec9951446fd1a0f22c81a4303fde164cd747aae152c5f5c8e6723e
+google-cloud-secret-manager==2.27.0 \
+    --hash=sha256:6af864c252bd3c11db7bb02b80cb0b14a8c9a33fc7ec4d6f245f33d8ce1f7cd1 \
+    --hash=sha256:e5540bece65a3ad720146f3b438973faf9315109b3ffa012a58711843047a3dc
     # via google-adk
 google-cloud-service-control==1.18.0 \
     --hash=sha256:645fac1f03410055d8f83b12e3f24a4a386ca45dfca052f70de609952ecbd1bd \
