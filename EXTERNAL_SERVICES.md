@@ -4,7 +4,7 @@ A comprehensive list of all external services used by the Google Lightspeed Agen
 
 ## LLM Models
 
-The agent uses Google Gemini models for all LLM inference. Two access paths are supported:
+The agent uses Google Gemini models by default, but Vertex AI supports deploying other models as well. Two access paths are supported:
 
 | Access Path | Description | Key Config |
 |-------------|-------------|------------|
