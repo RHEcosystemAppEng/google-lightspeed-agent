@@ -4,7 +4,25 @@ Deploy the Red Hat Lightspeed Agent for Google Cloud to Google Cloud Run for pro
 
 ## Architecture
 
-The deployment consists of **three separate Cloud Run services** plus **Cloud Memorystore for Redis** (for rate limiting):
+The deployment consists of **two or three Cloud Run services** (depending on `MCP_DEPLOY_MODE`) plus **Cloud Memorystore for Redis** (for rate limiting):
+
+### MCP Deployment Modes
+
+The MCP server can be deployed in two modes, controlled by the `MCP_DEPLOY_MODE` environment variable:
+
+| Mode | Value | Description | YAML Configs |
+|------|-------|-------------|--------------|
+| **Separate Service** (default) | `service` | MCP runs as its own Cloud Run service with `ingress: internal`. Agent connects via HTTPS. | `service.yaml` + `mcp-service.yaml` |
+| **Sidecar** | `sidecar` | MCP runs as a second container inside the agent pod. Agent connects via `http://localhost:8080`. | `service-sidecar.yaml` |
+
+| Consideration | Service mode | Sidecar mode |
+|---------------|-------------|--------------|
+| Independent scaling | MCP scales independently (maxScale: 4) | MCP scales with agent (1:1) |
+| Cold start latency | MCP may cold start separately | Both start together |
+| Network security | HTTPS between services + IAM | localhost (no network hop) |
+| Operational complexity | 3 Cloud Run services | 2 Cloud Run services |
+
+### Architecture (MCP_DEPLOY_MODE=service)
 
 ```
                               Google Cloud Marketplace
@@ -66,14 +84,27 @@ The deployment consists of **three separate Cloud Run services** plus **Cloud Me
 
 ### Deployment Order
 
+**Service mode** (default):
+
 1. **Set up Cloud Memorystore Redis and VPC connector** - Required for agent rate limiting (see [Redis Setup](#redis-setup-for-rate-limiting))
 2. **Deploy Marketplace Handler first** - Must be running to receive provisioning events
 3. **Deploy MCP Server** - Must be running before the agent can call Insights APIs
 4. **Deploy Agent after provisioning** - Can be deployed when customers are ready to use the agent
 
-The MCP server runs as a separate Cloud Run service with `ingress: internal`, reachable only by the agent's service account. The agent connects to it over HTTPS. The agent forwards the caller's JWT token to the MCP server, which uses it to authenticate with console.redhat.com on behalf of the user (see [MCP Authentication](#mcp-authentication)).
+The MCP server runs as a separate Cloud Run service with `ingress: internal`, reachable only by the agent's service account. The agent connects to it over HTTPS. `deploy.sh` auto-discovers the MCP service URL after deployment and sets `MCP_SERVER_URL` on the agent.
 
-> **Note:** The `MCP_SERVER_URL` in `service.yaml` is a placeholder. `deploy.sh` auto-discovers the MCP service URL after deployment and sets it on the agent.
+**Sidecar mode** (`MCP_DEPLOY_MODE=sidecar`):
+
+1. **Set up Cloud Memorystore Redis and VPC connector**
+2. **Deploy Marketplace Handler first**
+3. **Deploy Agent** (MCP sidecar is included in the agent pod, no separate step needed)
+
+```bash
+export MCP_DEPLOY_MODE=sidecar
+./deploy/cloudrun/deploy.sh --service all --allow-unauthenticated
+```
+
+> **Note:** If you switch from `service` to `sidecar` mode, the standalone MCP Cloud Run service will still exist. Delete it manually or run `cleanup.sh` first.
 
 ## Service Accounts
 
@@ -403,6 +434,8 @@ curl -s $AGENT_URL/.well-known/agent.json | jq '.capabilities.extensions'
 
 | Flag | Description |
 |------|-------------|
+| Flag | Description |
+|------|-------------|
 | `--service <service>` | Which service to deploy: `all` (default), `handler`, `mcp`, `agent` |
 | `--image <image>` | Container image for the agent (default: `gcr.io/$PROJECT_ID/lightspeed-agent:latest`) |
 | `--handler-image <image>` | Container image for the marketplace handler (default: `gcr.io/$PROJECT_ID/marketplace-handler:latest`) |
@@ -410,14 +443,20 @@ curl -s $AGENT_URL/.well-known/agent.json | jq '.capabilities.extensions'
 | `--build` | Build the image(s) before deploying |
 | `--allow-unauthenticated` | Allow public access (required for A2A and Pub/Sub) |
 
+**Environment variables:**
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MCP_DEPLOY_MODE` | `service` | `service` (separate Cloud Run service) or `sidecar` (MCP inside agent pod) |
+
 **Service deployment:**
 
-| Service | YAML Config | Description |
-|---------|-------------|-------------|
-| `handler` | `marketplace-handler.yaml` | Pub/Sub events, DCR requests |
-| `mcp` | `mcp-service.yaml` | Red Hat Insights MCP tools (internal) |
-| `agent` | `service.yaml` | A2A queries, user interactions |
-| `all` | All three | Deploy all services |
+| Service | YAML Config (service mode) | YAML Config (sidecar mode) | Description |
+|---------|---------------------------|----------------------------|-------------|
+| `handler` | `marketplace-handler.yaml` | `marketplace-handler.yaml` | Pub/Sub events, DCR requests |
+| `mcp` | `mcp-service.yaml` | _(skipped)_ | Red Hat Insights MCP tools (internal) |
+| `agent` | `service.yaml` | `service-sidecar.yaml` | A2A queries, user interactions |
+| `all` | All three | Handler + Agent (with sidecar) | Deploy all services |
 
 The deploy script performs variable substitution on the YAML configs
 (`${PROJECT_ID}`, `${REGION}`, image references, etc.) and deploys using
@@ -1448,7 +1487,7 @@ To remove all resources created by the setup and deploy scripts:
 ```
 
 This will delete:
-- Cloud Run services (lightspeed-agent, marketplace-handler, rh-lightspeed-mcp)
+- Cloud Run services (lightspeed-agent, marketplace-handler, and rh-lightspeed-mcp if `MCP_DEPLOY_MODE=service`)
 - Pub/Sub topic and subscription
 - Secret Manager secrets
 - Service accounts (runtime + Pub/Sub invoker) and IAM bindings
