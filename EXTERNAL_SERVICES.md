@@ -50,8 +50,8 @@ These services are required for production Cloud Run deployments and are configu
 | Service | Purpose | Required | Key Config |
 |---------|---------|----------|------------|
 | **Red Hat SSO (Keycloak)** | OAuth 2.0 auth, token introspection, Dynamic Client Registration | Yes | `RED_HAT_SSO_ISSUER` (default: `https://sso.redhat.com/auth/realms/redhat-external`) |
-| **console.redhat.com (Insights APIs)** | Advisor, Inventory, Vulnerability, Remediations, Patch, Image Builder, RBAC, RHSM | Yes (via MCP) | `MCP_SERVER_URL`, JWT forwarded via MCP headers (see `mcp_headers.py`) |
-| **Red Hat Lightspeed MCP Server** | Sidecar gateway to Insights APIs | Yes | `MCP_SERVER_URL`, `MCP_TRANSPORT_MODE` |
+| **console.redhat.com (Lightspeed APIs)** | Advisor, Inventory, Vulnerability, Remediations, Patch, Image Builder, RBAC, RHSM | Yes (via MCP) | `MCP_SERVER_URL`, JWT forwarded via MCP headers (see `mcp_headers.py`) |
+| **Red Hat Lightspeed MCP Server** | Sidecar gateway to Lightspeed APIs | Yes | `MCP_SERVER_URL`, `MCP_TRANSPORT_MODE` |
 
 ## Databases
 
