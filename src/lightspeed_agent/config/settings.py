@@ -60,7 +60,7 @@ class Settings(BaseSettings):
     )
     mcp_server_url: str = Field(
         default="http://localhost:8080",
-        description="MCP server URL for http/sse modes (use HTTPS URL for Cloud Run production)",
+        description="MCP server URL for http/sse modes (must be HTTPS except for localhost)",
     )
     mcp_read_only: bool = Field(
         default=True,
@@ -324,6 +324,24 @@ class Settings(BaseSettings):
                 "Provide a PostgreSQL connection URL, e.g.: "
                 "SESSION_DATABASE_URL=postgresql+asyncpg://user:pass@host:5432/sessions"
             )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_mcp_server_url(self) -> "Settings":
+        """Enforce HTTPS for MCP_SERVER_URL (except localhost for development).
+
+        When the transport mode is http or sse, the MCP server URL must start
+        with https:// or http://localhost.  This ensures that the Red Hat SSO
+        JWT token forwarded to the MCP server is always transmitted over an
+        encrypted connection.
+        """
+        if self.mcp_transport_mode in ("http", "sse"):
+            url = self.mcp_server_url
+            if not url.startswith(("https://", "http://localhost")):
+                raise ValueError(
+                    f"MCP_SERVER_URL must use HTTPS (got {url!r}). "
+                    "Only http://localhost is allowed for local development."
+                )
         return self
 
     # OpenTelemetry Configuration

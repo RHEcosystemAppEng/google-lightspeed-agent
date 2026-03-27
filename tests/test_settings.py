@@ -48,3 +48,63 @@ class TestSkipJwtProductionGuard:
         ):
             settings = Settings(skip_jwt_validation=False)
             assert settings.skip_jwt_validation is False
+
+
+class TestMcpServerUrlHttpsGuard:
+    """Verify MCP_SERVER_URL requires HTTPS (except localhost)."""
+
+    def test_https_url_allowed(self):
+        """HTTPS URLs are accepted for http/sse transport modes."""
+        settings = Settings(
+            mcp_transport_mode="http",
+            mcp_server_url="https://rh-lightspeed-mcp-abc123.run.app",
+        )
+        assert settings.mcp_server_url == "https://rh-lightspeed-mcp-abc123.run.app"
+
+    def test_http_localhost_allowed(self):
+        """http://localhost is allowed for local development."""
+        settings = Settings(
+            mcp_transport_mode="http",
+            mcp_server_url="http://localhost:8080",
+        )
+        assert settings.mcp_server_url == "http://localhost:8080"
+
+    def test_http_localhost_no_port_allowed(self):
+        """http://localhost without port is allowed."""
+        settings = Settings(
+            mcp_transport_mode="http",
+            mcp_server_url="http://localhost",
+        )
+        assert settings.mcp_server_url == "http://localhost"
+
+    def test_plain_http_rejected(self):
+        """Plain HTTP to a non-localhost host must be rejected."""
+        with pytest.raises(ValidationError, match="must use HTTPS"):
+            Settings(
+                mcp_transport_mode="http",
+                mcp_server_url="http://mcp-server:8080",
+            )
+
+    def test_plain_http_remote_rejected(self):
+        """HTTP to a remote host must be rejected."""
+        with pytest.raises(ValidationError, match="must use HTTPS"):
+            Settings(
+                mcp_transport_mode="http",
+                mcp_server_url="http://10.0.0.5:8080",
+            )
+
+    def test_sse_mode_also_validates(self):
+        """SSE transport mode also enforces HTTPS."""
+        with pytest.raises(ValidationError, match="must use HTTPS"):
+            Settings(
+                mcp_transport_mode="sse",
+                mcp_server_url="http://mcp-server:8080",
+            )
+
+    def test_stdio_mode_skips_validation(self):
+        """stdio mode does not use MCP_SERVER_URL, so no URL validation."""
+        settings = Settings(
+            mcp_transport_mode="stdio",
+            mcp_server_url="http://anything:9999",
+        )
+        assert settings.mcp_server_url == "http://anything:9999"
