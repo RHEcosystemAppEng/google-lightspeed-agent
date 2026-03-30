@@ -77,7 +77,7 @@ async def pubsub_handler(request: Request) -> JSONResponse:
 
     try:
         audience = settings.pubsub_audience or None
-        google_id_token.verify_oauth2_token(
+        google_id_token.verify_oauth2_token(  # type: ignore[no-untyped-call]
             token,
             google_requests.Request(),
             audience=audience,
