@@ -249,6 +249,55 @@ LOG_FORMAT=text  # Human-readable for development
 AGENT_LOGGING_DETAIL=detailed  # Include tool args/results in logs
 ```
 
+#### Audit Logging
+
+When `LOG_FORMAT=json` (the default), every log record automatically includes audit context fields:
+
+| Field | Source | Description |
+|-------|--------|-------------|
+| `user_id` | JWT `sub` claim | Authenticated user identifier |
+| `org_id` | JWT `org_id` claim | Red Hat organization identifier |
+| `order_id` | DCR client lookup | Google Cloud Marketplace order |
+| `request_id` | Generated UUID4 | Per-request correlation ID |
+
+These fields enable:
+- **Request correlation** — all events in a single request share the same `request_id`
+- **User audit** — filter by `user_id` to trace all actions by a specific user
+- **Organization audit** — filter by `org_id` for organization-level auditing
+- **Data lineage** — `tool_call_completed` events include `data_source=<mcp_tool>`, and `mcp_jwt_forwarded` events prove data was retrieved using the user's authorized JWT
+
+Each agent lifecycle event is tagged with an `event_type` in the log message:
+
+| Event Type | Description |
+|------------|-------------|
+| `request_authenticated` | User JWT validated, user_id and org_id extracted |
+| `agent_run_started` | ADK agent invocation started |
+| `agent_run_completed` | ADK agent invocation finished |
+| `llm_call_started` | Gemini LLM call initiated |
+| `llm_call_completed` | Gemini LLM call finished (includes token counts) |
+| `tool_call_started` | MCP tool call initiated |
+| `tool_call_completed` | MCP tool call finished (includes `data_source`) |
+| `mcp_jwt_forwarded` | User JWT forwarded to MCP sidecar for Red Hat API auth |
+
+**Example JSON log line:**
+
+```json
+{"time": "2025-01-15 10:30:45", "level": "INFO", "logger": "lightspeed_agent.api.a2a.logging_plugin", "message": "Tool call completed (event_type=tool_call_completed, tool=get_advisories, data_source=get_advisories, ...)", "user_id": "user-42", "org_id": "org-7", "order_id": "order-99", "request_id": "abc-123-def-456"}
+```
+
+On Cloud Run, these JSON logs are automatically parsed by Cloud Logging and can be queried with:
+
+```bash
+# Find all actions by a specific user
+gcloud logging read 'jsonPayload.user_id="user-42"' --project=$GOOGLE_CLOUD_PROJECT
+
+# Find all tool calls in a specific request
+gcloud logging read 'jsonPayload.request_id="abc-123" AND jsonPayload.message=~"tool_call"' --project=$GOOGLE_CLOUD_PROJECT
+
+# Audit all MCP data access for an organization
+gcloud logging read 'jsonPayload.org_id="org-7" AND jsonPayload.message=~"mcp_jwt_forwarded"' --project=$GOOGLE_CLOUD_PROJECT
+```
+
 ### Development Settings
 
 | Variable | Default | Description |

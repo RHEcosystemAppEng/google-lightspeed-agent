@@ -73,7 +73,9 @@ data:
   # Set SERVICE_CONTROL_SERVICE_NAME in secrets for production
   SERVICE_CONTROL_ENABLED: "false"
 
-  # Logging
+  # Logging and Audit Trail
+  # LOG_FORMAT=json enables structured audit logging with user_id,
+  # org_id, order_id, and request_id in every log record.
   LOG_LEVEL: "DEBUG"
   LOG_FORMAT: "json"
   AGENT_LOGGING_DETAIL: "detailed"

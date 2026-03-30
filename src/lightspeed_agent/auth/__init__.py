@@ -17,7 +17,12 @@ from lightspeed_agent.auth.introspection import (
     TokenValidationError,
     get_token_introspector,
 )
-from lightspeed_agent.auth.middleware import AuthenticationMiddleware
+from lightspeed_agent.auth.middleware import (
+    AuthenticationMiddleware,
+    get_request_id,
+    get_request_org_id,
+    get_request_user_id,
+)
 from lightspeed_agent.auth.models import (
     AuthenticatedUser,
     JWTClaims,
@@ -36,6 +41,9 @@ __all__ = [
     "get_token_introspector",
     # Middleware
     "AuthenticationMiddleware",
+    "get_request_id",
+    "get_request_org_id",
+    "get_request_user_id",
     # Models
     "AuthenticatedUser",
     "JWTClaims",

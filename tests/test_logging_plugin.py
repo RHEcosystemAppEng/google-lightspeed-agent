@@ -53,6 +53,7 @@ class TestAgentLoggingPluginBasic:
         assert "Agent run started" in caplog.text
         assert "inv-123" in caplog.text
         assert "test_agent" in caplog.text
+        assert "event_type=agent_run_started" in caplog.text
 
     @pytest.mark.asyncio
     async def test_after_run_logs_info(self, plugin, caplog):
@@ -65,6 +66,7 @@ class TestAgentLoggingPluginBasic:
         assert result is None
         assert "Agent run completed" in caplog.text
         assert "inv-456" in caplog.text
+        assert "event_type=agent_run_completed" in caplog.text
 
     @pytest.mark.asyncio
     async def test_before_model_logs_info(self, plugin, caplog):
@@ -79,6 +81,7 @@ class TestAgentLoggingPluginBasic:
         assert result is None
         assert "LLM call started" in caplog.text
         assert "test_agent" in caplog.text
+        assert "event_type=llm_call_started" in caplog.text
 
     @pytest.mark.asyncio
     async def test_after_model_logs_token_counts(self, plugin, caplog):
@@ -100,6 +103,7 @@ class TestAgentLoggingPluginBasic:
         assert "input_tokens=100" in caplog.text
         assert "output_tokens=50" in caplog.text
         assert "gemini-2.5-flash-001" in caplog.text
+        assert "event_type=llm_call_completed" in caplog.text
 
     @pytest.mark.asyncio
     async def test_after_model_handles_missing_usage(self, plugin, caplog):
@@ -131,6 +135,7 @@ class TestAgentLoggingPluginBasic:
         assert result is None
         assert "LLM call failed" in caplog.text
         assert "API quota exceeded" in caplog.text
+        assert "event_type=llm_call_failed" in caplog.text
 
     @pytest.mark.asyncio
     async def test_before_tool_basic_omits_args(self, plugin, caplog):
@@ -148,6 +153,7 @@ class TestAgentLoggingPluginBasic:
         assert "Tool call started" in caplog.text
         assert "get_advisories" in caplog.text
         assert "abc-123" not in caplog.text
+        assert "event_type=tool_call_started" in caplog.text
 
     @pytest.mark.asyncio
     async def test_after_tool_basic_omits_result(self, plugin, caplog):
@@ -166,6 +172,8 @@ class TestAgentLoggingPluginBasic:
         assert "Tool call completed" in caplog.text
         assert "get_advisories" in caplog.text
         assert "sensitive-info" not in caplog.text
+        assert "event_type=tool_call_completed" in caplog.text
+        assert "data_source=get_advisories" in caplog.text
 
     @pytest.mark.asyncio
     async def test_on_tool_error_logs_error(self, plugin, caplog):
@@ -185,6 +193,7 @@ class TestAgentLoggingPluginBasic:
         assert "Tool call failed" in caplog.text
         assert "get_advisories" in caplog.text
         assert "MCP server unreachable" in caplog.text
+        assert "event_type=tool_call_failed" in caplog.text
 
 
 class TestAgentLoggingPluginDetailed:
@@ -234,6 +243,7 @@ class TestAgentLoggingPluginDetailed:
         assert "Tool call completed" in caplog.text
         assert "get_advisories" in caplog.text
         assert "CVE-2024-1234" in caplog.text
+        assert "data_source=get_advisories" in caplog.text
 
     @pytest.mark.asyncio
     async def test_after_tool_detailed_truncates_long_result(self, plugin, caplog):

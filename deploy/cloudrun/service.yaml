@@ -81,6 +81,10 @@ spec:
             # Updated automatically by deploy.sh after deployment.
             - name: MARKETPLACE_HANDLER_URL
               value: "https://marketplace-handler.example.com"
+            # Logging and Audit Trail
+            # LOG_FORMAT=json enables structured audit logging with user_id,
+            # org_id, order_id, and request_id in every log record.  Cloud
+            # Logging parses these fields automatically for querying.
             - name: LOG_LEVEL
               value: "INFO"
             - name: LOG_FORMAT

@@ -1309,6 +1309,43 @@ The test script at `scripts/test_deployed_dcr.py` is configurable via environmen
 | `TEST_ACCOUNT_ID` | `test-procurement-account-001` | Procurement account ID |
 | `TEST_REDIRECT_URIS` | `https://gemini.google.com/callback` | Comma-separated redirect URIs |
 
+## Audit Logging
+
+The agent automatically produces structured audit logs that correlate each user session with Red Hat API requests. When `LOG_FORMAT=json` (the default in Cloud Run), every log record includes:
+
+- **`user_id`** — authenticated user (JWT `sub` claim)
+- **`org_id`** — Red Hat organization (JWT `org_id` claim)
+- **`order_id`** — Google Cloud Marketplace order
+- **`request_id`** — UUID4 correlation ID (unique per request)
+
+Each agent lifecycle event carries an `event_type` tag (`request_authenticated`, `agent_run_started`, `tool_call_completed`, `mcp_jwt_forwarded`, etc.) and tool calls include a `data_source` field identifying which Red Hat Insights MCP tool retrieved the data.
+
+This provides a full data lineage audit trail: every piece of information disclosed by the agent can be traced back to a specific authenticated user prompt and a verified Red Hat Insights data source. These persistent logs are independent of the ephemeral ADK session storage.
+
+### Querying Audit Logs
+
+Cloud Logging automatically parses JSON log fields. Example queries:
+
+```bash
+# All actions by a specific user
+gcloud logging read 'jsonPayload.user_id="<user-id>"' \
+  --project=$GOOGLE_CLOUD_PROJECT --limit=50
+
+# All events in a single request (correlation)
+gcloud logging read 'jsonPayload.request_id="<request-id>"' \
+  --project=$GOOGLE_CLOUD_PROJECT
+
+# All MCP data access for an organization
+gcloud logging read 'jsonPayload.org_id="<org-id>" AND jsonPayload.message=~"mcp_jwt_forwarded"' \
+  --project=$GOOGLE_CLOUD_PROJECT
+
+# All tool calls with data source tracking
+gcloud logging read 'jsonPayload.message=~"tool_call_completed"' \
+  --project=$GOOGLE_CLOUD_PROJECT --limit=20
+```
+
+No additional configuration is required — audit logging is automatically active when `LOG_FORMAT=json`.
+
 ## Monitoring
 
 View metrics in Google Cloud Console:
