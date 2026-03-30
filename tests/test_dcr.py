@@ -350,7 +350,7 @@ class TestDCRRouter:
 
 
 class TestPubSubHandler:
-    """Tests for Pub/Sub event handling via the /dcr endpoint."""
+    """Tests for Pub/Sub event handling via the /pubsub endpoint."""
 
     @pytest_asyncio.fixture
     async def client(self, db_session):
@@ -386,6 +386,18 @@ class TestPubSubHandler:
             }
         }
 
+    def _post_pubsub(self, client, body):
+        """POST to /pubsub with a mocked valid Google OIDC token."""
+        with patch(
+            "lightspeed_agent.marketplace.router.google_id_token.verify_oauth2_token",
+            return_value={"iss": "accounts.google.com", "sub": "test"},
+        ):
+            return client.post(
+                "/pubsub",
+                json=body,
+                headers={"Authorization": "Bearer valid-oidc-token"},
+            )
+
     @pytest.mark.asyncio
     async def test_entitlement_active_returns_success_with_order_id(self, client):
         """Test that ENTITLEMENT_ACTIVE returns status=success and orderId."""
@@ -399,7 +411,7 @@ class TestPubSubHandler:
             },
         }
 
-        response = client.post("/dcr", json=self._make_pubsub_body(event_data))
+        response = self._post_pubsub(client, self._make_pubsub_body(event_data))
 
         assert response.status_code == 200
         data = response.json()
@@ -424,7 +436,7 @@ class TestPubSubHandler:
             new_callable=AsyncMock,
             return_value=mock_response,
         ) as mock_post:
-            response = client.post("/dcr", json=self._make_pubsub_body(event_data))
+            response = self._post_pubsub(client, self._make_pubsub_body(event_data))
 
         assert response.status_code == 200
         data = response.json()
@@ -458,7 +470,7 @@ class TestPubSubHandler:
             patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_post),
             patch("httpx.AsyncClient.get", new_callable=AsyncMock, return_value=mock_get),
         ):
-            response = client.post("/dcr", json=self._make_pubsub_body(event_data))
+            response = self._post_pubsub(client, self._make_pubsub_body(event_data))
 
         assert response.status_code == 200
         data = response.json()
@@ -475,7 +487,7 @@ class TestPubSubHandler:
             }
         }
 
-        response = client.post("/dcr", json=body)
+        response = self._post_pubsub(client, body)
 
         assert response.status_code == 200
         data = response.json()
@@ -491,7 +503,7 @@ class TestPubSubHandler:
             "entitlement": {"id": "order-1", "product": "products/test-product"},
         }
 
-        response = client.post("/dcr", json=self._make_pubsub_body(event_data))
+        response = self._post_pubsub(client, self._make_pubsub_body(event_data))
 
         assert response.status_code == 200
         data = response.json()
@@ -506,7 +518,7 @@ class TestPubSubHandler:
             "providerId": "test-provider",
         }
 
-        response = client.post("/dcr", json=self._make_pubsub_body(event_data))
+        response = self._post_pubsub(client, self._make_pubsub_body(event_data))
 
         assert response.status_code == 200
         data = response.json()
@@ -523,18 +535,11 @@ class TestPubSubHandler:
             }
         }
 
-        response = client.post("/dcr", json=body)
+        response = self._post_pubsub(client, body)
 
         assert response.status_code == 400
         data = response.json()
         assert "error" in data
-
-    @pytest.mark.asyncio
-    async def test_unknown_request_format(self, client):
-        """Test that requests without software_statement or message return 400."""
-        response = client.post("/dcr", json={"foo": "bar"})
-
-        assert response.status_code == 400
 
     # Product filtering tests
 
@@ -557,7 +562,7 @@ class TestPubSubHandler:
                 },
             }
 
-            response = client.post("/dcr", json=self._make_pubsub_body(event_data))
+            response = self._post_pubsub(client, self._make_pubsub_body(event_data))
 
             assert response.status_code == 200
             data = response.json()
@@ -585,7 +590,7 @@ class TestPubSubHandler:
                 },
             }
 
-            response = client.post("/dcr", json=self._make_pubsub_body(event_data))
+            response = self._post_pubsub(client, self._make_pubsub_body(event_data))
 
             assert response.status_code == 200
             data = response.json()
@@ -613,7 +618,7 @@ class TestPubSubHandler:
                 },
             }
 
-            response = client.post("/dcr", json=self._make_pubsub_body(event_data))
+            response = self._post_pubsub(client, self._make_pubsub_body(event_data))
 
             assert response.status_code == 200
             data = response.json()
@@ -634,7 +639,7 @@ class TestPubSubHandler:
             },
         }
 
-        response = client.post("/dcr", json=self._make_pubsub_body(event_data))
+        response = self._post_pubsub(client, self._make_pubsub_body(event_data))
 
         assert response.status_code == 200
         data = response.json()
