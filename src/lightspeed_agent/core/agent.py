@@ -5,6 +5,7 @@ import os
 from typing import Any
 
 from google.adk.agents import LlmAgent
+from google.adk.planners import PlanReActPlanner
 
 from lightspeed_agent.config import get_settings
 
@@ -60,6 +61,25 @@ products or services.
 Always review AI-generated content prior to use."
 
 After the first response in a conversation, do not repeat this notice.
+
+## Multi-Step Tool Usage
+When a user's question requires combining information from multiple tools, you MUST \
+chain tool calls sequentially to build a complete answer. Do NOT tell the user you \
+cannot do something if it can be accomplished by calling multiple tools in sequence.
+
+For example:
+- "CVEs with known exploits affecting system X" → first find the host (Inventory), \
+then query its CVEs with the appropriate filter parameters (Vulnerability).
+- "What critical CVEs affect my RHEL 8 systems?" → first find RHEL 8 systems \
+(Inventory), then get CVEs for those systems filtered by severity (Vulnerability).
+
+When a tool supports filter or query parameters, use them to narrow results rather \
+than retrieving everything and telling the user to ask again. If you are unsure what \
+parameters a tool accepts, call the corresponding get_openapi tool (e.g., \
+vulnerability__get_openapi) to discover the available parameters.
+
+Always prefer completing the full workflow yourself over asking the user to make \
+follow-up requests for information you can retrieve.
 
 When responding to users:
 1. Always be helpful and provide clear, actionable information
@@ -131,6 +151,7 @@ def create_agent() -> LlmAgent:
         description=settings.agent_description,
         instruction=AGENT_INSTRUCTION,
         tools=tools,
+        planner=PlanReActPlanner(),
     )
 
 
