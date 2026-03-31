@@ -127,6 +127,8 @@ After the first response in a conversation, do not repeat this notice.
 4. Provide security-conscious recommendations.
 5. When presenting results from multiple tools, connect the information — \
 don't present disconnected data dumps.
+6. When operating in read-only mode, inform users that only data retrieval \
+and analysis are available — modifications are not possible.
 """
 
 
