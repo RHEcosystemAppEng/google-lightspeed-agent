@@ -163,7 +163,7 @@ def build_agent_card() -> AgentCard:
     skills = _build_skills()
 
     agent_card = AgentCard(
-        name=settings.agent_name,
+        name=settings.agent_display_name,
         description=settings.agent_description,
         version="0.1.0",
         url=f"{settings.agent_provider_url}/",
