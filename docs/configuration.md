@@ -251,7 +251,12 @@ AGENT_LOGGING_DETAIL=detailed  # Include tool args/results in logs
 
 #### Audit Logging
 
-When `LOG_FORMAT=json` (the default), every log record automatically includes audit context fields:
+The `LOG_FORMAT` setting controls how log records are formatted:
+
+- **`json`** (default) — Structured JSON output. Every log record automatically includes audit context fields (`user_id`, `org_id`, `order_id`, `request_id`). Recommended for production and Cloud Run, where Cloud Logging parses these fields for querying.
+- **`text`** — Human-readable output (`timestamp - logger - level - message`). Audit context fields are **not** included in the log record. The agent execution plugin still embeds `user_id`, `org_id`, `order_id`, and `request_id` in the log message text, but they are not available as structured fields for filtering. Recommended for local development.
+
+When `LOG_FORMAT=json`, every log record automatically includes audit context fields:
 
 | Field | Source | Description |
 |-------|--------|-------------|

@@ -1324,23 +1324,27 @@ This provides a full data lineage audit trail: every piece of information disclo
 
 ### Querying Audit Logs
 
-Cloud Logging automatically parses JSON log fields. Example queries:
+Cloud Logging automatically parses JSON log fields. To filter logs from the Lightspeed Agent service specifically, add a `resource.labels.service_name` filter:
 
 ```bash
-# All actions by a specific user
-gcloud logging read 'jsonPayload.user_id="<user-id>"' \
+# All Lightspeed Agent logs (filter by Cloud Run service name)
+gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name="lightspeed-agent"' \
+  --project=$GOOGLE_CLOUD_PROJECT --limit=50
+
+# All actions by a specific user (scoped to the agent service)
+gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name="lightspeed-agent" AND jsonPayload.user_id="<user-id>"' \
   --project=$GOOGLE_CLOUD_PROJECT --limit=50
 
 # All events in a single request (correlation)
-gcloud logging read 'jsonPayload.request_id="<request-id>"' \
+gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name="lightspeed-agent" AND jsonPayload.request_id="<request-id>"' \
   --project=$GOOGLE_CLOUD_PROJECT
 
 # All MCP data access for an organization
-gcloud logging read 'jsonPayload.org_id="<org-id>" AND jsonPayload.message=~"mcp_jwt_forwarded"' \
+gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name="lightspeed-agent" AND jsonPayload.org_id="<org-id>" AND jsonPayload.message=~"mcp_jwt_forwarded"' \
   --project=$GOOGLE_CLOUD_PROJECT
 
 # All tool calls with data source tracking
-gcloud logging read 'jsonPayload.message=~"tool_call_completed"' \
+gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name="lightspeed-agent" AND jsonPayload.message=~"tool_call_completed"' \
   --project=$GOOGLE_CLOUD_PROJECT --limit=20
 ```
 
