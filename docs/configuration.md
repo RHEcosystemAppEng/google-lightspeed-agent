@@ -51,12 +51,12 @@ RED_HAT_SSO_CLIENT_SECRET=my-client-secret
 
 ### Red Hat Lightspeed MCP
 
-The MCP server runs as a sidecar container and provides tools for accessing Red Hat Insights APIs. The agent forwards the caller's JWT token to the MCP server, which uses it to authenticate with console.redhat.com on behalf of the user. See [MCP Integration](mcp-integration.md) for details.
+The MCP server runs as a separate Cloud Run service and provides tools for accessing Red Hat Insights APIs. The agent forwards the caller's JWT token to the MCP server, which uses it to authenticate with console.redhat.com on behalf of the user. See [MCP Integration](mcp-integration.md) for details.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `MCP_TRANSPORT_MODE` | `http` | MCP transport: `stdio`, `http`, or `sse` |
-| `MCP_SERVER_URL` | `http://localhost:8080` | MCP server URL (use 8081 for Podman to avoid A2A Inspector conflict) |
+| `MCP_SERVER_URL` | `http://localhost:8080` | MCP server URL (use HTTPS URL for Cloud Run production; 8081 for Podman) |
 | `MCP_READ_ONLY` | `true` | Enable read-only mode for MCP tools |
 
 **Development (stdio mode):**
@@ -67,12 +67,12 @@ MCP_TRANSPORT_MODE=stdio
 MCP_READ_ONLY=true
 ```
 
-**Production (http mode with sidecar):**
+**Production (http mode with MCP service):**
 
 ```bash
-# Agent connects to MCP server sidecar via HTTP
+# Agent connects to MCP server via HTTPS
 MCP_TRANSPORT_MODE=http
-MCP_SERVER_URL=http://localhost:8081  # Use 8081 for Podman (8080 for Cloud Run)
+MCP_SERVER_URL=http://localhost:8081  # Podman: use 8081. Cloud Run: set by deploy.sh (https:// URL)
 MCP_READ_ONLY=true
 ```
 

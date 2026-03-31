@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Red Hat Lightspeed Agent for Google Cloud — an A2A-ready (Agent-to-Agent protocol) AI agent providing access to Red Hat Insights, built on Google Agent Development Kit (ADK), Gemini 2.5 Flash, and a Red Hat Lightspeed MCP server sidecar. Integrates with Google Cloud Marketplace for provisioning, billing, and metering.
+Red Hat Lightspeed Agent for Google Cloud — an A2A-ready (Agent-to-Agent protocol) AI agent providing access to Red Hat Insights, built on Google Agent Development Kit (ADK), Gemini 2.5 Flash, and a Red Hat Lightspeed MCP server. Integrates with Google Cloud Marketplace for provisioning, billing, and metering.
 
 ## Common Commands
 
@@ -78,13 +78,15 @@ CI blocks merge on lint/test failures — catching issues locally saves round-tr
 
 ## Architecture
 
-### Two-Service Design
+### Three-Service Design
 
-The system runs as two separate FastAPI services with separate concerns:
+The system runs as three separate services:
 
-1. **Lightspeed Agent** (port 8000, `src/lightspeed_agent/main.py`) — The AI agent service. Scales to zero on Cloud Run. Handles A2A protocol requests (JSON-RPC 2.0 at `/`), serves the AgentCard at `/.well-known/agent.json`. Uses ADK `LlmAgent` with MCP tools loaded from the sidecar.
+1. **Lightspeed Agent** (port 8000, `src/lightspeed_agent/main.py`) — The AI agent service. Scales to zero on Cloud Run. Handles A2A protocol requests (JSON-RPC 2.0 at `/`), serves the AgentCard at `/.well-known/agent.json`. Uses ADK `LlmAgent` with MCP tools loaded from the MCP server.
 
 2. **Marketplace Handler** (port 8001, `src/lightspeed_agent/marketplace/app.py`) — Always-on service for Google Cloud Marketplace Pub/Sub provisioning events and Dynamic Client Registration (DCR). Has a single hybrid `/dcr` endpoint that routes Pub/Sub messages vs DCR requests based on request content.
+
+3. **MCP Server** — Red Hat Lightspeed MCP server providing Insights API tools. Runs as a separate Cloud Run service with `ingress: internal` (only reachable by the agent's service account).
 
 ### Database Isolation
 
@@ -105,7 +107,7 @@ Setting `SKIP_JWT_VALIDATION=true` bypasses auth (dev only, blocked when running
 
 ### MCP Integration
 
-The agent loads tools from a Red Hat Lightspeed MCP server running as a sidecar:
+The agent loads tools from a Red Hat Lightspeed MCP server (separate Cloud Run service):
 - Transport modes: `stdio` (dev), `http` (prod), `sse` (streaming) — configured via `MCP_TRANSPORT_MODE`
 - Read-only mode (`MCP_READ_ONLY=true`) filters to a safe subset of tools
 - Tool categories: Advisor, Inventory, Vulnerability, Remediations, Planning, Image Builder, Subscription Management, Content Sources

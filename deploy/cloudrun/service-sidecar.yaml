@@ -1,18 +1,20 @@
-# Cloud Run Service Configuration — MCP_DEPLOY_MODE=service
-# Declarative configuration for the Lightspeed Agent service.
+# Cloud Run Service Configuration — MCP_DEPLOY_MODE=sidecar
+# Declarative configuration for the Lightspeed Agent with MCP sidecar.
 #
-# This YAML is used when MCP_DEPLOY_MODE=service (the default).
-# For MCP_DEPLOY_MODE=sidecar, see service-sidecar.yaml.
+# This YAML is used when MCP_DEPLOY_MODE=sidecar.
+# For MCP_DEPLOY_MODE=service (the default), see service.yaml.
 #
-# The MCP server runs as a separate Cloud Run service (see mcp-service.yaml).
-# The agent connects to it over HTTPS using the MCP_SERVER_URL env var,
-# which is set automatically by deploy.sh after deployment.
+# The MCP server runs as a sidecar container inside the agent pod.
+# The agent connects to it via http://localhost:8080 (container-to-container).
+# No separate MCP Cloud Run service is needed.
 #
-# IMPORTANT: Deploy the MCP service BEFORE the agent so that deploy.sh can
-# discover the MCP URL and set MCP_SERVER_URL on the agent.
+# Note: Cloud Run doesn't support Quay.io directly. Copy the image to GCR:
+#   docker pull quay.io/redhat-services-prod/insights-management-tenant/insights-mcp/red-hat-lightspeed-mcp:latest
+#   docker tag quay.io/.../red-hat-lightspeed-mcp:latest gcr.io/${PROJECT_ID}/red-hat-lightspeed-mcp:latest
+#   docker push gcr.io/${PROJECT_ID}/red-hat-lightspeed-mcp:latest
 #
 # Usage:
-#   gcloud run services replace deploy/cloudrun/service.yaml \
+#   gcloud run services replace deploy/cloudrun/service-sidecar.yaml \
 #     --region=us-central1 --project=YOUR_PROJECT_ID
 #
 # Note: Replace ${PROJECT_ID} and ${REGION} with actual values before applying
@@ -88,10 +90,6 @@ spec:
             # Updated automatically by deploy.sh after deployment.
             - name: MARKETPLACE_HANDLER_URL
               value: "https://marketplace-handler.example.com"
-            # Logging and Audit Trail
-            # LOG_FORMAT=json enables structured audit logging with user_id,
-            # org_id, order_id, and request_id in every log record.  Cloud
-            # Logging parses these fields automatically for querying.
             - name: LOG_LEVEL
               value: "INFO"
             - name: LOG_FORMAT
@@ -113,13 +111,12 @@ spec:
             - name: SKIP_JWT_VALIDATION
               value: "false"
             # MCP Configuration
-            # The agent connects to the MCP server (separate Cloud Run service).
-            # MCP_SERVER_URL is auto-discovered and set by deploy.sh after
-            # the MCP service is deployed.  The placeholder below is overwritten.
+            # MCP server runs as a sidecar container in this pod.
+            # It is reachable at http://localhost:8080 (container-to-container).
             - name: MCP_TRANSPORT_MODE
               value: "http"
             - name: MCP_SERVER_URL
-              value: "https://MCP-SERVICE-URL-SET-BY-DEPLOY-SH"
+              value: "http://localhost:8080"
             - name: MCP_READ_ONLY
               value: "true"
             # Secrets from Secret Manager
@@ -177,6 +174,32 @@ spec:
               port: 8000
             periodSeconds: 30
             failureThreshold: 3
+
+        # =====================================================================
+        # Red Hat Lightspeed MCP Server (Sidecar)
+        # =====================================================================
+        # Provides MCP tools for interacting with Red Hat Insights APIs
+        # (Advisor, Inventory, Vulnerability, Remediations, etc.)
+        #
+        # The agent forwards the caller's JWT token to the MCP server via
+        # the Authorization header.  The MCP server uses this token to
+        # authenticate with console.redhat.com on behalf of the user.
+        #
+        # Sidecar container — no ports section (only the ingress container
+        # can declare ports in Cloud Run multi-container deployments).
+        - name: rh-lightspeed-mcp
+          image: ${MCP_IMAGE}
+          args:
+            - "--readonly"
+            - "http"
+            - "--port"
+            - "8080"
+            - "--host"
+            - "0.0.0.0"
+          resources:
+            limits:
+              cpu: "1"
+              memory: 512Mi
   traffic:
     - percent: 100
       latestRevision: true

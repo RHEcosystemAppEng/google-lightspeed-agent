@@ -4,7 +4,7 @@ This document explains how the Lightspeed Agent integrates with the Red Hat Ligh
 
 ## Overview
 
-The agent uses the [Red Hat Lightspeed MCP Server](https://github.com/RedHatInsights/insights-mcp) as a sidecar to access Red Hat Insights APIs. The MCP (Model Context Protocol) server provides tools that the agent can call to retrieve data from:
+The agent uses the [Red Hat Lightspeed MCP Server](https://github.com/RedHatInsights/insights-mcp) to access Red Hat Insights APIs. The MCP (Model Context Protocol) server provides tools that the agent can call to retrieve data from:
 
 - **Advisor**: System configuration recommendations
 - **Inventory**: Registered systems and host information
@@ -16,42 +16,37 @@ The agent uses the [Red Hat Lightspeed MCP Server](https://github.com/RedHatInsi
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                         Deployment Pod                          │
-│                                                                 │
-│  ┌─────────────────────┐      ┌─────────────────────────────┐   │
-│  │  Lightspeed Agent   │      │   Red Hat Lightspeed MCP    │   │
-│  │                     │      │   Server                    │   │
-│  │   ┌─────────────┐   │ HTTP │   ┌─────────────────────┐   │   │
-│  │   │   Gemini    │   │◄────►│   │   MCP Tools         │   │   │
-│  │   │   Model     │   │:8080 │   │   - advisor         │   │   │
-│  │   └─────────────┘   │      │   │   - inventory       │   │   │
-│  │          │          │      │   │   - vulnerability   │   │   │
-│  │          ▼          │      │   │   - remediations    │   │   │
-│  │   ┌─────────────┐   │      │   └─────────────────────┘   │   │
-│  │   │  ADK Agent  │   │      │             │               │   │
-│  │   └─────────────┘   │      │             │               │   │
-│  │                     │      │             ▼               │   │
-│  │   Port 8000         │      │   ┌─────────────────────┐   │   │
-│  └─────────────────────┘      │   │   OAuth2 Client     │   │   │
-│                               │   │   (Lightspeed)      │   │   │
-│                               │   └──────────┬──────────┘   │   │
-│                               │              │              │   │
-│                               └──────────────┼──────────────┘   │
-│                                              │                  │
-└──────────────────────────────────────────────┼──────────────────┘
-                                               │
-                                               ▼
-                                    ┌─────────────────────┐
-                                    │  console.redhat.com │
-                                    │                     │
-                                    │  - Advisor API      │
-                                    │  - Inventory API    │
-                                    │  - Vulnerability API│
-                                    │  - Remediations API │
-                                    │  - Patch API        │
-                                    │  - Image Builder API│
-                                    └─────────────────────┘
+┌─────────────────────┐       HTTPS        ┌─────────────────────────────┐
+│  Lightspeed Agent   │ ◄────────────────► │   Red Hat Lightspeed MCP    │
+│  (Cloud Run)        │                    │   Server (Cloud Run)        │
+│                     │                    │   ingress: internal         │
+│   ┌─────────────┐   │                    │   ┌─────────────────────┐   │
+│   │   Gemini    │   │                    │   │   MCP Tools         │   │
+│   │   Model     │   │                    │   │   - advisor         │   │
+│   └─────────────┘   │                    │   │   - inventory       │   │
+│          │          │                    │   │   - vulnerability   │   │
+│          ▼          │                    │   │   - remediations    │   │
+│   ┌─────────────┐   │                    │   └─────────────────────┘   │
+│   │  ADK Agent  │   │                    │             │               │
+│   └─────────────┘   │                    │             ▼               │
+│                     │                    │   ┌─────────────────────┐   │
+│   Port 8000         │                    │   │   OAuth2 Client     │   │
+└─────────────────────┘                    │   │   (Lightspeed)      │   │
+                                           │   └──────────┬──────────┘   │
+                                           │              │              │
+                                           └──────────────┼──────────────┘
+                                                          │
+                                                          ▼
+                                               ┌─────────────────────┐
+                                               │  console.redhat.com │
+                                               │                     │
+                                               │  - Advisor API      │
+                                               │  - Inventory API    │
+                                               │  - Vulnerability API│
+                                               │  - Remediations API │
+                                               │  - Patch API        │
+                                               │  - Image Builder API│
+                                               └─────────────────────┘
 ```
 
 ## Credential Flow
@@ -116,15 +111,11 @@ MCP_SERVER_MODE: http
 MCP_SERVER_PORT: 8081
 ```
 
-**Cloud Run deployment** (port 8080 for sidecar):
+**Cloud Run deployment** (separate service, HTTPS):
 ```yaml
-# Agent configuration
+# Agent configuration (MCP_SERVER_URL set automatically by deploy.sh)
 MCP_TRANSPORT_MODE: http
-MCP_SERVER_URL: http://localhost:8080
-
-# MCP server configuration
-MCP_SERVER_MODE: http
-MCP_SERVER_PORT: 8080
+MCP_SERVER_URL: https://rh-lightspeed-mcp-xxxxx.run.app
 ```
 
 ### stdio Transport (Development)
@@ -162,9 +153,10 @@ containers:
 
 ### Cloud Run
 
-The MCP server runs as a sidecar container in the Cloud Run service:
+The MCP server runs as a separate Cloud Run service (see `deploy/cloudrun/mcp-service.yaml`). The agent connects to it over HTTPS:
 
 ```yaml
+# Agent service (service.yaml)
 containers:
   - name: lightspeed-agent
     # ... agent configuration ...
@@ -172,11 +164,10 @@ containers:
       - name: MCP_TRANSPORT_MODE
         value: "http"
       - name: MCP_SERVER_URL
-        value: "http://localhost:8080"
-
-  - name: insights-mcp
-    image: ghcr.io/redhatinsights/red-hat-lightspeed-mcp:latest
+        value: "https://rh-lightspeed-mcp-xxxxx.run.app"  # Set by deploy.sh
 ```
+
+The MCP service uses `ingress: internal` so it is only reachable from the agent's service account in the same GCP project. `deploy.sh` auto-discovers the MCP URL and sets `MCP_SERVER_URL` on the agent.
 
 ## Available Tools
 

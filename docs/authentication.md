@@ -8,7 +8,7 @@ The system uses three distinct authentication flows:
 
 1. **Dynamic Client Registration (DCR)** -- Handler creates per-order OAuth clients in Red Hat SSO
 2. **Token Introspection** -- Agent validates access tokens via Red Hat SSO introspection endpoint (RFC 7662) and checks for `api.console` and `api.ocm` scopes
-3. **MCP JWT Pass-Through** -- Agent forwards the caller's JWT token to the MCP sidecar, which uses it to call console.redhat.com APIs on behalf of the user
+3. **MCP JWT Pass-Through** -- Agent forwards the caller's JWT token to the MCP server, which uses it to call console.redhat.com APIs on behalf of the user
 
 Clients obtain access tokens directly from Red Hat SSO using their DCR-issued credentials. The agent acts purely as a **Resource Server** — it validates incoming tokens but does not proxy or participate in the OAuth authorization flow.
 
@@ -73,7 +73,7 @@ Clients obtain access tokens directly from Red Hat SSO using their DCR-issued cr
                                                               | |                |               |
                                                               | |                v               |
                                                               | |  +----------------------------+|
-                                                              | +--| MCP Sidecar (8081)         ||
+                                                              | +--| MCP Server (internal)      ||
                                                               |    | 8. Calls APIs using the    ||
                                                               |    |    forwarded JWT token     ||
                                                               |    +-------------+--------------+|
@@ -100,8 +100,8 @@ Clients obtain access tokens directly from Red Hat SSO using their DCR-issued cr
 | 4 | Handler -> Red Hat SSO | Create OAuth client via GMA SSO API |
 | 5 | Client -> Red Hat SSO | Client obtains access token directly from Red Hat SSO (e.g., `client_credentials` grant) |
 | 6 | Agent -> Red Hat SSO | Introspect token on every A2A request; check `api.console` and `api.ocm` scopes |
-| 7 | Agent -> MCP Sidecar | Tool call with caller's JWT token in Authorization header |
-| 8 | MCP Sidecar -> console.redhat.com | Call Insights APIs using the forwarded JWT token |
+| 7 | Agent -> MCP Server | Tool call with caller's JWT token in Authorization header |
+| 8 | MCP Server -> console.redhat.com | Call Insights APIs using the forwarded JWT token |
 
 ## Dynamic Client Registration (DCR)
 
@@ -173,9 +173,9 @@ A test script is available at `scripts/test_dcr.py` that signs a software_statem
 - **Secret encryption**: Client secrets are encrypted with Fernet before storage in PostgreSQL.
 - **Client secrets**: Encrypted with Fernet before storage in PostgreSQL.
 
-## MCP Sidecar Authentication
+## MCP Server Authentication
 
-The agent forwards the caller's JWT token to the MCP sidecar via the `Authorization: Bearer <token>` header on every tool call. The MCP sidecar uses this token to authenticate with console.redhat.com APIs (Advisor, Inventory, Vulnerability, etc.) on behalf of the calling user. See [MCP Integration](mcp-integration.md) for full details.
+The agent forwards the caller's JWT token to the MCP server via the `Authorization: Bearer <token>` header on every tool call. The MCP server uses this token to authenticate with console.redhat.com APIs (Advisor, Inventory, Vulnerability, etc.) on behalf of the calling user. See [MCP Integration](mcp-integration.md) for full details.
 
 ## Token Introspection
 
@@ -235,7 +235,7 @@ default: `openid,profile,email,api.console,api.ocm`).  Tokens carrying scopes
 outside this list are rejected with **403 Forbidden**.
 
 This is a defense-in-depth measure: since the agent forwards the caller's JWT
-to the MCP sidecar and downstream APIs, restricting scopes prevents tokens with
+to the MCP server and downstream APIs, restricting scopes prevents tokens with
 elevated privileges from being exercised against those services.
 
 All permitted scopes must be explicitly listed in `AGENT_ALLOWED_SCOPES`.

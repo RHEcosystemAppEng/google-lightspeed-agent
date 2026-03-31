@@ -6,10 +6,11 @@ This document describes the architecture of the Red Hat Lightspeed Agent for Goo
 
 The Red Hat Lightspeed Agent for Google Cloud is an A2A-ready (Agent-to-Agent) service that provides AI-powered access to Red Hat Insights. It is built using Google's Agent Development Kit (ADK) and integrates with Red Hat's MCP (Model Context Protocol) server for Insights data access.
 
-The system consists of **two separate services**:
+The system consists of **three separate services**:
 
 1. **Marketplace Handler** - Always running service that handles provisioning and client registration
-2. **Lightspeed Agent** - The AI agent that handles user interactions (deployed after provisioning)
+2. **MCP Server** - Red Hat Lightspeed MCP server providing Insights API tools (internal only)
+3. **Lightspeed Agent** - The AI agent that handles user interactions (deployed after provisioning)
 
 ## Architecture Diagram
 
@@ -69,41 +70,44 @@ The system consists of **two separate services**:
 │  │  │                        Agent Core                               │      │  │
 │  │  │                  (Google ADK + Gemini)                          │      │  │
 │  │  └─────────────────────────────────────────────────────────────────┘      │  │
-│  │                              │                                            │  │
-│  │                              ▼                                            │  │
-│  │  ┌─────────────────────────────────────────────────────────────────┐      │  │
-│  │  │                      MCP Sidecar                                │      │  │
-│  │  │              (Red Hat Lightspeed MCP Server)                    │      │  │
-│  │  └─────────────────────────────────────────────────────────────────┘      │  │
 │  └───────────────────────────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────────────────────────┘
          │                    │
          ▼                    ▼
-┌─────────────┐      ┌─────────────────────────┐
-│   Gemini    │      │  Red Hat Insights APIs  │
-│     API     │      │  (via MCP Server)       │
-│  (Vertex)   │      │  - Advisor              │
-└─────────────┘      │  - Vulnerability        │
-                     │  - Patch                │
-                     │  - Content              │
-                     └─────────────────────────┘
+┌─────────────┐    ┌─────────────────────────────────────────┐
+│   Gemini    │    │     MCP Server Service                  │
+│     API     │    │     (Cloud Run - ingress: internal)     │
+│  (Vertex)   │    │     HTTPS from Agent                    │
+└─────────────┘    └────────────────┬────────────────────────┘
+                                    │
+                                    ▼
+                          ┌─────────────────────────┐
+                          │  Red Hat Insights APIs  │
+                          │  (via MCP Server)       │
+                          │  - Advisor              │
+                          │  - Vulnerability        │
+                          │  - Patch                │
+                          │  - Content              │
+                          └─────────────────────────┘
 ```
 
-## Two-Service Architecture
+## Three-Service Architecture
 
-### Why Two Services?
+### Why Three Services?
 
-The system is split into two services for important operational reasons:
+The system is split into three services for important operational reasons:
 
 | Service | Purpose | Lifecycle |
 |---------|---------|-----------|
 | **Marketplace Handler** | Handles provisioning and DCR | Always running (minScale=1) |
+| **MCP Server** | Red Hat Insights API tools | Scale to zero (stateless) |
 | **Lightspeed Agent** | AI agent for user queries | Deployed after provisioning |
 
 1. **Marketplace Handler must be always running** to receive Pub/Sub events from Google Cloud Marketplace for account and entitlement approvals
-2. **Agent can be deployed on-demand** after a customer has been provisioned
-3. **Separation of concerns**: Provisioning logic is isolated from agent logic
-4. **Independent scaling**: Handler scales for provisioning traffic, Agent scales for user traffic
+2. **MCP Server scales independently** from the agent — stateless, can scale to zero
+3. **Agent can be deployed on-demand** after a customer has been provisioned
+4. **Separation of concerns**: Provisioning logic, MCP tools, and agent logic are isolated
+5. **Independent scaling**: Each service scales for its own traffic pattern
 
 ## Components
 
@@ -141,9 +145,9 @@ The AI agent built with Google ADK:
 - **Tool Orchestration**: Manages tool calls to MCP server
 - **Session Management**: Maintains conversation context
 
-### MCP Sidecar
+### MCP Server Service
 
-Runs as a sidecar container connecting to Red Hat Insights:
+Runs as a separate Cloud Run service connecting to Red Hat Insights:
 
 - **Tool Discovery**: Discovers available Insights tools
 - **Tool Execution**: Executes tools and returns results
@@ -236,7 +240,7 @@ This flow handles actual user interactions with the agent:
 3. Query passed to Agent Core
 4. Agent processes query with Gemini
 5. Agent calls MCP tools as needed
-6. MCP sidecar queries Red Hat Insights APIs
+6. MCP service queries Red Hat Insights APIs
 7. Results aggregated and returned to user
 ```
 
@@ -287,7 +291,7 @@ src/lightspeed_agent/
 |-------|---------|------|---------|
 | `lightspeed-agent` | Agent | 8000 | A2A protocol, user queries |
 | `marketplace-handler` | Handler | 8001 | Pub/Sub events, DCR |
-| `insights-mcp` | MCP Sidecar | 8081 | Red Hat Lightspeed tools |
+| `insights-mcp` | MCP Service | 8080 | Red Hat Lightspeed tools |
 
 ## External Dependencies
 
@@ -314,6 +318,7 @@ src/lightspeed_agent/
 | Service | Min Instances | Max Instances | Notes |
 |---------|---------------|---------------|-------|
 | Marketplace Handler | 1 | 5 | Always running for Pub/Sub |
+| MCP Server | 0 | 4 | Stateless; should be >= agent maxScale |
 | Lightspeed Agent | 0 | 10 | Scale to zero when idle |
 
 ### Resource Requirements
@@ -322,7 +327,7 @@ src/lightspeed_agent/
 |---------|-----|--------|-------|
 | Marketplace Handler | 1 | 512Mi | Lightweight, event-driven |
 | Lightspeed Agent | 2 | 2Gi | AI processing, MCP calls |
-| MCP Sidecar | 0.5 | 256Mi | Red Hat Insights queries |
+| MCP Server | 1 | 512Mi | Red Hat Insights queries |
 
 ### Connection Pooling
 
