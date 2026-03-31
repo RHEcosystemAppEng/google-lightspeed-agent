@@ -452,9 +452,9 @@ google-auth==2.48.0 \
     #   google-cloud-storage
     #   google-cloud-trace
     #   google-genai
-google-auth-httplib2==0.3.0 \
-    --hash=sha256:177898a0175252480d5ed916aeea183c2df87c1f9c26705d74ae6b951c268b0b \
-    --hash=sha256:426167e5df066e3f5a0fc7ea18768c08e7296046594ce4c8c409c2457dd1f776
+google-auth-httplib2==0.3.1 \
+    --hash=sha256:0af542e815784cb64159b4469aa5d71dd41069ba93effa006e1916b1dcd88e55 \
+    --hash=sha256:682356a90ef4ba3d06548c37e9112eea6fc00395a11b0303a644c1a86abc275c
     # via google-api-python-client
 google-cloud-aiplatform==1.139.0 \
     --hash=sha256:3190b255cf510bce9e4b1adc8162ab0b3f9eca48801657d7af058d8e1d5ad9d0 \
