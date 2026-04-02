@@ -527,9 +527,9 @@ google-cloud-service-control==1.18.0 \
     --hash=sha256:645fac1f03410055d8f83b12e3f24a4a386ca45dfca052f70de609952ecbd1bd \
     --hash=sha256:7ab97cbf55da9934cc402fa74c4bf066e699c0ef863f8abeba7044dd8723c0e4
     # via lightspeed-agent (pyproject.toml)
-google-cloud-spanner==3.63.0 \
-    --hash=sha256:6ffae0ed589bbbd2d8831495e266198f3d069005cfe65c664448c9a727c88e7b \
-    --hash=sha256:e2a4fb3bdbad4688645f455d498705d3f935b7c9011f5c94c137b77569b47a62
+google-cloud-spanner==3.64.0 \
+    --hash=sha256:02c26601eaaef6abba78efe5c55187b16550aeab0671ed0a65ab2d78bf7c019e \
+    --hash=sha256:9dd8b268c511def6bef118f9d8d9cbea98509727d13388a8365d5b72e13acf7c
     # via
     #   google-adk
     #   sqlalchemy-spanner
