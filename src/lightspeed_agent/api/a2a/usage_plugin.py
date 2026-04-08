@@ -1,5 +1,6 @@
 """Usage tracking plugin with per-order metrics."""
 
+import asyncio
 import logging
 from typing import Any
 
@@ -11,9 +12,12 @@ from google.adk.tools.base_tool import BaseTool
 from google.adk.tools.tool_context import ToolContext
 
 from lightspeed_agent.auth.middleware import get_request_order_id
+from lightspeed_agent.config import get_settings
 from lightspeed_agent.metering import get_usage_repository
 
 logger = logging.getLogger(__name__)
+
+_TOOL_LIMIT_CODE = "usage_tool_call_limit_exceeded"
 
 
 def _resolve_order_id() -> str | None:
@@ -27,6 +31,8 @@ class UsageTrackingPlugin(BasePlugin):
     def __init__(self) -> None:
         super().__init__(name="usage_tracking")
         self._usage_repo = get_usage_repository()
+        self._tool_budget_lock = asyncio.Lock()
+        self._tool_calls_by_invocation: dict[str, int] = {}
 
     async def before_run_callback(self, *, invocation_context: InvocationContext) -> None:
         """Track request count at start of each run."""
@@ -68,6 +74,49 @@ class UsageTrackingPlugin(BasePlugin):
             )
 
         return None  # Don't modify the response
+
+    async def before_tool_callback(
+        self,
+        *,
+        tool: BaseTool,
+        tool_args: dict[str, Any],
+        tool_context: ToolContext,
+    ) -> dict[str, Any] | None:
+        """Enforce optional per-invocation tool budget before MCP execution."""
+        limit = get_settings().max_tool_calls_per_invocation
+        if limit <= 0:
+            return None
+
+        inv_id = tool_context.invocation_id
+        async with self._tool_budget_lock:
+            current = self._tool_calls_by_invocation.get(inv_id, 0)
+            if current >= limit:
+                tool_name = getattr(tool, "name", type(tool).__name__)
+                logger.warning(
+                    "Tool call blocked: invocation %s already used %s tool call(s) "
+                    "(max_tool_calls_per_invocation=%s); attempted tool=%s",
+                    inv_id,
+                    current,
+                    limit,
+                    tool_name,
+                )
+                return {
+                    "error": (
+                        f"Exceeded maximum of {limit} tool call(s) for this agent run. "
+                        "Start a new message or ask your administrator to raise "
+                        "MAX_TOOL_CALLS_PER_INVOCATION if appropriate."
+                    ),
+                    "code": _TOOL_LIMIT_CODE,
+                }
+            self._tool_calls_by_invocation[inv_id] = current + 1
+        return None
+
+    async def after_run_callback(self, *, invocation_context: InvocationContext) -> None:
+        """Drop per-invocation tool budget state when the run completes."""
+        inv_id = invocation_context.invocation_id
+        async with self._tool_budget_lock:
+            self._tool_calls_by_invocation.pop(inv_id, None)
+        return None
 
     async def after_tool_callback(
         self,

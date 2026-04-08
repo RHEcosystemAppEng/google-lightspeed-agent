@@ -157,16 +157,18 @@ With authentication, rate limits apply per `order_id` and `user_id` (from the to
 
 ## Rate Limiting vs Usage Tracking
 
-The agent has two separate systems for managing API usage:
+The agent combines **HTTP-level throttling**, **usage metering**, and an optional **per-run tool budget**. They are separate layers:
 
-| System | Purpose | Mechanism |
-|--------|---------|-----------|
-| **Rate Limiting** | Prevent abuse | FastAPI middleware, rejects excess requests |
-| **Usage Tracking** | Monitor consumption | ADK plugin, counts tokens and tool calls |
+| Layer | What it limits | When it runs | Shared across replicas? |
+|-------|----------------|--------------|-------------------------|
+| **HTTP rate limiting** | Incoming A2A POSTs per principal (minute/hour windows) | FastAPI middleware before the ADK runner | Yes, when all instances use the same Redis |
+| **Usage tracking (DB)** | Requests, tokens, completed tool calls for billing/analytics | ADK plugin (`UsageTrackingPlugin`) | Yes, all instances write to the same database |
+| **Per-invocation tool budget** | How many tools may **start** in one agent run | ADK `before_tool_callback` | **No (today):** in-memory per process; see [Per-invocation tool budget](metering.md#per-invocation-tool-budget) and [proposed shared counters](metering.md#proposed-enhancements-persistent--shared-counters) |
 
-Rate limiting happens **before** the request is processed (at the middleware layer), while usage tracking happens **during** request processing (via ADK plugin callbacks).
+**Comparison in plain terms:** Redis rate limits stop a client from opening too many **HTTP conversations**. The tool budget stops a **single** conversation from hammering MCP with an unbounded tool–model loop. Metering records what actually ran for reporting, including tools that completed (blocked tools are not counted in `after_tool_callback`).
 
 ## Notes
 
 - Rate limits are enforced across replicas as long as they share the same Redis instance.
 - The service verifies Redis connectivity at startup and fails fast when Redis is unavailable.
+- Tool budgets are **not** distributed across replicas until a shared store (for example Redis with TTL keyed by `invocation_id`) is implemented; see [metering.md](metering.md#proposed-enhancements-persistent--shared-counters).

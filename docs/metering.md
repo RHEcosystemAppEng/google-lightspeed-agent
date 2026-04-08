@@ -35,7 +35,11 @@ All usage tracking is handled by the `UsageTrackingPlugin` in `src/lightspeed_ag
 │  │                                                                 │    │
 │  │  after_model_callback ───► Extract token counts from response   │    │
 │  │                                                                 │    │
-│  │  after_tool_callback ────► Increment tool call counter          │    │
+│  │  before_tool_callback ───► Optional per-run tool budget         │    │
+│  │                                                                 │    │
+│  │  after_tool_callback ────► Increment tool call counter (DB)     │    │
+│  │                                                                 │    │
+│  │  after_run_callback ─────► Clear in-memory tool budget state     │    │
 │  │                                                                 │    │
 │  └─────────────────────────────────────────────────────────────────┘    │
 │                                    │                                    │
@@ -89,7 +93,30 @@ app = App(
 
 ## UsageTrackingPlugin Implementation
 
-The `UsageTrackingPlugin` (`src/lightspeed_agent/api/a2a/usage_plugin.py`) implements three callbacks:
+The `UsageTrackingPlugin` (`src/lightspeed_agent/api/a2a/usage_plugin.py`) implements the metering callbacks below, plus optional **per-invocation tool budgeting** (`before_tool_callback` / `after_run_callback`).
+
+## Per-invocation tool budget
+
+When `MAX_TOOL_CALLS_PER_INVOCATION` is greater than zero, the plugin counts how many tools are **started** in a single ADK invocation (same `invocation_id` on `ToolContext`). Before each tool runs, if the count is already at the limit, `before_tool_callback` returns a short-circuit **dict** (ADK skips executing the tool and does not run `after_tool_callback` for that call). Allowed tools increment the in-memory counter; when the run ends, `after_run_callback` removes the counter for that invocation so memory does not grow unbounded across requests.
+
+- **Metering interaction:** Blocked tools never reach `after_tool_callback`, so they are **not** persisted as `tool_calls` in `UsageRepository`.
+- **Relation to HTTP rate limits:** HTTP rate limiting (see [Rate limiting](rate-limiting.md)) bounds **incoming A2A requests**. The tool budget bounds **depth of a single agent run** (tool–model loops). They address different abuse patterns.
+
+### Multi-instance caveat (initial limitation)
+
+The budget uses an **in-memory** `dict` guarded by `asyncio.Lock` inside each agent process. It is **not** shared across Cloud Run instances, Podman replicas, or multi-worker Uvicorn processes. A tenant that spreads traffic across N instances effectively gets up to **N × limit** tool starts per logical “burst” if requests land on different instances, and **invocation_id** is only consistent within the process that handled the run.
+
+**Operational mitigations today:** keep `maxScale` predictable, use **session affinity** if your platform supports it for long-lived runs, or set a conservative limit accepting per-instance enforcement.
+
+### Proposed enhancements (persistent / shared counters)
+
+For **cross-replica, accurate** per-run caps, a future iteration could:
+
+1. **Redis (recommended):** Store `INCR` (or `INCRBY`) under a key such as `lightspeed:tool_budget:{invocation_id}` with **TTL** slightly above the max agent timeout (e.g. Cloud Run `timeoutSeconds`). `before_tool` would `INCR` and compare to `MAX_TOOL_CALLS_PER_INVOCATION`; optionally use a small Lua script for atomic check-and-set. Reuse the same Redis deployment as rate limiting or a dedicated prefix.
+2. **Database:** A row keyed by `invocation_id` or `(order_id, run_id)` with a monotonic `tool_starts` column and optimistic locking; heavier than Redis but consistent with existing PostgreSQL.
+3. **Runner hints:** If the platform exposes a stable **run identifier** in headers or metadata, prefer that over ad-hoc IDs so budgets survive internal retries more predictably.
+
+Until one of the above is implemented, treat `MAX_TOOL_CALLS_PER_INVOCATION` as a **per-process safety rail**, not a strict global quota.
 
 ### Request Counting
 
@@ -149,7 +176,7 @@ async def after_tool_callback(
     return None  # Don't modify the result
 ```
 
-This callback fires after every MCP tool invocation, persisting a tool-call increment for the current order.
+This callback fires after every MCP tool invocation, persisting a tool-call increment for the current order (skipped when `before_tool_callback` blocks the tool).
 
 ## Storage: UsageRepository
 
@@ -302,11 +329,13 @@ app = App(
 - **Retry on failure**: Failed reports are queued and retried with configurable max attempts; rows are released on failure for re-claim on retry
 - **Stale claim recovery**: Rows claimed by a crashed worker (never marked or released) are released at the start of each hourly run; threshold configurable via `METERING_STALE_CLAIM_MINUTES`
 - **Automatic backfill**: Unreported periods (from scheduler downtime or stale releases) are reported on each hourly run; configurable via `METERING_BACKFILL_MAX_AGE_HOURS` (default 7 days) and `METERING_BACKFILL_LIMIT_PER_RUN` (default 20)
+- **Optional per-run tool budget**: Configurable via `MAX_TOOL_CALLS_PER_INVOCATION`; in-process enforcement with documented multi-instance limits and a Redis/DB upgrade path (see [Per-invocation tool budget](#per-invocation-tool-budget))
 
 ## Configuration
 
 | Variable | Default | Description |
 |----------|---------|-------------|
+| `MAX_TOOL_CALLS_PER_INVOCATION` | 0 | Max tool starts per ADK invocation; `0` disables (in-process only; see [Per-invocation tool budget](#per-invocation-tool-budget)) |
 | `METERING_STALE_CLAIM_MINUTES` | 15 | Release rows claimed longer than this (worker crash recovery) |
 | `METERING_BACKFILL_MAX_AGE_HOURS` | 168 | Backfill only periods within this many hours (7 days) |
 | `METERING_BACKFILL_LIMIT_PER_RUN` | 20 | Max unreported periods to process per backfill run |

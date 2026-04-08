@@ -1,6 +1,6 @@
 """Tests for usage tracking plugin persistence behavior."""
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -110,4 +110,68 @@ class TestUsageTrackingPlugin:
             output_tokens=0,
             tool_calls=1,
         )
+
+
+def _tool_context(invocation_id: str) -> MagicMock:
+    ctx = MagicMock()
+    ctx.invocation_id = invocation_id
+    return ctx
+
+
+def _invocation_context(invocation_id: str) -> MagicMock:
+    ctx = MagicMock()
+    ctx.invocation_id = invocation_id
+    return ctx
+
+
+class TestUsageToolCallBudget:
+    """Per-invocation tool budget (before_tool_callback)."""
+
+    @pytest.mark.asyncio
+    async def test_before_tool_no_enforcement_when_limit_zero(self):
+        """With limit 0, every before_tool call is allowed."""
+        settings = MagicMock(max_tool_calls_per_invocation=0)
+        tool = MagicMock()
+        tool.name = "t"
+        tc = _tool_context("inv-a")
+        with patch("lightspeed_agent.api.a2a.usage_plugin.get_settings", return_value=settings):
+            plugin = usage_plugin.UsageTrackingPlugin()
+            for _ in range(5):
+                assert await plugin.before_tool_callback(
+                    tool=tool, tool_args={}, tool_context=tc
+                ) is None
+
+    @pytest.mark.asyncio
+    async def test_before_tool_blocks_after_limit(self):
+        """Allow exactly N tool starts, then return a short-circuit error dict."""
+        settings = MagicMock(max_tool_calls_per_invocation=2)
+        tool = MagicMock()
+        tool.name = "t"
+        tc = _tool_context("inv-limit")
+        with patch("lightspeed_agent.api.a2a.usage_plugin.get_settings", return_value=settings):
+            plugin = usage_plugin.UsageTrackingPlugin()
+            kwargs = {"tool": tool, "tool_args": {}, "tool_context": tc}
+            assert await plugin.before_tool_callback(**kwargs) is None
+            assert await plugin.before_tool_callback(**kwargs) is None
+            blocked = await plugin.before_tool_callback(**kwargs)
+            assert blocked is not None
+            assert blocked["code"] == usage_plugin._TOOL_LIMIT_CODE
+            assert "Exceeded maximum of 2" in blocked["error"]
+
+    @pytest.mark.asyncio
+    async def test_after_run_clears_budget_for_next_run_same_plugin(self):
+        """after_run_callback drops counters so a new run can use the budget again."""
+        settings = MagicMock(max_tool_calls_per_invocation=1)
+        tool = MagicMock()
+        tool.name = "t"
+        tc = _tool_context("inv-reset")
+        inv = _invocation_context("inv-reset")
+        with patch("lightspeed_agent.api.a2a.usage_plugin.get_settings", return_value=settings):
+            plugin = usage_plugin.UsageTrackingPlugin()
+            kwargs = {"tool": tool, "tool_args": {}, "tool_context": tc}
+            assert await plugin.before_tool_callback(**kwargs) is None
+            blocked = await plugin.before_tool_callback(**kwargs)
+            assert blocked is not None
+            await plugin.after_run_callback(invocation_context=inv)
+            assert await plugin.before_tool_callback(**kwargs) is None
 

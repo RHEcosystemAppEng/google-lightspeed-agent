@@ -225,10 +225,14 @@ GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
 
 ### Usage Tracking
 
-Usage tracking is built into the agent via the ADK plugin system. No configuration required for basic tracking.
+Usage tracking is built into the agent via the ADK plugin system. No database configuration is required for basic tracking.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
+| `MAX_TOOL_CALLS_PER_INVOCATION` | `0` | Cap MCP tool executions per agent run (`0` disables). Per-process memory only; see [metering.md](metering.md#per-invocation-tool-budget). |
+| `METERING_STALE_CLAIM_MINUTES` | `15` | Release usage rows claimed longer than this (worker crash recovery) |
+| `METERING_BACKFILL_MAX_AGE_HOURS` | `168` | Backfill only periods within this window (default 7 days) |
+| `METERING_BACKFILL_LIMIT_PER_RUN` | `20` | Max unreported periods to process per backfill run |
 | `LOG_LEVEL` | `INFO` | Set to `DEBUG` to see detailed usage logs |
 
 See [Usage Tracking and Metering](metering.md) for details on the plugin system and how to extend it.

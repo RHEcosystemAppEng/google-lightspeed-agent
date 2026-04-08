@@ -173,6 +173,9 @@ All configuration is via environment variables, managed through Pydantic setting
 **Agent:**
 - `AGENT_HOST`, `AGENT_PORT`
 
+**Usage / metering:**
+- `MAX_TOOL_CALLS_PER_INVOCATION` (per-run MCP tool cap; `0` disables; in-process only)
+
 **Service Control:**
 - `SERVICE_CONTROL_SERVICE_NAME`, `SERVICE_CONTROL_ENABLED`
 

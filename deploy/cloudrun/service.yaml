@@ -154,6 +154,10 @@ spec:
               value: "60"
             - name: RATE_LIMIT_REQUESTS_PER_HOUR
               value: "1000"
+            # Optional: max MCP tool executions per agent run (0 = unlimited).
+            # Counter is in-memory per Cloud Run instance; see docs/metering.md.
+            - name: MAX_TOOL_CALLS_PER_INVOCATION
+              value: "0"
           # Health checks
           startupProbe:
             httpGet:

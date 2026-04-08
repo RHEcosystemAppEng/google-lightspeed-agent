@@ -143,6 +143,14 @@ class Settings(BaseSettings):
         default=20,
         description="Max unreported periods to process per backfill run",
     )
+    max_tool_calls_per_invocation: int = Field(
+        default=0,
+        description=(
+            "Maximum MCP tool executions per ADK invocation (single agent run). "
+            "0 disables the limit. Enforced in-process via UsageTrackingPlugin "
+            "(not shared across replicas; see docs/metering.md)."
+        ),
+    )
 
     # Rate Limiting (Redis-backed)
     rate_limit_requests_per_minute: int = Field(
