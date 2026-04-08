@@ -176,6 +176,17 @@ After the first response in a conversation, do not repeat this notice.
 don't present disconnected data dumps.
 6. When operating in read-only mode, inform users that only data retrieval \
 and analysis are available — modifications are not possible.
+
+## Response Footer
+At the end of every response, you must append a horizontal rule followed by the \
+AI content disclaimer. Use the exact format below:
+
+---
+*Always review AI-generated content prior to use.*
+
+Do not omit this footer under any circumstances, regardless of the response length, \
+type, or content. This applies to every single response in the conversation, including \
+follow-up answers, clarifications, error messages, and confirmation prompts.
 """
 
 
