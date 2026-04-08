@@ -3,18 +3,25 @@
 # Google Cloud Run Deployment Script
 # =============================================================================
 #
-# Deploys BOTH services to Google Cloud Run:
-# 1. marketplace-handler - Handles DCR and Pub/Sub events (always running)
-# 2. lightspeed-agent - A2A agent with MCP sidecar (runs after provisioning)
+# Deploys services to Google Cloud Run.  The number of services depends on
+# MCP_DEPLOY_MODE (default: "service"):
 #
-# Uses the YAML service configs (service.yaml and marketplace-handler.yaml)
-# with variable substitution to deploy each service.
+#   service  — 3 Cloud Run services:
+#     1. marketplace-handler  – DCR + Pub/Sub events (always running)
+#     2. rh-lightspeed-mcp    – MCP server for Insights APIs (internal)
+#     3. lightspeed-agent     – A2A agent (runs after provisioning)
+#
+#   sidecar  — 2 Cloud Run services:
+#     1. marketplace-handler  – DCR + Pub/Sub events (always running)
+#     2. lightspeed-agent     – A2A agent with MCP sidecar container
+#
+# Uses the YAML service configs with variable substitution to deploy each service.
 #
 # Usage:
 #   ./deploy/cloudrun/deploy.sh [OPTIONS]
 #
 # Options:
-#   --service <service>       Which service to deploy: all, handler, agent
+#   --service <service>       Which service to deploy: all, handler, mcp, agent
 #                             (default: all)
 #   --image <image>           Container image for the agent
 #                             (default: gcr.io/$PROJECT_ID/lightspeed-agent:latest)
@@ -25,16 +32,27 @@
 #   --allow-unauthenticated   Allow public access
 #   --build                   Build images before deploying
 #
-# Architecture:
-#   ┌─────────────────────────┐     ┌─────────────────────────┐
-#   │  Marketplace Handler    │     │   Lightspeed Agent      │
-#   │  (Cloud Run #1)         │     │    (Cloud Run #2)       │
-#   │                         │     │                         │
-#   │  - POST /dcr            │     │  - POST / (A2A)         │
-#   │  - Pub/Sub push         │     │  - /.well-known/agent   │
-#   │  - Account approval     │     │  - OAuth flow           │
-#   │  - GMA SSO API          │     │  - MCP sidecar          │
-#   └─────────────────────────┘     └─────────────────────────┘
+# Architecture (MCP_DEPLOY_MODE=service):
+#   ┌─────────────────────────┐  ┌──────────────────────┐  ┌─────────────────────────┐
+#   │  Marketplace Handler    │  │  MCP Server          │  │   Lightspeed Agent      │
+#   │  (Cloud Run #1)         │  │  (Cloud Run #2)      │  │   (Cloud Run #3)        │
+#   │                         │  │  ingress: internal   │  │                         │
+#   │  - POST /dcr            │  │  - Insights APIs     │  │  - POST / (A2A)         │
+#   │  - Pub/Sub push         │  │  - Advisor, Inventory│  │  - /.well-known/agent   │
+#   │  - Account approval     │  │  - Vulnerability     │  │  - OAuth flow           │
+#   │  - GMA SSO API          │  │  - Remediations      │  │  - Calls MCP via HTTPS  │
+#   └─────────────────────────┘  └──────────────────────┘  └─────────────────────────┘
+#
+# Architecture (MCP_DEPLOY_MODE=sidecar):
+#   ┌─────────────────────────┐  ┌──────────────────────────────────────────┐
+#   │  Marketplace Handler    │  │   Lightspeed Agent (Cloud Run #2)       │
+#   │  (Cloud Run #1)         │  │  ┌─────────────┐  ┌──────────────────┐  │
+#   │                         │  │  │  Agent      │  │  MCP Server      │  │
+#   │  - POST /dcr            │  │  │  (8000)     │  │  (sidecar, 8080) │  │
+#   │  - Pub/Sub push         │  │  │  A2A, OAuth │  │  Insights APIs   │  │
+#   │  - Account approval     │  │  │             │──│  localhost:8080   │  │
+#   │  - GMA SSO API          │  │  └─────────────┘  └──────────────────┘  │
+#   └─────────────────────────┘  └──────────────────────────────────────────┘
 #
 # Prerequisites:
 #   - Run setup.sh first to configure GCP services
@@ -63,6 +81,10 @@ REGION="${GOOGLE_CLOUD_LOCATION:-us-central1}"
 SERVICE_NAME="${SERVICE_NAME:-lightspeed-agent}"
 SERVICE_ACCOUNT_NAME="${SERVICE_ACCOUNT_NAME:-${SERVICE_NAME}}"
 HANDLER_SERVICE_NAME="${HANDLER_SERVICE_NAME:-marketplace-handler}"
+MCP_SERVICE_NAME="${MCP_SERVICE_NAME:-rh-lightspeed-mcp}"
+# MCP deployment mode: "service" (separate Cloud Run service) or "sidecar"
+# (MCP container inside the agent pod). Default: "service".
+MCP_DEPLOY_MODE="${MCP_DEPLOY_MODE:-service}"
 DB_INSTANCE_NAME="${DB_INSTANCE_NAME:-lightspeed-agent-db}"
 VPC_CONNECTOR_NAME="${VPC_CONNECTOR_NAME:-lightspeed-redis-conn}"
 IMAGE_TAG="${IMAGE_TAG:-latest}"
@@ -95,7 +117,7 @@ HANDLER_IMAGE="${HANDLER_IMAGE:-}"
 MCP_IMAGE="${MCP_IMAGE:-gcr.io/${PROJECT_ID}/red-hat-lightspeed-mcp:latest}"
 
 # Parse arguments
-DEPLOY_SERVICE="all"  # all, handler, agent
+DEPLOY_SERVICE="all"  # all, handler, mcp, agent
 ALLOW_UNAUTH=false
 BUILD_IMAGE=false
 
@@ -127,7 +149,7 @@ while [[ $# -gt 0 ]]; do
             ;;
         *)
             log_error "Unknown option: $1"
-            echo "Usage: $0 [--service all|handler|agent] [--image IMAGE] [--handler-image IMAGE] [--mcp-image IMAGE] [--allow-unauthenticated] [--build]"
+            echo "Usage: $0 [--service all|handler|mcp|agent] [--image IMAGE] [--handler-image IMAGE] [--mcp-image IMAGE] [--allow-unauthenticated] [--build]"
             exit 1
             ;;
     esac
@@ -136,6 +158,12 @@ done
 # Validate required variables
 if [[ -z "$PROJECT_ID" ]]; then
     log_error "GOOGLE_CLOUD_PROJECT environment variable is required"
+    exit 1
+fi
+
+# Validate MCP_DEPLOY_MODE
+if [[ "$MCP_DEPLOY_MODE" != "service" && "$MCP_DEPLOY_MODE" != "sidecar" ]]; then
+    log_error "Invalid MCP_DEPLOY_MODE: $MCP_DEPLOY_MODE (must be 'service' or 'sidecar')"
     exit 1
 fi
 
@@ -151,6 +179,7 @@ log_info "Deploying to Cloud Run"
 log_info "  Project: $PROJECT_ID"
 log_info "  Region: $REGION"
 log_info "  Service(s): $DEPLOY_SERVICE"
+log_info "  MCP Deploy Mode: $MCP_DEPLOY_MODE"
 log_info "  Agent Image: $AGENT_IMAGE"
 log_info "  Handler Image: $HANDLER_IMAGE"
 log_info "  MCP Image: $MCP_IMAGE"
@@ -186,23 +215,40 @@ build_handler_image() {
 # Deploy using service YAML configs
 # =============================================================================
 deploy_agent() {
-    log_info "Deploying agent with service.yaml..."
+    local yaml_file
+
+    if [[ "$MCP_DEPLOY_MODE" == "sidecar" ]]; then
+        log_info "Deploying agent with MCP sidecar (service-sidecar.yaml)..."
+        yaml_file="deploy/cloudrun/service-sidecar.yaml"
+    else
+        log_info "Deploying agent with service.yaml (MCP as separate service)..."
+        yaml_file="deploy/cloudrun/service.yaml"
+
+        # Warn if MCP service isn't deployed yet (agent needs its URL)
+        if ! gcloud run services describe "$MCP_SERVICE_NAME" \
+            --region="$REGION" --project="$PROJECT_ID" &>/dev/null; then
+            log_warn "MCP service '$MCP_SERVICE_NAME' is not deployed yet."
+            log_warn "Deploy it first with: $0 --service mcp"
+            log_warn "The agent's MCP_SERVER_URL will be a placeholder until the MCP service is deployed."
+        fi
+    fi
 
     # Create temporary file with substituted values
     local tmp_yaml
     tmp_yaml=$(mktemp)
 
-    # Substitute variables in service.yaml
+    # Substitute variables in the selected YAML
     # Note: Image substitution must happen BEFORE PROJECT_ID substitution
     sed -e "s|gcr.io/\${PROJECT_ID}/lightspeed-agent:latest|${AGENT_IMAGE}|g" \
         -e "s|\${MCP_IMAGE}|${MCP_IMAGE}|g" \
+        -e "s|\${MCP_SERVICE_NAME}|${MCP_SERVICE_NAME}|g" \
         -e "s|\${PROJECT_ID}|${PROJECT_ID}|g" \
         -e "s|\${REGION}|${REGION}|g" \
         -e "s|\${SERVICE_NAME}|${SERVICE_NAME}|g" \
         -e "s|\${SERVICE_ACCOUNT_NAME}|${SERVICE_ACCOUNT_NAME}|g" \
         -e "s|\${DB_INSTANCE_NAME}|${DB_INSTANCE_NAME}|g" \
         -e "s|\${VPC_CONNECTOR_NAME}|${VPC_CONNECTOR_NAME}|g" \
-        deploy/cloudrun/service.yaml > "$tmp_yaml"
+        "$yaml_file" > "$tmp_yaml"
 
     # Deploy using the YAML
     gcloud run services replace "$tmp_yaml" \
@@ -256,6 +302,52 @@ deploy_handler() {
             --member="allUsers" \
             --role="roles/run.invoker"
     fi
+
+    # Cleanup
+    rm -f "$tmp_yaml"
+}
+
+deploy_mcp() {
+    if [[ "$MCP_DEPLOY_MODE" == "sidecar" ]]; then
+        log_warn "MCP_DEPLOY_MODE=sidecar: MCP runs inside the agent pod."
+        log_warn "Skipping standalone MCP service deployment."
+        log_warn "Deploy the agent instead: $0 --service agent"
+        return 0
+    fi
+
+    log_info "Deploying MCP server with mcp-service.yaml..."
+
+    # Create temporary file with substituted values
+    local tmp_yaml
+    tmp_yaml=$(mktemp)
+
+    # Substitute variables in mcp-service.yaml
+    sed -e "s|\${MCP_IMAGE}|${MCP_IMAGE}|g" \
+        -e "s|\${MCP_SERVICE_NAME}|${MCP_SERVICE_NAME}|g" \
+        -e "s|\${PROJECT_ID}|${PROJECT_ID}|g" \
+        -e "s|\${SERVICE_ACCOUNT_NAME}|${SERVICE_ACCOUNT_NAME}|g" \
+        deploy/cloudrun/mcp-service.yaml > "$tmp_yaml"
+
+    # Deploy using the YAML
+    gcloud run services replace "$tmp_yaml" \
+        --region "$REGION" \
+        --project "$PROJECT_ID"
+
+    # Only the agent's service account may invoke the MCP service.
+    # ingress: internal blocks external traffic at the network level;
+    # this IAM binding restricts internal callers to the agent SA only.
+    #
+    # The agent sends its Google ID token via X-Serverless-Authorization
+    # so Cloud Run IAM validates the caller without consuming the
+    # Authorization header, which carries the Red Hat SSO JWT that the
+    # MCP binary needs to call console.redhat.com on behalf of the user.
+    local agent_sa="${SERVICE_ACCOUNT_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
+    log_info "Granting run.invoker to agent SA ($agent_sa) on MCP service..."
+    gcloud run services add-iam-policy-binding "$MCP_SERVICE_NAME" \
+        --region "$REGION" \
+        --project "$PROJECT_ID" \
+        --member="serviceAccount:$agent_sa" \
+        --role="roles/run.invoker"
 
     # Cleanup
     rm -f "$tmp_yaml"
@@ -359,18 +451,26 @@ case "$DEPLOY_SERVICE" in
     all)
         deploy_handler
         configure_pubsub_push
+        if [[ "$MCP_DEPLOY_MODE" == "service" ]]; then
+            deploy_mcp
+        else
+            log_info "MCP_DEPLOY_MODE=sidecar: skipping standalone MCP deployment"
+        fi
         deploy_agent
         ;;
     handler)
         deploy_handler
         configure_pubsub_push
         ;;
+    mcp)
+        deploy_mcp
+        ;;
     agent)
         deploy_agent
         ;;
     *)
         log_error "Unknown service: $DEPLOY_SERVICE"
-        echo "Valid services: all, handler, agent"
+        echo "Valid services: all, handler, mcp, agent"
         exit 1
         ;;
 esac
@@ -405,14 +505,17 @@ case "$DEPLOY_SERVICE" in
     all)
         echo ""
         show_service_info "$HANDLER_SERVICE_NAME"
+        if [[ "$MCP_DEPLOY_MODE" == "service" ]]; then
+            echo ""
+            show_service_info "$MCP_SERVICE_NAME"
+        fi
         echo ""
         show_service_info "$SERVICE_NAME"
 
         # Update AGENT_PROVIDER_URL (agent base URL) and MARKETPLACE_HANDLER_URL
-        # on the agent service so the AgentCard advertises the correct URLs.
+        # on the agent service.  In service mode, also set MCP_SERVER_URL.
         # Note: AGENT_PROVIDER_ORGANIZATION_URL (JWT audience for DCR) is set
-        # in service.yaml and does NOT change per deployment — it's the
-        # provider's website (e.g., https://www.redhat.com).
+        # in the YAML and does NOT change per deployment.
         service_url=$(gcloud run services describe "$SERVICE_NAME" \
             --region="$REGION" \
             --project="$PROJECT_ID" \
@@ -430,6 +533,17 @@ case "$DEPLOY_SERVICE" in
                 log_warn "Could not retrieve $HANDLER_SERVICE_NAME URL. MARKETPLACE_HANDLER_URL not set."
                 log_warn "DCR endpoints in the AgentCard will fall back to AGENT_PROVIDER_URL."
             fi
+            if [[ "$MCP_DEPLOY_MODE" == "service" ]]; then
+                mcp_url=$(gcloud run services describe "$MCP_SERVICE_NAME" \
+                    --region="$REGION" \
+                    --project="$PROJECT_ID" \
+                    --format='value(status.url)' 2>/dev/null || echo "")
+                if [[ -n "$mcp_url" ]]; then
+                    env_vars="$env_vars,MCP_SERVER_URL=$mcp_url"
+                else
+                    log_warn "Could not retrieve $MCP_SERVICE_NAME URL. MCP_SERVER_URL not set."
+                fi
+            fi
             log_info "Updating agent env vars with service URLs"
             gcloud run services update "$SERVICE_NAME" \
                 --region="$REGION" \
@@ -440,9 +554,16 @@ case "$DEPLOY_SERVICE" in
         fi
 
         echo ""
-        echo "Architecture:"
-        echo "  1. Marketplace Handler receives Pub/Sub events and DCR requests"
-        echo "  2. Agent handles A2A protocol and user interactions"
+        if [[ "$MCP_DEPLOY_MODE" == "sidecar" ]]; then
+            echo "Architecture (MCP_DEPLOY_MODE=sidecar):"
+            echo "  1. Marketplace Handler receives Pub/Sub events and DCR requests"
+            echo "  2. Agent handles A2A protocol (MCP server runs as sidecar)"
+        else
+            echo "Architecture (MCP_DEPLOY_MODE=service):"
+            echo "  1. Marketplace Handler receives Pub/Sub events and DCR requests"
+            echo "  2. MCP Server provides Red Hat Insights API tools (internal only)"
+            echo "  3. Agent handles A2A protocol and user interactions"
+        fi
         echo ""
         echo "Test endpoints:"
         echo "  Handler health: curl \$(gcloud run services describe $HANDLER_SERVICE_NAME --region=$REGION --format='value(status.url)')/health"
@@ -456,13 +577,21 @@ case "$DEPLOY_SERVICE" in
         echo "  - Pub/Sub events from Google Cloud Marketplace"
         echo "  - DCR requests from Gemini Enterprise"
         ;;
+    mcp)
+        echo ""
+        show_service_info "$MCP_SERVICE_NAME"
+        echo ""
+        echo "The MCP server is deployed with ingress: internal."
+        echo "It is only reachable from the agent service account in the same GCP project."
+        ;;
     agent)
         echo ""
         show_service_info "$SERVICE_NAME"
 
         # Update AGENT_PROVIDER_URL (agent base URL) and MARKETPLACE_HANDLER_URL
-        # on the agent service. AGENT_PROVIDER_ORGANIZATION_URL is set in
-        # service.yaml and does NOT change per deployment.
+        # on the agent service.  In service mode, also set MCP_SERVER_URL.
+        # AGENT_PROVIDER_ORGANIZATION_URL is set in the YAML and does NOT
+        # change per deployment.
         service_url=$(gcloud run services describe "$SERVICE_NAME" \
             --region="$REGION" \
             --project="$PROJECT_ID" \
@@ -479,6 +608,17 @@ case "$DEPLOY_SERVICE" in
             else
                 log_warn "Could not retrieve $HANDLER_SERVICE_NAME URL. MARKETPLACE_HANDLER_URL not set."
                 log_warn "DCR endpoints in the AgentCard will fall back to AGENT_PROVIDER_URL."
+            fi
+            if [[ "$MCP_DEPLOY_MODE" == "service" ]]; then
+                mcp_url=$(gcloud run services describe "$MCP_SERVICE_NAME" \
+                    --region="$REGION" \
+                    --project="$PROJECT_ID" \
+                    --format='value(status.url)' 2>/dev/null || echo "")
+                if [[ -n "$mcp_url" ]]; then
+                    env_vars="$env_vars,MCP_SERVER_URL=$mcp_url"
+                else
+                    log_warn "Could not retrieve $MCP_SERVICE_NAME URL. MCP_SERVER_URL not set."
+                fi
             fi
             log_info "Updating agent env vars with service URLs"
             gcloud run services update "$SERVICE_NAME" \
@@ -498,4 +638,7 @@ esac
 echo ""
 echo "View logs:"
 echo "  gcloud run services logs read $HANDLER_SERVICE_NAME --region=$REGION --project=$PROJECT_ID"
+if [[ "$MCP_DEPLOY_MODE" == "service" ]]; then
+    echo "  gcloud run services logs read $MCP_SERVICE_NAME --region=$REGION --project=$PROJECT_ID"
+fi
 echo "  gcloud run services logs read $SERVICE_NAME --region=$REGION --project=$PROJECT_ID"
