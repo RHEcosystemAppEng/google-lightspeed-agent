@@ -68,6 +68,8 @@ data:
 
   # Usage Reporting Configuration
   USAGE_REPORT_INTERVAL_SECONDS: "3600"
+  # Per-invocation MCP tool cap (0 = disabled). In-memory per agent process.
+  MAX_TOOL_CALLS_PER_INVOCATION: "0"
 
   # Google Cloud Service Control (for usage reporting to Marketplace)
   # Set SERVICE_CONTROL_SERVICE_NAME in secrets for production
