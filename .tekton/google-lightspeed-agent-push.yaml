@@ -349,7 +349,7 @@ spec:
       - name: CACHI2_ARTIFACT
         value: $(tasks.prefetch-dependencies.results.CACHI2_ARTIFACT)
       - name: ARGS
-        value: "--severity-threshold=high --project-name=google-lightspeed-agent --report --org=2f8df97d-ffcb-4b63-b5a9-cafdc8f5fb33"
+        value: "--project-name=google-lightspeed-agent --report --org=2f8df97d-ffcb-4b63-b5a9-cafdc8f5fb33"
       runAfter:
       - build-image-index
       taskRef:
