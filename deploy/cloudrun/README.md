@@ -317,6 +317,78 @@ export VPC_CONNECTOR_NAME="lightspeed-redis-conn"
 
 See [Connect to Redis from Cloud Run](https://cloud.google.com/run/docs/integrate/redis-memorystore) for more details.
 
+#### Migrating an Existing Redis Instance to TLS
+
+Cloud Memorystore does not support enabling in-transit encryption on an existing instance — the `--transit-encryption-mode` flag is immutable after creation. To enable TLS you must create a new instance and cut over. The Redis data is entirely ephemeral (rate limiting sliding window counters), so there is nothing to migrate.
+
+**1. Create a new Redis instance with TLS:**
+
+```bash
+gcloud redis instances create lightspeed-redis-tls \
+  --size=1 \
+  --region=$GOOGLE_CLOUD_LOCATION \
+  --redis-version=redis_7_0 \
+  --network=default \
+  --transit-encryption-mode=SERVER_AUTHENTICATION \
+  --project=$GOOGLE_CLOUD_PROJECT
+
+REDIS_HOST=$(gcloud redis instances describe lightspeed-redis-tls \
+  --region=$GOOGLE_CLOUD_LOCATION \
+  --project=$GOOGLE_CLOUD_PROJECT \
+  --format='value(host)')
+```
+
+**2. Download the CA certificate and store it in Secret Manager:**
+
+```bash
+gcloud redis instances describe lightspeed-redis-tls \
+  --region=$GOOGLE_CLOUD_LOCATION \
+  --project=$GOOGLE_CLOUD_PROJECT \
+  --format='value(serverCaCerts[0].cert)' > /tmp/redis-ca.pem
+
+gcloud secrets create redis-ca-cert \
+  --data-file=/tmp/redis-ca.pem \
+  --project=$GOOGLE_CLOUD_PROJECT
+
+rm /tmp/redis-ca.pem
+```
+
+**3. Update the Redis URL secret to use `rediss://`:**
+
+```bash
+echo -n "rediss://${REDIS_HOST}:6379/0" | \
+  gcloud secrets versions add rate-limit-redis-url \
+    --data-file=- --project=$GOOGLE_CLOUD_PROJECT
+```
+
+**4. Redeploy the agent service** (picks up the new secret version, CA cert volume mount, and `RATE_LIMIT_REDIS_CA_CERT` env var from the updated `service.yaml`):
+
+```bash
+./deploy/cloudrun/deploy.sh --service agent
+```
+
+**5. Verify the agent is healthy:**
+
+```bash
+curl $(gcloud run services describe ${SERVICE_NAME:-lightspeed-agent} \
+  --region=$GOOGLE_CLOUD_LOCATION \
+  --project=$GOOGLE_CLOUD_PROJECT \
+  --format='value(status.url)')/health
+```
+
+**6. Delete the old Redis instance:**
+
+```bash
+gcloud redis instances delete lightspeed-redis \
+  --region=$GOOGLE_CLOUD_LOCATION \
+  --project=$GOOGLE_CLOUD_PROJECT
+```
+
+**Notes:**
+
+- No downtime: Cloud Run rolls out the new revision alongside the old one. The old revision keeps using the previous `redis://` URL (pinned at deploy time) until it drains.
+- Rate limiting counters reset after the cutover (all sliding windows start fresh). This is harmless — users simply get a full quota again.
+
 ### 5. Configure Secrets
 
 Update the placeholder secrets with actual values:
