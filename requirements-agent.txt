@@ -511,9 +511,9 @@ google-cloud-monitoring==2.29.1 \
     # via
     #   google-cloud-spanner
     #   opentelemetry-exporter-gcp-monitoring
-google-cloud-pubsub==2.35.0 \
-    --hash=sha256:2c0d1d7ccda52fa12fb73f34b7eb9899381e2fd931c7d47b10f724cdfac06f95 \
-    --hash=sha256:c32e4eb29e532ec784b5abb5d674807715ec07895b7c022b9404871dec09970d
+google-cloud-pubsub==2.37.0 \
+    --hash=sha256:7c5ba9beb5236e2b83c091dd6171423dc7d6d0e989391bd09f60dbd242b29f10 \
+    --hash=sha256:dd912422cf66e4ffb423b0d5391ca81bdfa408eb0f21f57adecdb6fb3b1e0bb1
     # via google-adk
 google-cloud-resource-manager==1.16.0 \
     --hash=sha256:cc938f87cc36c2672f062b1e541650629e0d954c405a4dac35ceedee70c267c3 \
