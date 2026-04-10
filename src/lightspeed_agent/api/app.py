@@ -13,7 +13,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import FastAPI
+from a2a.server.apps.jsonrpc.fastapi_app import A2AFastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from lightspeed_agent.api.a2a.a2a_setup import setup_a2a_routes
@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+async def lifespan(app: A2AFastAPI) -> AsyncIterator[None]:
     """Application lifespan manager for startup/shutdown events."""
     settings = get_settings()
 
@@ -94,7 +94,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.error("Failed to close rate limiter Redis connection: %s", e)
 
 
-def create_app() -> FastAPI:
+def create_app() -> A2AFastAPI:
     """Create and configure the FastAPI application.
 
     Returns:
@@ -102,7 +102,7 @@ def create_app() -> FastAPI:
     """
     settings = get_settings()
 
-    app = FastAPI(
+    app = A2AFastAPI(
         title=settings.agent_name,
         description=settings.agent_description,
         version="0.1.0",
