@@ -210,8 +210,8 @@ Rate limiting uses a Redis-backed sliding window algorithm for distributed deplo
 ```bash
 # Local development (no TLS)
 RATE_LIMIT_REDIS_URL=redis://localhost:6379/0
-# Production with Cloud Memorystore (TLS enabled)
-# RATE_LIMIT_REDIS_URL=rediss://10.x.x.x:6379/0
+# Production with Cloud Memorystore (TLS enabled, port 6378)
+# RATE_LIMIT_REDIS_URL=rediss://10.x.x.x:6378/0
 # RATE_LIMIT_REDIS_CA_CERT=/secrets/redis-ca-cert/latest
 RATE_LIMIT_REDIS_TIMEOUT_MS=200
 RATE_LIMIT_KEY_PREFIX=lightspeed:ratelimit
