@@ -198,7 +198,8 @@ Rate limiting uses a Redis-backed sliding window algorithm for distributed deplo
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `RATE_LIMIT_REDIS_URL` | `redis://localhost:6379/0` | Redis URL used for rate limiting |
+| `RATE_LIMIT_REDIS_URL` | `redis://localhost:6379/0` | Redis URL used for rate limiting. Use `rediss://` (double s) for TLS in production. |
+| `RATE_LIMIT_REDIS_CA_CERT` | (empty) | Path to Redis server CA certificate for TLS verification. Required when using `rediss://` with Cloud Memorystore. |
 | `RATE_LIMIT_REDIS_TIMEOUT_MS` | `200` | Redis operation timeout in milliseconds |
 | `RATE_LIMIT_KEY_PREFIX` | `lightspeed:ratelimit` | Prefix for Redis rate limit keys |
 | `RATE_LIMIT_REQUESTS_PER_MINUTE` | `60` | Max requests per minute |
@@ -207,7 +208,11 @@ Rate limiting uses a Redis-backed sliding window algorithm for distributed deplo
 **Example:**
 
 ```bash
+# Local development (no TLS)
 RATE_LIMIT_REDIS_URL=redis://localhost:6379/0
+# Production with Cloud Memorystore (TLS enabled)
+# RATE_LIMIT_REDIS_URL=rediss://10.x.x.x:6379/0
+# RATE_LIMIT_REDIS_CA_CERT=/secrets/redis-ca-cert/latest
 RATE_LIMIT_REDIS_TIMEOUT_MS=200
 RATE_LIMIT_KEY_PREFIX=lightspeed:ratelimit
 RATE_LIMIT_REQUESTS_PER_MINUTE=120

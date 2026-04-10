@@ -263,15 +263,16 @@ gcloud compute networks vpc-access connectors create lightspeed-redis-conn \
   --project=$GOOGLE_CLOUD_PROJECT
 ```
 
-**Step 2: Create a Redis instance** in the same VPC network:
+**Step 2: Create a Redis instance** in the same VPC network with in-transit encryption (TLS):
 
 ```bash
-# Create a Basic tier Redis instance (smallest, cost-effective for rate limiting)
+# Create a Basic tier Redis instance with TLS enabled
 gcloud redis instances create lightspeed-redis \
   --size=1 \
   --region=$GOOGLE_CLOUD_LOCATION \
   --redis-version=redis_7_0 \
   --network=default \
+  --transit-encryption-mode=SERVER_AUTHENTICATION \
   --project=$GOOGLE_CLOUD_PROJECT
 
 # Get the Redis host IP
@@ -282,15 +283,32 @@ REDIS_HOST=$(gcloud redis instances describe lightspeed-redis \
 echo "Redis host: $REDIS_HOST"
 ```
 
-**Step 3: Store the Redis URL in Secret Manager**:
+**Step 3: Download the Redis CA certificate and store it in Secret Manager**:
 
 ```bash
-# Redis uses port 6379 by default
-echo -n "redis://${REDIS_HOST}:6379/0" | \
+# Download the server CA certificate (required for TLS verification)
+gcloud redis instances describe lightspeed-redis \
+  --region=$GOOGLE_CLOUD_LOCATION \
+  --project=$GOOGLE_CLOUD_PROJECT \
+  --format='value(serverCaCerts[0].cert)' > /tmp/redis-ca.pem
+
+# Store the CA certificate in Secret Manager
+gcloud secrets create redis-ca-cert \
+  --data-file=/tmp/redis-ca.pem \
+  --project=$GOOGLE_CLOUD_PROJECT
+
+rm /tmp/redis-ca.pem
+```
+
+**Step 4: Store the Redis URL in Secret Manager** (using `rediss://` scheme for TLS):
+
+```bash
+# Note: "rediss://" (double s) enables TLS on the connection
+echo -n "rediss://${REDIS_HOST}:6379/0" | \
   gcloud secrets versions add rate-limit-redis-url --data-file=- --project=$GOOGLE_CLOUD_PROJECT
 ```
 
-**Step 4: Set the VPC connector name** (if different from default):
+**Step 5: Set the VPC connector name** (if different from default):
 
 ```bash
 # Default is lightspeed-redis-conn; override if you used a different name
@@ -332,9 +350,10 @@ echo -n "postgresql+asyncpg://insights:$MARKETPLACE_DB_PASSWORD@/lightspeed_agen
 echo -n "postgresql+asyncpg://sessions:$SESSION_DB_PASSWORD@/agent_sessions?host=/cloudsql/$CONNECTION_NAME" | \
   gcloud secrets versions add session-database-url --data-file=- --project=$GOOGLE_CLOUD_PROJECT
 
-# Rate limit Redis URL (required). As instructed in Redis Setup step 3 after creating the Redis instance.
+# Rate limit Redis URL (required). As instructed in Redis Setup steps 3-4 after creating the Redis instance.
 # REDIS_HOST=$(gcloud redis instances describe lightspeed-redis --region=$GOOGLE_CLOUD_LOCATION --project=$GOOGLE_CLOUD_PROJECT --format='value(host)')
-# echo -n "redis://${REDIS_HOST}:6379/0" | gcloud secrets versions add rate-limit-redis-url --data-file=- --project=$GOOGLE_CLOUD_PROJECT
+# echo -n "rediss://${REDIS_HOST}:6379/0" | gcloud secrets versions add rate-limit-redis-url --data-file=- --project=$GOOGLE_CLOUD_PROJECT
+# The CA certificate is stored separately (see Redis Setup step 3).
 ```
 
 ### 6. Copy MCP Image to GCR
@@ -484,13 +503,14 @@ The agent uses Cloud Memorystore for Redis for distributed rate limiting. Requir
 
 | Variable | Source | Description |
 |----------|--------|-------------|
-| `RATE_LIMIT_REDIS_URL` | Secret `rate-limit-redis-url` | Redis connection URL (e.g. `redis://10.x.x.x:6379/0`) |
+| `RATE_LIMIT_REDIS_URL` | Secret `rate-limit-redis-url` | Redis connection URL (e.g. `rediss://10.x.x.x:6379/0`). Use `rediss://` (double s) for TLS. |
+| `RATE_LIMIT_REDIS_CA_CERT` | Env (file path) | Path to the Redis server CA certificate for TLS verification (e.g. `/secrets/redis-ca-cert/latest`) |
 | `RATE_LIMIT_REDIS_TIMEOUT_MS` | Env | Redis operation timeout (default: 200) |
 | `RATE_LIMIT_KEY_PREFIX` | Env | Key prefix for rate limit keys |
 | `RATE_LIMIT_REQUESTS_PER_MINUTE` | Env | Max requests per minute per principal |
 | `RATE_LIMIT_REQUESTS_PER_HOUR` | Env | Max requests per hour per principal |
 
-The service uses a VPC connector to reach the Redis instance. Set `VPC_CONNECTOR_NAME` (default: `lightspeed-redis-conn`) when deploying. See [Rate Limiting — Testing](../../docs/rate-limiting.md#testing-rate-limiting) for how to validate rate limiting.
+The service uses a VPC connector to reach the Redis instance. Set `VPC_CONNECTOR_NAME` (default: `lightspeed-redis-conn`) when deploying. In-transit encryption (TLS) is enabled on the Memorystore instance; the CA certificate is mounted from Secret Manager as a volume (see `service.yaml`). See [Rate Limiting — Testing](../../docs/rate-limiting.md#testing-rate-limiting) for how to validate rate limiting.
 
 ### MCP Output Size Guard
 
