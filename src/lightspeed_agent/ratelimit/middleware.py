@@ -95,12 +95,17 @@ return {1, "ok", min_remaining_minute, min_remaining_hour, 0, 0}
     def __init__(self) -> None:
         settings = get_settings()
         timeout_seconds = max(settings.rate_limit_redis_timeout_ms, 1) / 1000.0
+        kwargs: dict[str, Any] = {
+            "encoding": "utf-8",
+            "decode_responses": True,
+            "socket_timeout": timeout_seconds,
+            "socket_connect_timeout": timeout_seconds,
+        }
+        if settings.rate_limit_redis_ca_cert:
+            kwargs["ssl_ca_certs"] = settings.rate_limit_redis_ca_cert
         self._redis = Redis.from_url(
             settings.rate_limit_redis_url,
-            encoding="utf-8",
-            decode_responses=True,
-            socket_timeout=timeout_seconds,
-            socket_connect_timeout=timeout_seconds,
+            **kwargs,
         )
         self._requests_per_minute = settings.rate_limit_requests_per_minute
         self._requests_per_hour = settings.rate_limit_requests_per_hour
