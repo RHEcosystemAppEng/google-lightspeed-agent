@@ -266,6 +266,22 @@ if [[ "$ENABLE_MARKETPLACE" == "true" ]]; then
         --project="$PROJECT_ID" \
         --quiet || true
 
+    # Grant the deployer permission to impersonate the Pub/Sub Invoker SA.
+    # Required so that deploy.sh can use --impersonate-service-account when
+    # creating push subscriptions on cross-project marketplace topics.
+    DEPLOYER_ACCOUNT=$(gcloud config get-value account 2>/dev/null)
+    if [[ -n "$DEPLOYER_ACCOUNT" ]]; then
+        log_info "Granting roles/iam.serviceAccountTokenCreator to $DEPLOYER_ACCOUNT on Pub/Sub Invoker SA..."
+        gcloud iam service-accounts add-iam-policy-binding "$PUBSUB_INVOKER_SA" \
+            --member="user:$DEPLOYER_ACCOUNT" \
+            --role="roles/iam.serviceAccountTokenCreator" \
+            --project="$PROJECT_ID" \
+            --quiet || true
+    else
+        log_warn "Could not determine deployer account. You may need to manually grant"
+        log_warn "roles/iam.serviceAccountTokenCreator on $PUBSUB_INVOKER_SA to run deploy.sh."
+    fi
+
     # Grant the Pub/Sub Invoker SA the Pub/Sub Editor role in the project.
     # Required so that deploy.sh can impersonate this SA to create a push
     # subscription attached to the marketplace topic (which is typically in a
