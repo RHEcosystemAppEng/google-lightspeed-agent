@@ -1054,7 +1054,24 @@ requests.
 > because it produces a valid Red Hat SSO token whose `azp` claim we map to a
 > seeded DCR client in the database.
 
-**1. Login to OCM and get the token's client_id:**
+**1. Relax scope requirements for `ocm token`:**
+
+The `ocm token` does not carry the `api.console` / `api.ocm` scopes that the
+agent requires by default, and it includes extra scopes (`roles`, `web-origins`)
+that are not in the allowlist. Temporarily adjust both settings on Cloud Run:
+
+```bash
+gcloud run services update lightspeed-agent \
+  --region=$GOOGLE_CLOUD_LOCATION \
+  --project=$GOOGLE_CLOUD_PROJECT \
+  --update-env-vars="AGENT_REQUIRED_SCOPE=" \
+  --update-env-vars="AGENT_ALLOWED_SCOPES=openid,profile,email,api.console,api.ocm,roles,web-origins"
+```
+
+> **Remember to restore these after testing** — see
+> [Cleanup test records](#cleanup-test-records) below.
+
+**2. Login to OCM and get the token's client_id:**
 
 ```bash
 ocm login --use-auth-code
@@ -1065,7 +1082,7 @@ OCM_CLIENT_ID=$(ocm token | cut -d. -f2 | base64 -d 2>/dev/null | jq -r '.azp')
 echo "OCM client_id (azp): $OCM_CLIENT_ID"
 ```
 
-**2. Choose an order ID and seed the DCR client:**
+**3. Choose an order ID and seed the DCR client:**
 
 ```bash
 export TEST_ORDER_ID="test-order-$(date +%s)"
@@ -1078,7 +1095,7 @@ python scripts/seed_dcr_clients.py seed \
   --account-id "$TEST_ACCOUNT_ID"
 ```
 
-**3. Seed the matching entitlement record:**
+**4. Seed the matching entitlement record:**
 
 ```bash
 python3 -c "
@@ -1101,7 +1118,7 @@ asyncio.run(main())
 "
 ```
 
-**4. Verify the records:**
+**5. Verify the records:**
 
 ```bash
 # Check DCR client
@@ -1131,7 +1148,7 @@ asyncio.run(main())
 "
 ```
 
-**5. Get your token:**
+**6. Get your token:**
 
 ```bash
 export RED_HAT_TOKEN=$(ocm token)
@@ -1167,15 +1184,22 @@ or [Test with A2A Inspector](#test-with-a2a-inspector) below.
 
 #### Cleanup test records
 
-When done testing, remove the seeded database records. This requires the Cloud
-SQL Auth Proxy and environment variables from [Prerequisites](#prerequisites)
-above.
+When done testing, restore scope settings and remove the seeded database records.
+The database cleanup requires the Cloud SQL Auth Proxy and environment variables
+from [Prerequisites](#prerequisites) above.
 
 ```bash
-# Remove DCR client
+# 1. Restore scope requirements
+gcloud run services update lightspeed-agent \
+  --region=$GOOGLE_CLOUD_LOCATION \
+  --project=$GOOGLE_CLOUD_PROJECT \
+  --update-env-vars="AGENT_REQUIRED_SCOPE=api.console,api.ocm" \
+  --update-env-vars="AGENT_ALLOWED_SCOPES=openid,profile,email,api.console,api.ocm"
+
+# 2. Remove DCR client
 python scripts/seed_dcr_clients.py delete --order-id "$TEST_ORDER_ID" --confirm
 
-# Remove entitlement
+# 3. Remove entitlement
 python3 -c "
 import asyncio, os
 from sqlalchemy import text
