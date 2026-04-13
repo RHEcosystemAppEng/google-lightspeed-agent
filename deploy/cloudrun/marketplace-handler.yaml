@@ -120,17 +120,15 @@ spec:
                 secretKeyRef:
                   name: database-url
                   key: latest
-          # Health checks
+          # Health checks (TCP probes — no public HTTP health endpoints)
           startupProbe:
-            httpGet:
-              path: /health
+            tcpSocket:
               port: 8001
             initialDelaySeconds: 3
             periodSeconds: 5
             failureThreshold: 3
           livenessProbe:
-            httpGet:
-              path: /health
+            tcpSocket:
               port: 8001
             periodSeconds: 30
             failureThreshold: 3

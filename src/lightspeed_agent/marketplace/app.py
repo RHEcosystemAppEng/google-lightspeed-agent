@@ -79,18 +79,6 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    # Health check endpoint
-    @app.get("/health")
-    async def health_check() -> dict[str, str]:
-        """Health check endpoint."""
-        return {"status": "healthy", "service": "marketplace-handler"}
-
-    # Ready check endpoint
-    @app.get("/ready")
-    async def ready_check() -> dict[str, str]:
-        """Readiness check endpoint."""
-        return {"status": "ready", "service": "marketplace-handler"}
-
     # Include the main handler router
     # This provides the /dcr endpoint that handles both Pub/Sub and DCR
     app.include_router(handler_router)

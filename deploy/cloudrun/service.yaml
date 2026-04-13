@@ -167,17 +167,15 @@ spec:
             - name: redis-ca-cert
               mountPath: /secrets/redis-ca-cert
               readOnly: true
-          # Health checks
+          # Health checks (TCP probes — no public HTTP health endpoints)
           startupProbe:
-            httpGet:
-              path: /health
+            tcpSocket:
               port: 8000
             initialDelaySeconds: 5
             periodSeconds: 10
             failureThreshold: 3
           livenessProbe:
-            httpGet:
-              path: /health
+            tcpSocket:
               port: 8000
             periodSeconds: 30
             failureThreshold: 3

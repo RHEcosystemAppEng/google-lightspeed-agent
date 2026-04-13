@@ -396,7 +396,6 @@ show_service_info() {
 
     if [[ -n "$service_url" ]]; then
         log_info "$service_name URL: $service_url"
-        echo "  Test: curl $service_url/health"
     else
         log_warn "Could not retrieve $service_name URL"
     fi
@@ -447,8 +446,7 @@ case "$DEPLOY_SERVICE" in
         echo "  2. Agent handles A2A protocol and user interactions"
         echo ""
         echo "Test endpoints:"
-        echo "  Handler health: curl \$(gcloud run services describe $HANDLER_SERVICE_NAME --region=$REGION --format='value(status.url)')/health"
-        echo "  Agent card:     curl \$(gcloud run services describe $SERVICE_NAME --region=$REGION --format='value(status.url)')/.well-known/agent.json"
+        echo "  Agent card: curl \$(gcloud run services describe $SERVICE_NAME --region=$REGION --format='value(status.url)')/.well-known/agent.json"
         ;;
     handler)
         echo ""

@@ -111,18 +111,6 @@ def create_app() -> A2AFastAPI:
         lifespan=lifespan,
     )
 
-    # Health check endpoint
-    @app.get("/health")
-    async def health_check() -> dict[str, str]:
-        """Health check endpoint."""
-        return {"status": "healthy", "agent": settings.agent_name}
-
-    # Ready check endpoint
-    @app.get("/ready")
-    async def ready_check() -> dict[str, str]:
-        """Readiness check endpoint."""
-        return {"status": "ready", "agent": settings.agent_name}
-
     # Set up A2A protocol routes using ADK's built-in integration
     # This provides:
     # - GET /.well-known/agent.json - AgentCard

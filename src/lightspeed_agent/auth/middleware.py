@@ -78,9 +78,6 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
 
     # Paths that are always public (no auth required)
     PUBLIC_PATHS = {
-        "/health",
-        "/healthz",
-        "/ready",
         "/docs",
         "/openapi.json",
         "/redoc",
