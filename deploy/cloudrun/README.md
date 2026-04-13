@@ -1054,18 +1054,18 @@ requests.
 > because it produces a valid Red Hat SSO token whose `azp` claim we map to a
 > seeded DCR client in the database.
 
-**1. Relax scope requirements for `ocm token`:**
+**1. Set scope requirements to match `ocm token`:**
 
-The `ocm token` does not carry the `api.console` / `api.ocm` scopes that the
-agent requires by default, and it includes extra scopes (`roles`, `web-origins`)
-that are not in the allowlist. Temporarily adjust both settings on Cloud Run:
+The `ocm token` carries `openid`, `roles`, and `web-origins` scopes — not the
+`api.console` / `api.ocm` scopes the agent requires by default. Temporarily set
+both required and allowed scopes to match the ocm token on Cloud Run:
 
 ```bash
 gcloud run services update lightspeed-agent \
   --region=$GOOGLE_CLOUD_LOCATION \
   --project=$GOOGLE_CLOUD_PROJECT \
-  --update-env-vars="AGENT_REQUIRED_SCOPE=" \
-  --update-env-vars="AGENT_ALLOWED_SCOPES=openid,profile,email,api.console,api.ocm,roles,web-origins"
+  --update-env-vars="AGENT_REQUIRED_SCOPE=openid,roles,web-origins" \
+  --update-env-vars="AGENT_ALLOWED_SCOPES=openid,roles,web-origins"
 ```
 
 > **Remember to restore these after testing** — see
@@ -1595,27 +1595,33 @@ you will see:
 {"jsonrpc":"2.0","error":{"code":-32003,"message":"Forbidden","data":{"detail":"Token is missing required scope(s): api.console, api.ocm"}},"id":null}
 ```
 
-To temporarily disable the scope check for testing, set `AGENT_REQUIRED_SCOPE`
-to an empty string on the agent service:
+To temporarily adjust the required scopes for testing (e.g. when using
+`ocm token` which carries `openid,roles,web-origins`), set both
+`AGENT_REQUIRED_SCOPE` and `AGENT_ALLOWED_SCOPES` to match the token's scopes:
 
 ```bash
 gcloud run services update ${SERVICE_NAME:-lightspeed-agent} \
   --region=$GOOGLE_CLOUD_LOCATION \
   --project=$GOOGLE_CLOUD_PROJECT \
-  --update-env-vars="AGENT_REQUIRED_SCOPE="
+  --update-env-vars="AGENT_REQUIRED_SCOPE=openid,roles,web-origins" \
+  --update-env-vars="AGENT_ALLOWED_SCOPES=openid,roles,web-origins"
 ```
 
-To restore the scope requirement:
+To restore the default scope requirements:
 
 ```bash
 gcloud run services update ${SERVICE_NAME:-lightspeed-agent} \
   --region=$GOOGLE_CLOUD_LOCATION \
   --project=$GOOGLE_CLOUD_PROJECT \
-  --update-env-vars="AGENT_REQUIRED_SCOPE=api.console,api.ocm"
+  --update-env-vars="AGENT_REQUIRED_SCOPE=api.console,api.ocm" \
+  --update-env-vars="AGENT_ALLOWED_SCOPES=openid,profile,email,api.console,api.ocm"
 ```
 
-This setting is also configurable in `service.yaml` via the
-`AGENT_REQUIRED_SCOPE` environment variable.
+> **Note:** Both `AGENT_REQUIRED_SCOPE` and `AGENT_ALLOWED_SCOPES` must not be
+> empty in production environments. The agent validates at startup that required
+> scopes are a subset of allowed scopes.
+
+These settings are also configurable in `service.yaml`.
 
 **"Token carries disallowed scope(s): ..."**
 
