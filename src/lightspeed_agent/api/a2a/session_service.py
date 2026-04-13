@@ -48,7 +48,7 @@ def _sync_session_from_reloaded(session: Session, reloaded: Session) -> None:
     # when the attribute exists (ADK ≥ 1.28).
     marker = getattr(reloaded, "_storage_update_marker", None)
     if marker is not None:
-        session._storage_update_marker = marker
+        session._storage_update_marker = marker  # type: ignore[attr-defined,unused-ignore]
 
 
 class RetryingDatabaseSessionService(DatabaseSessionService):  # type: ignore[misc]
