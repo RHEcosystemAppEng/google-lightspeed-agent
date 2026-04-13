@@ -13,8 +13,15 @@ Configuration is managed through environment variables. Copy `.env.example` to `
 | `GOOGLE_GENAI_USE_VERTEXAI` | `FALSE` | Use Vertex AI instead of Google AI Studio |
 | `GOOGLE_API_KEY` | - | Google AI Studio API key (required if not using Vertex AI) |
 | `GOOGLE_CLOUD_PROJECT` | - | GCP project ID (required for Vertex AI) |
-| `GOOGLE_CLOUD_LOCATION` | `us-central1` | GCP region for Vertex AI |
+| `GOOGLE_CLOUD_LOCATION` | `global` | Vertex AI model location (use `global` for pay-as-you-go) |
 | `GEMINI_MODEL` | `gemini-2.5-flash` | Gemini model to use |
+| `GEMINI_HTTP_RETRY_ATTEMPTS` | `5` | Max HTTP attempts per model call (including the first). Use `1` to disable SDK retries. Aligns with [google-genai defaults](https://cloud.google.com/vertex-ai/generative-ai/docs/retry-strategy). |
+| `GEMINI_HTTP_RETRY_INITIAL_DELAY` | `1.0` | Initial backoff delay in seconds (exponential backoff with jitter). |
+| `GEMINI_HTTP_RETRY_MAX_DELAY` | `60.0` | Maximum delay in seconds between retries. |
+| `GEMINI_HTTP_RETRY_EXP_BASE` | `2.0` | Backoff multiplier between attempts. |
+| `GEMINI_HTTP_RETRY_JITTER` | `1.0` | Jitter factor to reduce synchronized retries across clients. |
+
+HTTP retries use **exponential backoff with jitter** via the Google Gen AI SDK for transient errors (for example HTTP 429, 408, and 5xx). Retries help with short spikes; they do **not** replace raising [Vertex AI quotas](https://cloud.google.com/vertex-ai/generative-ai/docs/quotas) or fixing sustained overload. See the [Vertex AI retry strategy](https://cloud.google.com/vertex-ai/generative-ai/docs/retry-strategy) documentation.
 
 **Using Google AI Studio:**
 
@@ -28,7 +35,7 @@ GOOGLE_API_KEY=your-api-key
 ```bash
 GOOGLE_GENAI_USE_VERTEXAI=TRUE
 GOOGLE_CLOUD_PROJECT=your-project-id
-GOOGLE_CLOUD_LOCATION=us-central1
+GOOGLE_CLOUD_LOCATION=global
 ```
 
 ### Red Hat SSO / OAuth 2.0
@@ -240,6 +247,7 @@ See [Usage Tracking and Metering](metering.md) for details on the plugin system 
 | `LOG_LEVEL` | `INFO` | Log level: DEBUG, INFO, WARNING, ERROR |
 | `LOG_FORMAT` | `json` | Log format: `json` or `text` |
 | `AGENT_LOGGING_DETAIL` | `basic` | Agent execution logging detail: `basic` or `detailed` |
+| `TOOL_RESULT_MAX_CHARS` | `51200` | Max character length for MCP tool results sent to the LLM. Oversized results are replaced with a message advising the user to narrow down or paginate. Set to `0` to disable. |
 
 **Example:**
 
@@ -247,6 +255,81 @@ See [Usage Tracking and Metering](metering.md) for details on the plugin system 
 LOG_LEVEL=DEBUG
 LOG_FORMAT=text  # Human-readable for development
 AGENT_LOGGING_DETAIL=detailed  # Include tool args/results in logs
+```
+
+#### MCP Output Size Guard
+
+MCP tools can return very large responses (e.g., listing all advisories or inventory systems). These responses are passed in full to the LLM as input context, which can inflate token counts significantly (270K+ tokens observed) and trigger Vertex AI token-per-minute (TPM) rate limits (HTTP 429 `RESOURCE_EXHAUSTED`).
+
+The `TOOL_RESULT_MAX_CHARS` setting controls a size guard that detects oversized tool results and replaces them with an actionable message telling the LLM to guide the user toward narrowing down their query or using pagination.
+
+```bash
+# Default: 50K characters (conservative, works within standard TPM quotas)
+TOOL_RESULT_MAX_CHARS=51200
+
+# Allow larger results if you have higher TPM quotas
+TOOL_RESULT_MAX_CHARS=100000
+
+# Disable the guard entirely (not recommended — may cause 429 errors)
+TOOL_RESULT_MAX_CHARS=0
+```
+
+When a result exceeds the limit, the LLM receives an error message instead of the raw data, allowing it to inform the user and suggest alternatives. Monitor `Tool result too large` warning logs to track which tools trigger the guard.
+
+**Choosing the right limit:** The optimal value depends on the model's context window and expected session length. Each tool result, along with all previous messages and tool results in the conversation, counts toward the model's input token budget. Longer sessions accumulate more context, leaving less room for individual tool results. A conservative limit (the default) works well for multi-turn sessions where context builds up over time. If your sessions are typically short (single-turn queries), you can increase the limit to allow richer results without risk of hitting context or TPM limits.
+
+#### Audit Logging
+
+The `LOG_FORMAT` setting controls how log records are formatted:
+
+- **`json`** (default) — Structured JSON output. Every log record automatically includes audit context fields (`user_id`, `org_id`, `order_id`, `request_id`). Recommended for production and Cloud Run, where Cloud Logging parses these fields for querying.
+- **`text`** — Human-readable output (`timestamp - logger - level - message`). Audit context fields are **not** included in the log record. The agent execution plugin still embeds `user_id`, `org_id`, `order_id`, and `request_id` in the log message text, but they are not available as structured fields for filtering. Recommended for local development.
+
+When `LOG_FORMAT=json`, every log record automatically includes audit context fields:
+
+| Field | Source | Description |
+|-------|--------|-------------|
+| `user_id` | JWT `sub` claim | Authenticated user identifier |
+| `org_id` | JWT `org_id` claim | Red Hat organization identifier |
+| `order_id` | DCR client lookup | Google Cloud Marketplace order |
+| `request_id` | Generated UUID4 | Per-request correlation ID |
+
+These fields enable:
+- **Request correlation** — all events in a single request share the same `request_id`
+- **User audit** — filter by `user_id` to trace all actions by a specific user
+- **Organization audit** — filter by `org_id` for organization-level auditing
+- **Data lineage** — `tool_call_completed` events include `data_source=<mcp_tool>`, and `mcp_jwt_forwarded` events prove data was retrieved using the user's authorized JWT
+
+Each agent lifecycle event is tagged with an `event_type` in the log message:
+
+| Event Type | Description |
+|------------|-------------|
+| `request_authenticated` | User JWT validated, user_id and org_id extracted |
+| `agent_run_started` | ADK agent invocation started |
+| `agent_run_completed` | ADK agent invocation finished |
+| `llm_call_started` | Gemini LLM call initiated |
+| `llm_call_completed` | Gemini LLM call finished (includes token counts) |
+| `tool_call_started` | MCP tool call initiated |
+| `tool_call_completed` | MCP tool call finished (includes `data_source`) |
+| `mcp_jwt_forwarded` | User JWT forwarded to MCP sidecar for Red Hat API auth |
+
+**Example JSON log line:**
+
+```json
+{"time": "2025-01-15 10:30:45", "level": "INFO", "logger": "lightspeed_agent.api.a2a.logging_plugin", "message": "Tool call completed (event_type=tool_call_completed, tool=get_advisories, data_source=get_advisories, ...)", "user_id": "user-42", "org_id": "org-7", "order_id": "order-99", "request_id": "abc-123-def-456"}
+```
+
+On Cloud Run, these JSON logs are automatically parsed by Cloud Logging and can be queried with:
+
+```bash
+# Find all actions by a specific user
+gcloud logging read 'jsonPayload.user_id="user-42"' --project=$GOOGLE_CLOUD_PROJECT
+
+# Find all tool calls in a specific request
+gcloud logging read 'jsonPayload.request_id="abc-123" AND jsonPayload.message=~"tool_call"' --project=$GOOGLE_CLOUD_PROJECT
+
+# Audit all MCP data access for an organization
+gcloud logging read 'jsonPayload.org_id="org-7" AND jsonPayload.message=~"mcp_jwt_forwarded"' --project=$GOOGLE_CLOUD_PROJECT
 ```
 
 ### Development Settings

@@ -1,8 +1,11 @@
-"""Agent execution logging plugin.
+"""Agent execution logging plugin with audit context.
 
 Logs agent lifecycle events (tool calls, LLM invocations, run start/end)
-at INFO level for operational visibility. Controlled by the
-AGENT_LOGGING_DETAIL setting:
+at INFO level for operational visibility. Each log entry includes an
+``event_type`` classification and audit context (user_id, org_id,
+order_id, request_id) for data lineage tracing.
+
+Controlled by the AGENT_LOGGING_DETAIL setting:
   - "basic": logs tool names, token counts, and lifecycle events
   - "detailed": also logs tool arguments and truncated results
 """
@@ -18,6 +21,12 @@ from google.adk.plugins.base_plugin import BasePlugin
 from google.adk.tools.base_tool import BaseTool
 from google.adk.tools.tool_context import ToolContext
 
+from lightspeed_agent.auth.middleware import (
+    get_request_id,
+    get_request_order_id,
+    get_request_org_id,
+    get_request_user_id,
+)
 from lightspeed_agent.config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -34,7 +43,7 @@ def _truncate(value: Any, max_length: int = _MAX_RESULT_LENGTH) -> str:
 
 
 class AgentLoggingPlugin(BasePlugin):
-    """ADK plugin that logs agent execution events at INFO level."""
+    """ADK plugin that logs agent execution events with audit context."""
 
     def __init__(self) -> None:
         super().__init__(name="agent_logging")
@@ -42,15 +51,27 @@ class AgentLoggingPlugin(BasePlugin):
     def _is_detailed(self) -> bool:
         return get_settings().agent_logging_detail == "detailed"
 
+    @staticmethod
+    def _audit_fields() -> str:
+        """Build audit context string for log messages."""
+        return (
+            f"user_id={get_request_user_id()}, "
+            f"org_id={get_request_org_id()}, "
+            f"order_id={get_request_order_id()}, "
+            f"request_id={get_request_id()}"
+        )
+
     # -- run lifecycle --------------------------------------------------------
 
     async def before_run_callback(
         self, *, invocation_context: InvocationContext
     ) -> None:
         logger.info(
-            "Agent run started (invocation_id=%s, agent=%s)",
+            "Agent run started "
+            "(event_type=agent_run_started, invocation_id=%s, agent=%s, %s)",
             invocation_context.invocation_id,
             invocation_context.agent.name,
+            self._audit_fields(),
         )
         return None
 
@@ -58,8 +79,10 @@ class AgentLoggingPlugin(BasePlugin):
         self, *, invocation_context: InvocationContext
     ) -> None:
         logger.info(
-            "Agent run completed (invocation_id=%s)",
+            "Agent run completed "
+            "(event_type=agent_run_completed, invocation_id=%s, %s)",
             invocation_context.invocation_id,
+            self._audit_fields(),
         )
         return None
 
@@ -68,7 +91,11 @@ class AgentLoggingPlugin(BasePlugin):
     async def before_model_callback(
         self, *, callback_context: CallbackContext, llm_request: LlmRequest
     ) -> Any | None:
-        logger.info("LLM call started (agent=%s)", callback_context.agent_name)
+        logger.info(
+            "LLM call started (event_type=llm_call_started, agent=%s, %s)",
+            callback_context.agent_name,
+            self._audit_fields(),
+        )
         return None
 
     async def after_model_callback(
@@ -87,17 +114,24 @@ class AgentLoggingPlugin(BasePlugin):
         model_version = llm_response.model_version if llm_response else None
 
         logger.info(
-            "LLM call completed (input_tokens=%d, output_tokens=%d, model=%s)",
+            "LLM call completed "
+            "(event_type=llm_call_completed, input_tokens=%d, output_tokens=%d, "
+            "model=%s, %s)",
             input_tokens,
             output_tokens,
             model_version,
+            self._audit_fields(),
         )
         return None
 
     async def on_model_error_callback(
         self, *, callback_context: CallbackContext, llm_request: LlmRequest, error: Exception
     ) -> LlmResponse | None:
-        logger.error("LLM call failed: %s", error)
+        logger.error(
+            "LLM call failed (event_type=llm_call_failed, error=%s, %s)",
+            error,
+            self._audit_fields(),
+        )
         return None
 
     # -- tool callbacks -------------------------------------------------------
@@ -112,12 +146,19 @@ class AgentLoggingPlugin(BasePlugin):
         tool_name = getattr(tool, "name", type(tool).__name__)
         if self._is_detailed():
             logger.info(
-                "Tool call started (tool=%s, args=%s)",
+                "Tool call started "
+                "(event_type=tool_call_started, tool=%s, args=%s, %s)",
                 tool_name,
                 _truncate(tool_args),
+                self._audit_fields(),
             )
         else:
-            logger.info("Tool call started (tool=%s)", tool_name)
+            logger.info(
+                "Tool call started "
+                "(event_type=tool_call_started, tool=%s, %s)",
+                tool_name,
+                self._audit_fields(),
+            )
         return None
 
     async def after_tool_callback(
@@ -131,12 +172,22 @@ class AgentLoggingPlugin(BasePlugin):
         tool_name = getattr(tool, "name", type(tool).__name__)
         if self._is_detailed():
             logger.info(
-                "Tool call completed (tool=%s, result=%s)",
+                "Tool call completed "
+                "(event_type=tool_call_completed, tool=%s, data_source=%s, "
+                "result=%s, %s)",
+                tool_name,
                 tool_name,
                 _truncate(result),
+                self._audit_fields(),
             )
         else:
-            logger.info("Tool call completed (tool=%s)", tool_name)
+            logger.info(
+                "Tool call completed "
+                "(event_type=tool_call_completed, tool=%s, data_source=%s, %s)",
+                tool_name,
+                tool_name,
+                self._audit_fields(),
+            )
         return None
 
     async def on_tool_error_callback(
@@ -148,5 +199,11 @@ class AgentLoggingPlugin(BasePlugin):
         error: Exception,
     ) -> dict[str, Any] | None:
         tool_name = getattr(tool, "name", type(tool).__name__)
-        logger.error("Tool call failed (tool=%s): %s", tool_name, error)
+        logger.error(
+            "Tool call failed "
+            "(event_type=tool_call_failed, tool=%s, error=%s, %s)",
+            tool_name,
+            error,
+            self._audit_fields(),
+        )
         return None

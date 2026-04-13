@@ -2,6 +2,38 @@
 
 Deploy the Red Hat Lightspeed Agent for Google Cloud to Google Cloud Run for production use.
 
+## Table of Contents
+
+- [Architecture](#architecture)
+- [Service Accounts](#service-accounts)
+- [Prerequisites](#prerequisites)
+- [Quick Start](#quick-start)
+  - [1. Set Environment Variables](#1-set-environment-variables)
+  - [2. Run Setup Script](#2-run-setup-script)
+  - [3. Set Up Cloud SQL Database](#3-set-up-cloud-sql-database)
+  - [4. Redis Setup for Rate Limiting](#4-redis-setup-for-rate-limiting)
+  - [5. Configure Secrets](#5-configure-secrets)
+  - [6. Copy MCP Image to GCR](#6-copy-mcp-image-to-gcr)
+  - [7. Deploy](#7-deploy)
+- [Service Configuration](#service-configuration)
+  - [Agent Container](#agent-container)
+  - [Rate Limiting (Redis)](#rate-limiting-redis)
+  - [MCP Output Size Guard](#mcp-output-size-guard)
+  - [MCP Server Sidecar](#mcp-server-sidecar)
+  - [Scaling](#scaling)
+- [How the MCP Server Works](#how-the-mcp-server-works)
+- [Authentication](#authentication)
+- [Endpoints](#endpoints)
+- [Testing the Deployment](#testing-the-deployment)
+- [Database Architecture](#database-architecture)
+- [Custom Domain](#custom-domain)
+- [Testing the Agent](#testing-the-agent)
+- [Testing DCR on Cloud Run](#testing-dcr-on-cloud-run)
+- [Audit Logging](#audit-logging)
+- [Monitoring](#monitoring)
+- [Troubleshooting](#troubleshooting)
+- [Cleanup / Teardown](#cleanup--teardown)
+
 ## Architecture
 
 The deployment consists of **two separate Cloud Run services** plus **Cloud Memorystore for Redis** (for rate limiting):
@@ -97,8 +129,13 @@ Both are created automatically by `setup.sh`. The Pub/Sub Invoker SA is only cre
 
 ```bash
 export GOOGLE_CLOUD_PROJECT="your-project-id"
-export GOOGLE_CLOUD_LOCATION="us-central1"
+export GOOGLE_CLOUD_LOCATION="us-central1"  # Cloud Run deployment region
 export SERVICE_NAME="lightspeed-agent"
+
+# Vertex AI model location (use "global" for pay-as-you-go access).
+# This is separate from GOOGLE_CLOUD_LOCATION, which sets the Cloud Run
+# deployment region. Defaults to "global" if not set.
+# export VERTEXAI_LOCATION="global"
 
 # Optional: use a different name for the GCP service account
 # export SERVICE_ACCOUNT_NAME="my-custom-sa"
@@ -149,7 +186,8 @@ The setup script enables required APIs, creates service accounts (runtime + Pub/
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `GOOGLE_CLOUD_PROJECT` | (required) | GCP project ID |
-| `GOOGLE_CLOUD_LOCATION` | `us-central1` | GCP region |
+| `GOOGLE_CLOUD_LOCATION` | `us-central1` | Cloud Run deployment region |
+| `VERTEXAI_LOCATION` | `global` | Vertex AI model location (use `global` for pay-as-you-go) |
 | `SERVICE_NAME` | `lightspeed-agent` | Cloud Run service name |
 | `SERVICE_ACCOUNT_NAME` | `${SERVICE_NAME}` | GCP service account name (allows a different name than the Cloud Run service) |
 | `HANDLER_SERVICE_NAME` | `marketplace-handler` | Marketplace handler Cloud Run service name |
@@ -420,6 +458,7 @@ deployment without the script, substitute all `${...}` variables in the YAML bef
 ```bash
 sed -e "s|\${PROJECT_ID}|$GOOGLE_CLOUD_PROJECT|g" \
     -e "s|\${REGION}|$GOOGLE_CLOUD_LOCATION|g" \
+    -e "s|\${VERTEXAI_LOCATION}|${VERTEXAI_LOCATION:-global}|g" \
     -e "s|\${DB_INSTANCE_NAME}|${DB_INSTANCE_NAME:-lightspeed-agent-db}|g" \
     -e "s|\${VPC_CONNECTOR_NAME}|${VPC_CONNECTOR_NAME:-lightspeed-redis-conn}|g" \
     -e "s|\${SERVICE_NAME}|${SERVICE_NAME:-lightspeed-agent}|g" \
@@ -452,6 +491,67 @@ The agent uses Cloud Memorystore for Redis for distributed rate limiting. Requir
 | `RATE_LIMIT_REQUESTS_PER_HOUR` | Env | Max requests per hour per principal |
 
 The service uses a VPC connector to reach the Redis instance. Set `VPC_CONNECTOR_NAME` (default: `lightspeed-redis-conn`) when deploying. See [Rate Limiting — Testing](../../docs/rate-limiting.md#testing-rate-limiting) for how to validate rate limiting.
+
+### MCP Output Size Guard
+
+MCP tools can return very large responses (e.g., listing all advisories or inventory systems),
+which inflate the LLM input context and may trigger Vertex AI token-per-minute (TPM) rate limits
+(HTTP 429 `RESOURCE_EXHAUSTED`).
+
+The agent includes an **MCP output size guard** that detects oversized tool results and replaces
+them with an actionable message. Instead of sending the full payload to the LLM, the agent tells
+the model the result was too large and asks it to guide the user toward narrowing down their query
+or using pagination.
+
+**Configuration:**
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `TOOL_RESULT_MAX_CHARS` | `51200` | Maximum character length for MCP tool results. Results exceeding this are replaced with guidance. Set to `0` to disable. |
+
+**To adjust the limit on Cloud Run:**
+
+```bash
+# Allow larger results (e.g., 100K characters)
+gcloud run services update lightspeed-agent \
+  --region=$GOOGLE_CLOUD_LOCATION \
+  --project=$GOOGLE_CLOUD_PROJECT \
+  --set-env-vars TOOL_RESULT_MAX_CHARS=100000
+
+# Disable the guard entirely (not recommended — may cause 429 errors)
+gcloud run services update lightspeed-agent \
+  --region=$GOOGLE_CLOUD_LOCATION \
+  --project=$GOOGLE_CLOUD_PROJECT \
+  --set-env-vars TOOL_RESULT_MAX_CHARS=0
+```
+
+**How it works:**
+
+1. An MCP tool executes and returns a result
+2. The `MCPOutputSizeGuardPlugin` serializes the result and checks its character length
+3. If the result exceeds `TOOL_RESULT_MAX_CHARS`, it is replaced with:
+   ```json
+   {
+     "error": "tool_result_too_large",
+     "message": "The tool 'get_advisories' returned a result that is too large to process (270,000 characters, limit is 51,200). Please ask the user to narrow down their query or use pagination/filtering parameters to reduce the result size.",
+     "original_size_chars": 270000,
+     "limit_chars": 51200
+   }
+   ```
+4. The LLM receives this message and can inform the user to refine their request
+
+**Tuning tips:**
+
+- **51,200 characters** (default, 50 KiB) is a conservative limit that keeps input tokens well within
+  Vertex AI TPM quotas for `gemini-2.5-flash`
+- If you have higher TPM quotas, increase the limit to allow richer responses
+- The optimal limit depends on the model's context window and expected session length — longer
+  multi-turn sessions accumulate more context, leaving less room for individual tool results.
+  Short single-turn sessions can tolerate a higher limit.
+- Monitor the `Tool result too large` warning logs to see which tools trigger the guard
+  and how often
+
+See [Configuration — MCP Output Size Guard](../../docs/configuration.md#mcp-output-size-guard) for more details.
 
 ### MCP Server Sidecar
 
@@ -1308,6 +1408,47 @@ The test script at `scripts/test_deployed_dcr.py` is configurable via environmen
 | `TEST_ORDER_ID` | random UUID | Fixed order ID |
 | `TEST_ACCOUNT_ID` | `test-procurement-account-001` | Procurement account ID |
 | `TEST_REDIRECT_URIS` | `https://gemini.google.com/callback` | Comma-separated redirect URIs |
+
+## Audit Logging
+
+The agent automatically produces structured audit logs that correlate each user session with Red Hat API requests. When `LOG_FORMAT=json` (the default in Cloud Run), every log record includes:
+
+- **`user_id`** — authenticated user (JWT `sub` claim)
+- **`org_id`** — Red Hat organization (JWT `org_id` claim)
+- **`order_id`** — Google Cloud Marketplace order
+- **`request_id`** — UUID4 correlation ID (unique per request)
+
+Each agent lifecycle event carries an `event_type` tag (`request_authenticated`, `agent_run_started`, `tool_call_completed`, `mcp_jwt_forwarded`, etc.) and tool calls include a `data_source` field identifying which Red Hat Insights MCP tool retrieved the data.
+
+This provides a full data lineage audit trail: every piece of information disclosed by the agent can be traced back to a specific authenticated user prompt and a verified Red Hat Insights data source. These persistent logs are independent of the ephemeral ADK session storage.
+
+### Querying Audit Logs
+
+Cloud Logging automatically parses JSON log fields. To filter logs from the Lightspeed Agent service specifically, add a `resource.labels.service_name` filter:
+
+```bash
+# All Lightspeed Agent logs (filter by Cloud Run service name)
+gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name="lightspeed-agent"' \
+  --project=$GOOGLE_CLOUD_PROJECT --limit=50
+
+# All actions by a specific user (scoped to the agent service)
+gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name="lightspeed-agent" AND jsonPayload.user_id="<user-id>"' \
+  --project=$GOOGLE_CLOUD_PROJECT --limit=50
+
+# All events in a single request (correlation)
+gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name="lightspeed-agent" AND jsonPayload.request_id="<request-id>"' \
+  --project=$GOOGLE_CLOUD_PROJECT
+
+# All MCP data access for an organization
+gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name="lightspeed-agent" AND jsonPayload.org_id="<org-id>" AND jsonPayload.message=~"mcp_jwt_forwarded"' \
+  --project=$GOOGLE_CLOUD_PROJECT
+
+# All tool calls with data source tracking
+gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name="lightspeed-agent" AND jsonPayload.message=~"tool_call_completed"' \
+  --project=$GOOGLE_CLOUD_PROJECT --limit=20
+```
+
+No additional configuration is required — audit logging is automatically active when `LOG_FORMAT=json`.
 
 ## Monitoring
 

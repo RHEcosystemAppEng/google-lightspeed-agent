@@ -6,6 +6,12 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from lightspeed_agent.api.a2a.logging_plugin import AgentLoggingPlugin, _truncate
+from lightspeed_agent.auth.middleware import (
+    _request_id,
+    _request_order_id,
+    _request_org_id,
+    _request_user_id,
+)
 
 
 class TestTruncate:
@@ -53,6 +59,7 @@ class TestAgentLoggingPluginBasic:
         assert "Agent run started" in caplog.text
         assert "inv-123" in caplog.text
         assert "test_agent" in caplog.text
+        assert "event_type=agent_run_started" in caplog.text
 
     @pytest.mark.asyncio
     async def test_after_run_logs_info(self, plugin, caplog):
@@ -65,6 +72,7 @@ class TestAgentLoggingPluginBasic:
         assert result is None
         assert "Agent run completed" in caplog.text
         assert "inv-456" in caplog.text
+        assert "event_type=agent_run_completed" in caplog.text
 
     @pytest.mark.asyncio
     async def test_before_model_logs_info(self, plugin, caplog):
@@ -79,6 +87,7 @@ class TestAgentLoggingPluginBasic:
         assert result is None
         assert "LLM call started" in caplog.text
         assert "test_agent" in caplog.text
+        assert "event_type=llm_call_started" in caplog.text
 
     @pytest.mark.asyncio
     async def test_after_model_logs_token_counts(self, plugin, caplog):
@@ -100,6 +109,7 @@ class TestAgentLoggingPluginBasic:
         assert "input_tokens=100" in caplog.text
         assert "output_tokens=50" in caplog.text
         assert "gemini-2.5-flash-001" in caplog.text
+        assert "event_type=llm_call_completed" in caplog.text
 
     @pytest.mark.asyncio
     async def test_after_model_handles_missing_usage(self, plugin, caplog):
@@ -131,6 +141,7 @@ class TestAgentLoggingPluginBasic:
         assert result is None
         assert "LLM call failed" in caplog.text
         assert "API quota exceeded" in caplog.text
+        assert "event_type=llm_call_failed" in caplog.text
 
     @pytest.mark.asyncio
     async def test_before_tool_basic_omits_args(self, plugin, caplog):
@@ -148,6 +159,7 @@ class TestAgentLoggingPluginBasic:
         assert "Tool call started" in caplog.text
         assert "get_advisories" in caplog.text
         assert "abc-123" not in caplog.text
+        assert "event_type=tool_call_started" in caplog.text
 
     @pytest.mark.asyncio
     async def test_after_tool_basic_omits_result(self, plugin, caplog):
@@ -166,6 +178,8 @@ class TestAgentLoggingPluginBasic:
         assert "Tool call completed" in caplog.text
         assert "get_advisories" in caplog.text
         assert "sensitive-info" not in caplog.text
+        assert "event_type=tool_call_completed" in caplog.text
+        assert "data_source=get_advisories" in caplog.text
 
     @pytest.mark.asyncio
     async def test_on_tool_error_logs_error(self, plugin, caplog):
@@ -185,6 +199,7 @@ class TestAgentLoggingPluginBasic:
         assert "Tool call failed" in caplog.text
         assert "get_advisories" in caplog.text
         assert "MCP server unreachable" in caplog.text
+        assert "event_type=tool_call_failed" in caplog.text
 
 
 class TestAgentLoggingPluginDetailed:
@@ -234,6 +249,7 @@ class TestAgentLoggingPluginDetailed:
         assert "Tool call completed" in caplog.text
         assert "get_advisories" in caplog.text
         assert "CVE-2024-1234" in caplog.text
+        assert "data_source=get_advisories" in caplog.text
 
     @pytest.mark.asyncio
     async def test_after_tool_detailed_truncates_long_result(self, plugin, caplog):
@@ -321,3 +337,155 @@ class TestAllCallbacksReturnNone:
             )
             is None
         )
+
+
+class TestAuditFieldsInLogMessages:
+    """Verify that audit context fields (user_id, org_id, order_id, request_id)
+    are included in log messages when contextvars are set."""
+
+    @pytest.fixture
+    def plugin(self):
+        with patch(
+            "lightspeed_agent.api.a2a.logging_plugin.get_settings"
+        ) as mock_settings:
+            settings = MagicMock()
+            settings.agent_logging_detail = "basic"
+            mock_settings.return_value = settings
+            yield AgentLoggingPlugin()
+
+    @pytest.fixture(autouse=True)
+    def _set_audit_context(self):
+        """Set audit contextvars for the duration of each test."""
+        token_user = _request_user_id.set("test-user-42")
+        token_org = _request_org_id.set("test-org-7")
+        token_order = _request_order_id.set("test-order-99")
+        token_req = _request_id.set("req-abc-123")
+        yield
+        _request_user_id.reset(token_user)
+        _request_org_id.reset(token_org)
+        _request_order_id.reset(token_order)
+        _request_id.reset(token_req)
+
+    @pytest.mark.asyncio
+    async def test_before_run_includes_audit_fields(self, plugin, caplog):
+        ctx = MagicMock()
+        ctx.invocation_id = "inv-1"
+        ctx.agent = MagicMock(name="agent")
+
+        with caplog.at_level(logging.INFO):
+            await plugin.before_run_callback(invocation_context=ctx)
+
+        assert "user_id=test-user-42" in caplog.text
+        assert "org_id=test-org-7" in caplog.text
+        assert "order_id=test-order-99" in caplog.text
+        assert "request_id=req-abc-123" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_after_run_includes_audit_fields(self, plugin, caplog):
+        ctx = MagicMock()
+        ctx.invocation_id = "inv-1"
+
+        with caplog.at_level(logging.INFO):
+            await plugin.after_run_callback(invocation_context=ctx)
+
+        assert "user_id=test-user-42" in caplog.text
+        assert "org_id=test-org-7" in caplog.text
+        assert "order_id=test-order-99" in caplog.text
+        assert "request_id=req-abc-123" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_before_model_includes_audit_fields(self, plugin, caplog):
+        ctx = MagicMock()
+        ctx.agent_name = "agent"
+
+        with caplog.at_level(logging.INFO):
+            await plugin.before_model_callback(
+                callback_context=ctx, llm_request=MagicMock()
+            )
+
+        assert "user_id=test-user-42" in caplog.text
+        assert "org_id=test-org-7" in caplog.text
+        assert "order_id=test-order-99" in caplog.text
+        assert "request_id=req-abc-123" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_after_model_includes_audit_fields(self, plugin, caplog):
+        ctx = MagicMock()
+        llm_response = MagicMock()
+        llm_response.usage_metadata = None
+        llm_response.model_version = None
+        llm_response.content = None
+
+        with caplog.at_level(logging.INFO):
+            await plugin.after_model_callback(
+                callback_context=ctx, llm_response=llm_response
+            )
+
+        assert "user_id=test-user-42" in caplog.text
+        assert "org_id=test-org-7" in caplog.text
+        assert "order_id=test-order-99" in caplog.text
+        assert "request_id=req-abc-123" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_before_tool_includes_audit_fields(self, plugin, caplog):
+        tool = MagicMock()
+        tool.name = "get_advisories"
+
+        with caplog.at_level(logging.INFO):
+            await plugin.before_tool_callback(
+                tool=tool, tool_args={}, tool_context=MagicMock()
+            )
+
+        assert "user_id=test-user-42" in caplog.text
+        assert "org_id=test-org-7" in caplog.text
+        assert "order_id=test-order-99" in caplog.text
+        assert "request_id=req-abc-123" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_after_tool_includes_audit_fields(self, plugin, caplog):
+        tool = MagicMock()
+        tool.name = "get_advisories"
+
+        with caplog.at_level(logging.INFO):
+            await plugin.after_tool_callback(
+                tool=tool, tool_args={}, tool_context=MagicMock(), result={}
+            )
+
+        assert "user_id=test-user-42" in caplog.text
+        assert "org_id=test-org-7" in caplog.text
+        assert "order_id=test-order-99" in caplog.text
+        assert "request_id=req-abc-123" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_tool_error_includes_audit_fields(self, plugin, caplog):
+        tool = MagicMock()
+        tool.name = "get_advisories"
+
+        with caplog.at_level(logging.ERROR):
+            await plugin.on_tool_error_callback(
+                tool=tool,
+                tool_args={},
+                tool_context=MagicMock(),
+                error=RuntimeError("fail"),
+            )
+
+        assert "user_id=test-user-42" in caplog.text
+        assert "org_id=test-org-7" in caplog.text
+        assert "order_id=test-order-99" in caplog.text
+        assert "request_id=req-abc-123" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_model_error_includes_audit_fields(self, plugin, caplog):
+        ctx = MagicMock()
+
+        with caplog.at_level(logging.ERROR):
+            await plugin.on_model_error_callback(
+                callback_context=ctx,
+                llm_request=MagicMock(),
+                error=RuntimeError("fail"),
+            )
+
+        assert "user_id=test-user-42" in caplog.text
+        assert "org_id=test-org-7" in caplog.text
+        assert "order_id=test-order-99" in caplog.text
+        assert "request_id=req-abc-123" in caplog.text
