@@ -13,7 +13,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import FastAPI
+from a2a.server.apps.jsonrpc.fastapi_app import A2AFastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from lightspeed_agent.api.a2a.a2a_setup import setup_a2a_routes
@@ -21,12 +21,13 @@ from lightspeed_agent.api.a2a.agent_card import get_agent_card_dict
 from lightspeed_agent.auth import AuthenticationMiddleware
 from lightspeed_agent.config import get_settings
 from lightspeed_agent.ratelimit import RateLimitMiddleware, get_redis_rate_limiter
+from lightspeed_agent.security import SecurityHeadersMiddleware
 
 logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+async def lifespan(app: A2AFastAPI) -> AsyncIterator[None]:
     """Application lifespan manager for startup/shutdown events."""
     settings = get_settings()
 
@@ -94,7 +95,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.error("Failed to close rate limiter Redis connection: %s", e)
 
 
-def create_app() -> FastAPI:
+def create_app() -> A2AFastAPI:
     """Create and configure the FastAPI application.
 
     Returns:
@@ -102,7 +103,7 @@ def create_app() -> FastAPI:
     """
     settings = get_settings()
 
-    app = FastAPI(
+    app = A2AFastAPI(
         title=settings.agent_name,
         description=settings.agent_description,
         version="0.1.0",
@@ -145,9 +146,12 @@ def create_app() -> FastAPI:
     # Can be disabled with SKIP_JWT_VALIDATION=true for development
     app.add_middleware(AuthenticationMiddleware)
 
+    # Add security headers middleware (HSTS, X-Content-Type-Options, X-Frame-Options)
+    app.add_middleware(SecurityHeadersMiddleware)
+
     # Add CORS middleware for A2A Inspector and other browser-based clients
     # This must be added after other middleware to be processed first
-    # Middleware execution order: CORS -> Auth -> RateLimit -> Handler
+    # Middleware execution order: CORS -> SecurityHeaders -> Auth -> RateLimit -> Handler
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],  # Allow all origins for development
