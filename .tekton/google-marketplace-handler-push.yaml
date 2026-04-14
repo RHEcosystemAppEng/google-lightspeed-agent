@@ -350,6 +350,8 @@ spec:
         value: $(tasks.prefetch-dependencies.results.SOURCE_ARTIFACT)
       - name: CACHI2_ARTIFACT
         value: $(tasks.prefetch-dependencies.results.CACHI2_ARTIFACT)
+      - name: ARGS
+        value: "--project-name=google-marketplace-handler --report --org=d152f68c-67b3-4efa-a5da-207d8219ca59"
       runAfter:
       - build-image-index
       taskRef:
