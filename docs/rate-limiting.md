@@ -170,3 +170,4 @@ Rate limiting happens **before** the request is processed (at the middleware lay
 
 - Rate limits are enforced across replicas as long as they share the same Redis instance.
 - The service verifies Redis connectivity at startup and fails fast when Redis is unavailable.
+- **In-transit encryption (TLS)**: Cloud Memorystore instances are created with `--transit-encryption-mode=SERVER_AUTHENTICATION`. Use the `rediss://` URL scheme and set `RATE_LIMIT_REDIS_CA_CERT` to the path of the mounted server CA certificate. See [Cloud Run Deployment — Redis Setup](../deploy/cloudrun/README.md#4-redis-setup-for-rate-limiting) for setup instructions.

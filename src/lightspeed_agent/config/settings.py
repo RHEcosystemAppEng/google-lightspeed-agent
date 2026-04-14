@@ -32,12 +32,42 @@ class Settings(BaseSettings):
         description="Google Cloud project ID for Vertex AI",
     )
     google_cloud_location: str = Field(
-        default="us-central1",
-        description="Google Cloud location for Vertex AI",
+        default="global",
+        description="Google Cloud location for Vertex AI (use 'global' for pay-as-you-go)",
     )
     gemini_model: str = Field(
         default="gemini-2.5-flash",
         description="Gemini model to use",
+    )
+    gemini_http_retry_attempts: int = Field(
+        default=5,
+        ge=1,
+        description=(
+            "Max HTTP attempts per Gemini call (including the first request). "
+            "Set to 1 to disable SDK retries. Matches google-genai default (5)."
+        ),
+    )
+    gemini_http_retry_initial_delay: float = Field(
+        default=1.0,
+        gt=0,
+        description=(
+            "Initial backoff delay in seconds before the first retry (exponential backoff)."
+        ),
+    )
+    gemini_http_retry_max_delay: float = Field(
+        default=60.0,
+        gt=0,
+        description="Maximum delay in seconds between retries.",
+    )
+    gemini_http_retry_exp_base: float = Field(
+        default=2.0,
+        gt=0,
+        description="Multiplier for exponential backoff between attempts.",
+    )
+    gemini_http_retry_jitter: float = Field(
+        default=1.0,
+        ge=0,
+        description="Jitter factor for backoff (reduces synchronized retries).",
     )
 
     # Red Hat SSO Configuration
@@ -155,7 +185,11 @@ class Settings(BaseSettings):
     )
     rate_limit_redis_url: str = Field(
         default="redis://localhost:6379/0",
-        description="Redis URL for distributed rate limiting",
+        description="Redis URL for distributed rate limiting (use rediss:// for TLS)",
+    )
+    rate_limit_redis_ca_cert: str = Field(
+        default="",
+        description="Path to Redis server CA certificate for TLS verification",
     )
     rate_limit_redis_timeout_ms: int = Field(
         default=200,
@@ -180,6 +214,15 @@ class Settings(BaseSettings):
         description="Agent execution logging detail level. "
         "'basic' logs tool names and token counts. "
         "'detailed' also logs tool arguments and truncated results.",
+    )
+    tool_result_max_chars: int = Field(
+        default=51200,
+        ge=0,
+        description=(
+            "Maximum character length for MCP tool results sent to the LLM. "
+            "Oversized results are replaced with a message advising the user "
+            "to narrow down or paginate. Set to 0 to disable."
+        ),
     )
 
     # DCR (Dynamic Client Registration) Configuration

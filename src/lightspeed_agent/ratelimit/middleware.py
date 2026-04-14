@@ -2,6 +2,7 @@
 
 import logging
 import math
+import os
 import time
 import uuid
 from collections.abc import Callable
@@ -95,12 +96,34 @@ return {1, "ok", min_remaining_minute, min_remaining_hour, 0, 0}
     def __init__(self) -> None:
         settings = get_settings()
         timeout_seconds = max(settings.rate_limit_redis_timeout_ms, 1) / 1000.0
+        # TLS handshake (certificate exchange) needs more time than plain TCP.
+        # Use a separate, longer timeout for connection establishment so that
+        # the per-operation timeout can stay low for fast fail-open behaviour.
+        uses_tls = settings.rate_limit_redis_url.startswith("rediss://")
+        if os.getenv("K_SERVICE") and not uses_tls:
+            raise ValueError(
+                f"Redis TLS is required in Cloud Run (K_SERVICE={os.getenv('K_SERVICE')}). "
+                f"Use 'rediss://' scheme, not 'redis://'. "
+                f"Current URL: {settings.rate_limit_redis_url}"
+            )
+        if uses_tls and not settings.rate_limit_redis_ca_cert:
+            raise ValueError(
+                "RATE_LIMIT_REDIS_CA_CERT must be set when using TLS (rediss://) "
+                "for RATE_LIMIT_REDIS_URL. Provide the path to the Redis server "
+                "CA certificate for TLS verification."
+            )
+        connect_timeout = max(timeout_seconds, 5.0) if uses_tls else timeout_seconds
+        kwargs: dict[str, Any] = {
+            "encoding": "utf-8",
+            "decode_responses": True,
+            "socket_timeout": timeout_seconds,
+            "socket_connect_timeout": connect_timeout,
+        }
+        if settings.rate_limit_redis_ca_cert:
+            kwargs["ssl_ca_certs"] = settings.rate_limit_redis_ca_cert
         self._redis = Redis.from_url(
             settings.rate_limit_redis_url,
-            encoding="utf-8",
-            decode_responses=True,
-            socket_timeout=timeout_seconds,
-            socket_connect_timeout=timeout_seconds,
+            **kwargs,
         )
         self._requests_per_minute = settings.rate_limit_requests_per_minute
         self._requests_per_hour = settings.rate_limit_requests_per_hour
