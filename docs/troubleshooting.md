@@ -103,7 +103,7 @@ echo $TOKEN | cut -d. -f2 | base64 -d 2>/dev/null | jq .
 | Issue | Cause | Solution |
 |-------|-------|----------|
 | Token not active | Token expired or revoked | Get new token via OAuth or `client_credentials` |
-| Introspection failed | Agent can't reach Keycloak | Check `RED_HAT_SSO_ISSUER` and network |
+| Introspection failed | Agent can't reach Red Hat SSO | Check `RED_HAT_SSO_ISSUER` and network |
 | Wrong credentials | Agent client_id/secret invalid | Check `RED_HAT_SSO_CLIENT_ID/SECRET` |
 
 **Test Introspection Endpoint**:
@@ -127,9 +127,17 @@ curl -s -X POST \
 echo $TOKEN | cut -d. -f2 | base64 -d 2>/dev/null | jq .scope
 ```
 
-**Required Scope**: `agent:insights` (configurable via `AGENT_REQUIRED_SCOPE`)
+**Required Scopes**: `api.console` and `api.ocm` (configurable via `AGENT_REQUIRED_SCOPE`)
 
-**Fix**: Ensure the `agent:insights` Client Scope exists in Keycloak and is assigned to the client that issued the token.
+**Fix**: Ensure the `api.console` and `api.ocm` Client Scopes exist in Red Hat SSO and are assigned to the client that issued the token.
+
+### Disallowed Scope (403 Forbidden)
+
+**Symptom**: `Token carries disallowed scope(s): <scope_name>`
+
+The token contains scopes outside the `AGENT_ALLOWED_SCOPES` allowlist.
+
+**Fix**: Either add the scope to `AGENT_ALLOWED_SCOPES` or request a token without the extra scopes. All permitted scopes must be explicitly listed.
 
 ### OAuth Callback Errors
 
@@ -300,7 +308,7 @@ podman pod inspect lightspeed-agent-pod
 podman login registry.access.redhat.com
 
 # Pull image manually
-podman pull registry.access.redhat.com/ubi9/python-312-minimal:latest
+podman pull registry.access.redhat.com/ubi10/python-312-minimal:latest
 ```
 
 ### Volume Mount Issues
@@ -418,7 +426,7 @@ open http://localhost:8000/docs
 | Message | Meaning | Action |
 |---------|---------|--------|
 | `Token validation failed` | Invalid/inactive token | Check token and introspection endpoint |
-| `Insufficient scope` | Missing `agent:insights` | Add scope to client in Keycloak |
+| `Insufficient scope` | Missing `api.console` or `api.ocm` | Add scopes to client in Red Hat SSO |
 | `Tool execution failed` | MCP error | Check MCP server |
 | `Rate limit exceeded` | Too many requests | Wait or upgrade |
 | `Database connection failed` | DB unreachable | Check database |

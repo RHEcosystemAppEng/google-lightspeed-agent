@@ -102,18 +102,6 @@ spec:
             secretKeyRef:
               name: lightspeed-agent-secrets
               key: RED_HAT_SSO_CLIENT_SECRET
-        - name: DCR_INITIAL_ACCESS_TOKEN
-          valueFrom:
-            secretKeyRef:
-              name: lightspeed-agent-secrets
-              key: DCR_INITIAL_ACCESS_TOKEN
-              optional: true
-        - name: DCR_ENCRYPTION_KEY
-          valueFrom:
-            secretKeyRef:
-              name: lightspeed-agent-secrets
-              key: DCR_ENCRYPTION_KEY
-              optional: true
         # Database URL - Connect to PostgreSQL in the marketplace-handler pod
         # Uses host.containers.internal to reach the handler pod's PostgreSQL
         # Used for marketplace data (orders, entitlements, DCR clients)

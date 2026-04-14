@@ -29,8 +29,8 @@ The system consists of **two separate services**:
 │  │                           FastAPI Application                             │  │
 │  │  ┌──────────────────────────────────────────────────────────────────────┐ │  │
 │  │  │                    Hybrid /dcr Endpoint                              │ │  │
-│  │  │  - Pub/Sub Events → Approve accounts/entitlements                    │ │  │
-│  │  │  - DCR Requests → Create OAuth clients via Keycloak                  │ │  │
+│  │  │  - Pub/Sub Events → Approve accounts and entitlements                 │ │  │
+│  │  │  - DCR Requests → Create OAuth clients via GMA SSO API               │ │  │
 │  │  └──────────────────────────────────────────────────────────────────────┘ │  │
 │  └───────────────────────────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────────────────────────┘
@@ -39,8 +39,8 @@ The system consists of **two separate services**:
          ▼                                                    ▼
 ┌─────────────────┐                                  ┌─────────────────────────┐
 │   PostgreSQL    │                                  │    Red Hat SSO          │
-│   Database      │◀──────────────────────────────▶│    (Keycloak)           │
-│  - Accounts     │                                  │  - DCR Endpoint         │
+│   Database      │◀──────────────────────────────▶│                         │
+│  - Accounts     │                                  │  - GMA SSO API          │
 │  - Entitlements │                                  │  - OIDC/OAuth           │
 │  - DCR Clients  │                                  └─────────────────────────┘
 └─────────────────┘
@@ -100,7 +100,7 @@ The system is split into two services for important operational reasons:
 | **Marketplace Handler** | Handles provisioning and DCR | Always running (minScale=1) |
 | **Lightspeed Agent** | AI agent for user queries | Deployed after provisioning |
 
-1. **Marketplace Handler must be always running** to receive Pub/Sub events from Google Cloud Marketplace for account approvals
+1. **Marketplace Handler must be always running** to receive Pub/Sub events from Google Cloud Marketplace for account and entitlement approvals
 2. **Agent can be deployed on-demand** after a customer has been provisioned
 3. **Separation of concerns**: Provisioning logic is isolated from agent logic
 4. **Independent scaling**: Handler scales for provisioning traffic, Agent scales for user traffic
@@ -112,7 +112,7 @@ The system is split into two services for important operational reasons:
 A separate FastAPI application for provisioning, providing:
 
 - **Hybrid /dcr Endpoint**: Single endpoint handling both:
-  - Pub/Sub events (account/entitlement approvals)
+  - Pub/Sub events (account and entitlement approvals, filtered by product)
   - DCR requests (OAuth client creation)
 - **Health Endpoints**: Kubernetes-compatible health checks
 - **Database Access**: PostgreSQL for persistent storage
@@ -129,8 +129,8 @@ The main AI agent FastAPI application, providing:
 
 Handles all authentication and authorization:
 
-- **Token Introspection**: Validates tokens via Keycloak introspection endpoint (RFC 7662)
-- **Scope Checking**: Checks for required `agent:insights` scope
+- **Token Introspection**: Validates tokens via Red Hat SSO introspection endpoint (RFC 7662)
+- **Scope Checking**: Checks for required `api.console` and `api.ocm` scopes; rejects tokens carrying scopes outside the configured allowlist
 - **Bypass for Discovery**: `/.well-known/agent.json` is public per A2A spec
 
 ### Agent Core
@@ -159,10 +159,11 @@ This flow happens when a customer purchases from Google Cloud Marketplace:
 1. Customer purchases from Google Cloud Marketplace
 2. Marketplace sends Pub/Sub event to Marketplace Handler
 3. Handler receives POST /dcr with Pub/Sub message wrapper
-4. Handler extracts event type (ACCOUNT_ACTIVE, ENTITLEMENT_ACTIVE, etc.)
-5. Handler calls Google Procurement API to approve account/entitlement
-6. Handler stores account/entitlement in PostgreSQL
-7. Customer is now provisioned for the service
+4. Handler filters by product (SERVICE_CONTROL_SERVICE_NAME) — account events pass through
+5. Handler extracts event type (ACCOUNT_CREATION_REQUESTED, ENTITLEMENT_CREATION_REQUESTED, etc.)
+6. Handler calls Google Procurement API to approve account, then entitlement
+7. Handler stores entitlement in PostgreSQL
+8. Customer is now provisioned for the service
 ```
 
 ```
@@ -178,7 +179,7 @@ This flow happens when a customer purchases from Google Cloud Marketplace:
                                                                           ▼
                                          ┌─────────────────────────────────────┐
                                          │   Google Procurement API            │
-                                         │   (Approve Account/Entitlement)     │
+                                         │   (Approve Entitlement)             │
                                          └─────────────────────────────────────┘
 ```
 
@@ -191,7 +192,7 @@ This flow happens when an admin configures the agent in Gemini Enterprise:
 2. Gemini sends POST /dcr with software_statement JWT
 3. Handler validates Google's JWT signature
 4. Handler verifies order_id matches a provisioned entitlement
-5. Handler calls Red Hat SSO DCR to create OAuth client
+5. Handler calls GMA SSO API to create OAuth tenant client
 6. Handler stores client mapping in PostgreSQL
 7. Handler returns client_id, client_secret to Gemini
 8. Gemini stores credentials for future OAuth flows
@@ -215,13 +216,13 @@ This flow happens when an admin configures the agent in Gemini Enterprise:
 
 ### Flow 3: Client Authentication
 
-Clients obtain access tokens directly from Red Hat SSO (Keycloak) using their
+Clients obtain access tokens directly from Red Hat SSO using their
 DCR-issued credentials. The agent does not participate in token issuance — it
 acts purely as a Resource Server.
 
 ```
 1. Client authenticates directly with Red Hat SSO (e.g., client_credentials grant)
-2. Red Hat SSO issues access token with agent:insights scope
+2. Red Hat SSO issues access token with api.console and api.ocm scopes
 3. Client uses the token for A2A requests to the agent
 ```
 
@@ -262,7 +263,7 @@ src/lightspeed_agent/
 │   └── models.py              # ORM models (accounts, entitlements, DCR clients, usage)
 ├── dcr/                        # Dynamic Client Registration
 │   ├── google_jwt.py          # Google JWT validation
-│   ├── keycloak_client.py     # Keycloak DCR API client
+│   ├── gma_client.py          # GMA SSO API client
 │   ├── models.py              # DCR Pydantic models
 │   ├── repository.py          # PostgreSQL repository
 │   └── service.py             # DCR business logic
@@ -297,7 +298,7 @@ src/lightspeed_agent/
 | Red Hat Lightspeed MCP | Agent | Data access | Yes |
 | PostgreSQL | Both | Data persistence | Yes (Production) |
 | Google Cloud Pub/Sub | Handler | Marketplace events | Production |
-| Google Procurement API | Handler | Account/entitlement approval | Production |
+| Google Procurement API | Handler | Entitlement approval, account validation | Production |
 | Google Service Control | Agent | Usage reporting | Production |
 
 ## Scaling Considerations
@@ -334,8 +335,8 @@ src/lightspeed_agent/
 ### Authentication
 
 - A2A query endpoints require valid Bearer token from Red Hat SSO
-- Tokens validated via Keycloak introspection endpoint (RFC 7662)
-- Required `agent:insights` scope checked; returns 403 if missing
+- Tokens validated via Red Hat SSO introspection endpoint (RFC 7662)
+- Required `api.console` and `api.ocm` scopes checked; returns 403 if missing or if token carries disallowed scopes
 
 ### Public Endpoints
 
@@ -418,15 +419,15 @@ The system uses PostgreSQL for persistence. For production deployments, the mark
 
 ## Architecture Decision Records
 
-### ADR-1: Real DCR with Red Hat SSO (Keycloak)
+### ADR-1: Real DCR with Red Hat SSO (GMA SSO API)
 
 **Status**: Accepted
 
-**Context**: Google Cloud Marketplace requires agents to implement DCR (RFC 7591) to create OAuth client credentials for each marketplace order. Options considered: (1) return tracking credentials without creating real OAuth clients, or (2) create actual OAuth clients in Red Hat SSO via its DCR API.
+**Context**: Google Cloud Marketplace requires agents to implement DCR (RFC 7591) to create OAuth client credentials for each marketplace order. Options considered: (1) return tracking credentials without creating real OAuth clients, or (2) create actual OAuth clients in Red Hat SSO via the GMA SSO API.
 
-**Decision**: Implement real DCR with Red Hat SSO (Keycloak). Each order gets a real, functioning OAuth client with proper OAuth 2.0 flow and per-order isolation.
+**Decision**: Implement real DCR with Red Hat SSO via the GMA SSO API. Each order gets a real, functioning OAuth client with proper OAuth 2.0 flow and per-order isolation.
 
-**Consequences**: Requires DCR to be enabled on the Red Hat SSO realm and an Initial Access Token from the admin. More complex setup but more robust architecture.
+**Consequences**: Requires GMA API credentials (`GMA_CLIENT_ID` / `GMA_CLIENT_SECRET`) with `api.iam.clients.gma` scope. More complex setup but more robust architecture.
 
 ### ADR-2: PostgreSQL for Persistence
 
@@ -444,6 +445,6 @@ The system uses PostgreSQL for persistence. For production deployments, the mark
 
 **Context**: Not all deployments have DCR enabled on Red Hat SSO, and development/testing environments may not need real DCR.
 
-**Decision**: Make DCR mode configurable via `DCR_ENABLED`. When `true` (default), real OAuth clients are created in Keycloak. When `false`, static credentials from environment variables are returned.
+**Decision**: Make DCR mode configurable via `DCR_ENABLED`. When `true` (default), real OAuth clients are created via the GMA SSO API. When `false`, static credentials from environment variables are returned.
 
 **Consequences**: Two code paths to maintain. Clear documentation needed for each mode. See [Authentication](authentication.md#dynamic-client-registration-dcr) for details.

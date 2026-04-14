@@ -87,109 +87,17 @@ The handler must be started with at least these environment variables:
     # Set TEST_CLIENT_ID and TEST_CLIENT_SECRET on this script.
     DCR_ENABLED=false
 
-    # --- OR: Real DCR against a local Keycloak ---
+    # --- OR: Real DCR via GMA SSO API ---
     # DCR_ENABLED=true
-    # RED_HAT_SSO_ISSUER=http://localhost:8180/realms/test-realm
-    # DCR_INITIAL_ACCESS_TOKEN=<your-keycloak-IAT>
+    # GMA_CLIENT_ID=<your-gma-client-id>
+    # GMA_CLIENT_SECRET=<your-gma-client-secret>
 
     # Always required
     DCR_ENCRYPTION_KEY=<generate with: python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'>
     DATABASE_URL=sqlite+aiosqlite:///./lightspeed_agent.db
 
-    # Must match PROVIDER_URL below (or set AGENT_PROVIDER_URL on the handler)
-    AGENT_PROVIDER_URL=https://your-agent-domain.com
-
-------------------------------------------------------------------------
-Local Keycloak setup (for real DCR testing)
-------------------------------------------------------------------------
-
-If you want to test the full DCR flow (real OAuth client creation in
-Keycloak) without admin access to Red Hat SSO, you can run a local
-Keycloak instance in Podman.  This is optional -- static credentials
-mode (DCR_ENABLED=false) works without Keycloak.
-
-1. Start Keycloak:
-
-       podman run -d \
-         --name keycloak-test \
-         -p 8180:8080 \
-         -e KC_BOOTSTRAP_ADMIN_USERNAME=admin \
-         -e KC_BOOTSTRAP_ADMIN_PASSWORD=admin \
-         -e KC_HTTP_ENABLED=true \
-         -e KC_HOSTNAME=host.containers.internal \
-         -e KC_HOSTNAME_PORT=8180 \
-         -e KC_HOSTNAME_STRICT=true \
-         quay.io/keycloak/keycloak:26.0 start-dev --http-port=8080
-
-   IMPORTANT: KC_HOSTNAME_STRICT=true with KC_HOSTNAME=host.containers.internal
-   ensures Keycloak uses a consistent issuer for all tokens regardless of how
-   requests arrive (localhost vs host.containers.internal).  Without this, the
-   IAT generated via localhost would have a mismatched issuer when the handler
-   presents it via host.containers.internal, causing "Failed decode token".
-
-2. Disable SSL and create the test realm:
-
-   Since KC_HOSTNAME_STRICT=true treats localhost as external, you must
-   disable SSL via kcadm.sh from inside the container:
-
-       podman exec keycloak-test /opt/keycloak/bin/kcadm.sh \
-         config credentials --server http://localhost:8080 \
-         --realm master --user admin --password admin
-
-       podman exec keycloak-test /opt/keycloak/bin/kcadm.sh \
-         update realms/master -s sslRequired=NONE
-
-       podman exec keycloak-test /opt/keycloak/bin/kcadm.sh \
-         create realms -s realm=test-realm -s enabled=true -s sslRequired=NONE
-
-3. Get an admin token:
-
-       ADMIN_TOKEN=$(curl -s -X POST \
-         "http://localhost:8180/realms/master/protocol/openid-connect/token" \
-         -d "client_id=admin-cli" \
-         -d "username=admin" \
-         -d "password=admin" \
-         -d "grant_type=password" \
-         | python -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
-
-4. Generate an Initial Access Token (IAT) for DCR:
-
-       IAT=$(curl -s -X POST \
-         "http://localhost:8180/admin/realms/test-realm/clients-initial-access" \
-         -H "Authorization: Bearer $ADMIN_TOKEN" \
-         -H "Content-Type: application/json" \
-         -d '{"count": 100, "expiration": 86400}' \
-         | python -c "import sys,json; print(json.load(sys.stdin)['token'])")
-       echo "Initial Access Token: $IAT"
-
-5. Configure the marketplace handler with:
-
-       DCR_ENABLED=true
-       SKIP_JWT_VALIDATION=true
-       RED_HAT_SSO_ISSUER=http://host.containers.internal:8180/realms/test-realm
-       DCR_INITIAL_ACCESS_TOKEN=<the IAT from step 4>
-
-6. Run this script.  The handler will create a real OAuth client in
-   your local Keycloak.  Verify at:
-       http://localhost:8180/admin -> test-realm -> Clients
-
-7. You can also test Keycloak DCR directly (without the handler):
-
-       curl -s -X POST \
-         "http://localhost:8180/realms/test-realm/clients-registrations/openid-connect" \
-         -H "Authorization: Bearer $IAT" \
-         -H "Content-Type: application/json" \
-         -d '{
-           "client_name": "gemini-order-test-123",
-           "redirect_uris": ["https://gemini.google.com/callback"],
-           "grant_types": ["authorization_code", "refresh_token"],
-           "token_endpoint_auth_method": "client_secret_basic",
-           "application_type": "web"
-         }'
-
-8. Clean up:
-
-       podman stop keycloak-test && podman rm keycloak-test
+    # Must match PROVIDER_URL below (or set AGENT_PROVIDER_ORGANIZATION_URL on the handler)
+    AGENT_PROVIDER_ORGANIZATION_URL=https://www.redhat.com
 
 ------------------------------------------------------------------------
 Usage
@@ -228,9 +136,9 @@ Environment variables
     MARKETPLACE_HANDLER_URL  (default: http://localhost:8001)
         Base URL of the marketplace handler.
 
-    PROVIDER_URL  (default: https://your-agent-domain.com)
+    PROVIDER_URL  (default: https://www.redhat.com)
         Expected audience (aud) claim.  Must match the handler's
-        AGENT_PROVIDER_URL setting.
+        AGENT_PROVIDER_ORGANIZATION_URL setting.
 
     TEST_ORDER_ID  (optional)
         Fixed marketplace order ID.  If unset a random UUID is generated.
@@ -267,7 +175,7 @@ import requests
 # ---------------------------------------------------------------------------
 
 HANDLER_URL = os.environ.get("MARKETPLACE_HANDLER_URL", "http://localhost:8001")
-PROVIDER_URL = os.environ.get("PROVIDER_URL", "https://your-agent-domain.com")
+PROVIDER_URL = os.environ.get("PROVIDER_URL", "https://www.redhat.com")
 TEST_SERVICE_ACCOUNT = os.environ.get("TEST_SERVICE_ACCOUNT")
 TEST_SA_KEY_FILE = os.environ.get("TEST_SA_KEY_FILE")
 TEST_CLIENT_ID = os.environ.get("TEST_CLIENT_ID")

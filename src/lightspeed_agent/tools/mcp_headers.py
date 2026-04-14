@@ -5,7 +5,12 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from lightspeed_agent.auth.middleware import get_request_access_token
+from lightspeed_agent.auth.middleware import (
+    get_request_access_token,
+    get_request_id,
+    get_request_org_id,
+    get_request_user_id,
+)
 
 if TYPE_CHECKING:
     from google.adk.agents.readonly_context import ReadonlyContext
@@ -39,6 +44,17 @@ def create_mcp_header_provider() -> Callable[["ReadonlyContext"], dict[str, str]
         if token_info is not None:
             token, token_exp = token_info
             now = datetime.now(UTC)
+
+            logger.info(
+                "Forwarding JWT to MCP server "
+                "(event_type=mcp_jwt_forwarded, user_id=%s, org_id=%s, "
+                "request_id=%s, token_expiry=%s)",
+                get_request_user_id(),
+                get_request_org_id(),
+                get_request_id(),
+                token_exp.isoformat(),
+            )
+
             if now >= token_exp:
                 logger.warning(
                     "Access token expired at %s (now %s); "

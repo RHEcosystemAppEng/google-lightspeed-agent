@@ -48,7 +48,8 @@ def _build_oauth_security_scheme() -> OAuth2SecurityScheme:
         "openid": "OpenID Connect scope",
         "profile": "User profile information",
         "email": "User email address",
-        "agent:insights": "Access to Red Hat Insights agent",
+        "api.console": "Access to Red Hat console APIs",
+        "api.ocm": "Access to Red Hat OpenShift Cluster Manager APIs",
     }
 
     auth_code_flow = AuthorizationCodeOAuthFlow(
@@ -86,11 +87,45 @@ def _build_dcr_extension() -> AgentExtension:
     handler_url = settings.marketplace_handler_url or settings.agent_provider_url
 
     return AgentExtension(
-        uri="urn:google:agent:dcr",
-        description="Dynamic Client Registration for OAuth 2.0",
+        uri="https://cloud.google.com/marketplace/docs/partners/ai-agents/setup-dcr",
         params={
-            "endpoint": f"{handler_url}/dcr",
-            "supportedGrantTypes": ["authorization_code", "refresh_token"],
+            "target_url": f"{handler_url}/dcr",
+        },
+    )
+
+
+def _build_access_mode_extension() -> AgentExtension:
+    """Build access mode extension.
+
+    Indicates whether the agent operates in read-only mode and lists
+    the OAuth2 scopes reflecting this access level.
+    """
+    settings = get_settings()
+
+    return AgentExtension(
+        uri="urn:redhat:lightspeed:access-mode",
+        description="Agent access mode and permitted OAuth2 scopes",
+        params={
+            "read_only": settings.mcp_read_only,
+            "oauth2_scopes": settings.allowed_scopes_list,
+        },
+    )
+
+
+def _build_rate_limit_extension() -> AgentExtension:
+    """Build rate limiting metadata extension.
+
+    Exposes the agent's rate limits so downstream agents and clients
+    can plan their request patterns accordingly.
+    """
+    settings = get_settings()
+
+    return AgentExtension(
+        uri="urn:redhat:lightspeed:rate-limiting",
+        description="Agent rate limiting constraints",
+        params={
+            "requests_per_minute": settings.rate_limit_requests_per_minute,
+            "requests_per_hour": settings.rate_limit_requests_per_hour,
         },
     )
 
@@ -98,12 +133,14 @@ def _build_dcr_extension() -> AgentExtension:
 def _build_capabilities() -> AgentCapabilities:
     """Build agent capabilities with extensions."""
     dcr_extension = _build_dcr_extension()
+    access_mode_extension = _build_access_mode_extension()
+    rate_limit_extension = _build_rate_limit_extension()
 
     return AgentCapabilities(
         streaming=True,
         push_notifications=False,
         state_transition_history=False,
-        extensions=[dcr_extension],
+        extensions=[dcr_extension, access_mode_extension, rate_limit_extension],
     )
 
 
@@ -118,7 +155,7 @@ def build_agent_card() -> AgentCard:
 
     provider = AgentProvider(
         organization="Red Hat",
-        url="https://www.redhat.com",
+        url=settings.agent_provider_organization_url,
     )
 
     oauth_scheme = _build_oauth_security_scheme()
@@ -126,11 +163,11 @@ def build_agent_card() -> AgentCard:
     skills = _build_skills()
 
     agent_card = AgentCard(
-        name=settings.agent_name,
+        name=settings.agent_display_name,
         description=settings.agent_description,
         version="0.1.0",
         url=f"{settings.agent_provider_url}/",
-        protocol_version="0.2.3",
+        protocol_version="0.3.0",
         provider=provider,
         capabilities=capabilities,
         skills=skills,
@@ -138,7 +175,7 @@ def build_agent_card() -> AgentCard:
             "redhat_sso": SecurityScheme(root=oauth_scheme),
         },
         security=[
-            {"redhat_sso": ["openid", "agent:insights"]},
+            {"redhat_sso": ["openid", "api.console", "api.ocm"]},
         ],
         default_input_modes=["text"],
         default_output_modes=["text"],

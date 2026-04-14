@@ -67,11 +67,20 @@ spec:
             # Google Cloud Configuration
             - name: GOOGLE_CLOUD_PROJECT
               value: "${PROJECT_ID}"
-            - name: GOOGLE_CLOUD_LOCATION
-              value: "${REGION}"
+            # Marketplace product identifier (managed service name from
+            # Producer Portal). Required for entitlement approval via the
+            # Procurement API and for product-level event filtering.
+            - name: SERVICE_CONTROL_SERVICE_NAME
+              value: "${SERVICE_CONTROL_SERVICE_NAME}"
             # Red Hat SSO Configuration
             - name: RED_HAT_SSO_ISSUER
               value: "https://sso.redhat.com/auth/realms/redhat-external"
+            # Agent provider's organization website URL.
+            # Used as the expected JWT audience for Google DCR
+            # software_statement validation. Must match the aud claim
+            # Google sends in the software_statement.
+            - name: AGENT_PROVIDER_ORGANIZATION_URL
+              value: "https://www.redhat.com"
             # Ensure production environment do not skip JWT validation
             - name: SKIP_JWT_VALIDATION
               value: "false"
@@ -80,6 +89,11 @@ spec:
               value: "true"
             - name: DCR_CLIENT_NAME_PREFIX
               value: "gemini-order-"
+            # GMA SSO API base URL for tenant creation.
+            # Production: https://sso.redhat.com/auth/realms/redhat-external/apis/beta/acs/v1/
+            # Staging:    https://sso.stage.redhat.com/auth/realms/redhat-external/apis/beta/acs/v1/
+            - name: GMA_API_BASE_URL
+              value: "https://sso.redhat.com/auth/realms/redhat-external/apis/beta/acs/v1/"
             # Secrets from Secret Manager
             - name: RED_HAT_SSO_CLIENT_ID
               valueFrom:
@@ -91,10 +105,15 @@ spec:
                 secretKeyRef:
                   name: redhat-sso-client-secret
                   key: latest
-            - name: DCR_INITIAL_ACCESS_TOKEN
+            - name: GMA_CLIENT_ID
               valueFrom:
                 secretKeyRef:
-                  name: dcr-initial-access-token
+                  name: gma-client-id
+                  key: latest
+            - name: GMA_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: gma-client-secret
                   key: latest
             - name: DCR_ENCRYPTION_KEY
               valueFrom:

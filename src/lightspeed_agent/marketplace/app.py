@@ -17,6 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from lightspeed_agent.config import get_settings
 from lightspeed_agent.marketplace.router import router as handler_router
+from lightspeed_agent.security import SecurityHeadersMiddleware
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +36,19 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         logger.info("Database initialized successfully")
     except Exception as e:
         logger.error("Failed to initialize database: %s", e)
+        raise
+
+    # Startup: Validate DCR configuration (fail-fast on Cloud Run)
+    # This ensures DCR_ENCRYPTION_KEY is valid BEFORE the service becomes ready,
+    # preventing silent failures when the first DCR request arrives.
+    try:
+        from lightspeed_agent.dcr import get_dcr_service
+
+        logger.info("Validating DCR service configuration")
+        get_dcr_service()  # Triggers DCRService.__init__() validation
+        logger.info("DCR service initialized successfully")
+    except Exception as e:
+        logger.error("Failed to initialize DCR service: %s", e)
         raise
 
     yield
@@ -81,6 +95,9 @@ def create_app() -> FastAPI:
     # Include the main handler router
     # This provides the /dcr endpoint that handles both Pub/Sub and DCR
     app.include_router(handler_router)
+
+    # Add security headers middleware (HSTS, X-Content-Type-Options, X-Frame-Options)
+    app.add_middleware(SecurityHeadersMiddleware)
 
     # Add CORS middleware
     app.add_middleware(
