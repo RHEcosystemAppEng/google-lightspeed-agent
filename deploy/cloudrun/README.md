@@ -997,6 +997,227 @@ Follow the instructions to verify domain ownership and configure DNS.
 
 Once deployed, you can test the agent using a local proxy that handles Google Cloud Run authentication.
 
+> **Important:** When full authentication is enabled (the default on Cloud Run),
+> every A2A request must pass three validation steps:
+>
+> 1. **Token introspection** — The Bearer token must be active at Red Hat SSO
+> 2. **DCR client lookup** — The token's `client_id` (`azp` claim) must exist in the `dcr_clients` table
+> 3. **Entitlement check** — The DCR client's `order_id` must have an `active` entitlement in `marketplace_entitlements`
+>
+> Without steps 2 and 3, you will get `"No active order found for this client"` (403 Forbidden).
+> See [Authentication Setup for Testing](#authentication-setup-for-testing) below to configure
+> the required database records before sending A2A requests.
+
+### Authentication Setup for Testing
+
+#### Prerequisites
+
+Install the [Cloud SQL Auth Proxy](https://cloud.google.com/sql/docs/postgres/connect-auth-proxy)
+if you don't have it already, then start it and fetch database credentials:
+
+```bash
+# Install Cloud SQL Auth Proxy (one-time setup)
+# Linux (amd64):
+curl -o cloud-sql-proxy https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.15.2/cloud-sql-proxy.linux.amd64
+chmod +x cloud-sql-proxy
+
+# macOS (Apple Silicon):
+# curl -o cloud-sql-proxy https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.15.2/cloud-sql-proxy.darwin.arm64
+# chmod +x cloud-sql-proxy
+```
+
+```bash
+# Terminal 1: Start Cloud SQL Auth Proxy
+./cloud-sql-proxy --port 5432 \
+  ${GOOGLE_CLOUD_PROJECT}:${GOOGLE_CLOUD_LOCATION}:${DB_INSTANCE_NAME:-lightspeed-agent-db}
+```
+
+```bash
+# Terminal 2: Fetch credentials from Secret Manager
+CLOUD_DB_URL=$(gcloud secrets versions access latest \
+  --secret=database-url --project=$GOOGLE_CLOUD_PROJECT)
+DB_PASSWORD=$(echo "$CLOUD_DB_URL" | sed -n 's|.*://insights:\([^@]*\)@.*|\1|p')
+export DATABASE_URL="postgresql+asyncpg://insights:${DB_PASSWORD}@localhost:5432/lightspeed_agent"
+export DCR_ENCRYPTION_KEY=$(gcloud secrets versions access latest \
+  --secret=dcr-encryption-key --project=$GOOGLE_CLOUD_PROJECT)
+```
+
+#### Seed database records and get a token
+
+This seeds the database with a DCR client and entitlement that match your
+`ocm token`'s `azp` claim, allowing you to use `ocm token` directly for A2A
+requests.
+
+> **Why `ocm token`?** DCR clients created via the GMA API only support
+> `authorization_code` and `refresh_token` grants (the flows Gemini Enterprise
+> uses) — `client_credentials` is not enabled. The `ocm token` approach works
+> because it produces a valid Red Hat SSO token whose `azp` claim we map to a
+> seeded DCR client in the database.
+
+**1. Set scope requirements to match `ocm token`:**
+
+The `ocm token` carries `openid`, `roles`, and `web-origins` scopes — not the
+`api.console` / `api.ocm` scopes the agent requires by default. Temporarily set
+both required and allowed scopes to match the ocm token on Cloud Run:
+
+```bash
+gcloud run services update lightspeed-agent \
+  --region=$GOOGLE_CLOUD_LOCATION \
+  --project=$GOOGLE_CLOUD_PROJECT \
+  --update-env-vars="AGENT_REQUIRED_SCOPE=openid,roles,web-origins" \
+  --update-env-vars="AGENT_ALLOWED_SCOPES=openid,roles,web-origins"
+```
+
+> **Remember to restore these after testing** — see
+> [Cleanup test records](#cleanup-test-records) below.
+
+**2. Login to OCM and get the token's client_id:**
+
+```bash
+ocm login --use-auth-code
+
+# Decode the token's azp (authorized party) claim — this is the client_id
+# the auth middleware will look up in the dcr_clients table
+OCM_CLIENT_ID=$(ocm token | cut -d. -f2 | base64 -d 2>/dev/null | jq -r '.azp')
+echo "OCM client_id (azp): $OCM_CLIENT_ID"
+```
+
+**3. Choose an order ID and seed the DCR client:**
+
+```bash
+export TEST_ORDER_ID="test-order-$(date +%s)"
+export TEST_ACCOUNT_ID="test-account-001"
+
+python scripts/seed_dcr_clients.py seed \
+  --client-id "$OCM_CLIENT_ID" \
+  --client-secret "placeholder-not-used-for-ocm" \
+  --order-id "$TEST_ORDER_ID" \
+  --account-id "$TEST_ACCOUNT_ID"
+```
+
+**4. Seed the matching entitlement record:**
+
+```bash
+python3 -c "
+import asyncio, os
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import create_async_engine
+
+async def main():
+    engine = create_async_engine(os.environ['DATABASE_URL'])
+    async with engine.begin() as conn:
+        await conn.execute(text('''
+            INSERT INTO marketplace_entitlements (id, account_id, provider_id, state, metadata)
+            VALUES (:id, :account_id, 'test-provider', 'active', '{}')
+            ON CONFLICT (id) DO UPDATE SET state = 'active'
+        '''), {'id': os.environ['TEST_ORDER_ID'], 'account_id': os.environ['TEST_ACCOUNT_ID']})
+    print(f'Entitlement seeded: order_id={os.environ[\"TEST_ORDER_ID\"]}')
+    await engine.dispose()
+
+asyncio.run(main())
+"
+```
+
+**5. Verify the records:**
+
+```bash
+# Check DCR client
+python scripts/seed_dcr_clients.py list
+
+# Check entitlement
+python3 -c "
+import asyncio, os
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import create_async_engine
+
+async def main():
+    engine = create_async_engine(os.environ['DATABASE_URL'])
+    async with engine.connect() as conn:
+        result = await conn.execute(text('''
+            SELECT id, account_id, state FROM marketplace_entitlements
+            WHERE id = :id
+        '''), {'id': os.environ['TEST_ORDER_ID']})
+        row = result.first()
+        if row:
+            print(f'Entitlement: id={row.id}, account_id={row.account_id}, state={row.state}')
+        else:
+            print('ERROR: Entitlement not found')
+    await engine.dispose()
+
+asyncio.run(main())
+"
+```
+
+**6. Get your token:**
+
+```bash
+export RED_HAT_TOKEN=$(ocm token)
+```
+
+Your `RED_HAT_TOKEN` is now ready. Quick smoke test against the deployed agent:
+
+```bash
+AGENT_URL=$(gcloud run services describe lightspeed-agent \
+  --region=$GOOGLE_CLOUD_LOCATION \
+  --project=$GOOGLE_CLOUD_PROJECT \
+  --format='value(status.url)')
+
+curl -X POST $AGENT_URL/ \
+  -H "Authorization: Bearer $RED_HAT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "method": "message/send",
+    "params": {
+      "message": {
+        "messageId": "1",
+        "role": "user",
+        "parts": [{"type": "text", "text": "Can you give me the systems affected by CVE-2023-49569"}]
+      }
+    },
+    "id": "1"
+  }' | jq .
+```
+
+For more testing options, see [Test A2A Requests with Local Proxy](#test-a2a-requests-with-local-proxy)
+or [Test with A2A Inspector](#test-with-a2a-inspector) below.
+
+#### Cleanup test records
+
+When done testing, restore scope settings and remove the seeded database records.
+The database cleanup requires the Cloud SQL Auth Proxy and environment variables
+from [Prerequisites](#prerequisites) above.
+
+```bash
+# 1. Restore scope requirements
+gcloud run services update lightspeed-agent \
+  --region=$GOOGLE_CLOUD_LOCATION \
+  --project=$GOOGLE_CLOUD_PROJECT \
+  --update-env-vars="AGENT_REQUIRED_SCOPE=api.console,api.ocm" \
+  --update-env-vars="AGENT_ALLOWED_SCOPES=openid,profile,email,api.console,api.ocm"
+
+# 2. Remove DCR client
+python scripts/seed_dcr_clients.py delete --order-id "$TEST_ORDER_ID" --confirm
+
+# 3. Remove entitlement
+python3 -c "
+import asyncio, os
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import create_async_engine
+
+async def main():
+    engine = create_async_engine(os.environ['DATABASE_URL'])
+    async with engine.begin() as conn:
+        result = await conn.execute(text('''
+            DELETE FROM marketplace_entitlements WHERE id = :id
+        '''), {'id': os.environ['TEST_ORDER_ID']})
+        print(f'Deleted {result.rowcount} entitlement(s)')
+    await engine.dispose()
+
+asyncio.run(main())
+"
+```
+
 ### Test Agent Card
 
 Verify the agent is running and accessible:
@@ -1050,20 +1271,13 @@ gcloud run services update lightspeed-agent \
 
 **3. Get a Red Hat SSO access token:**
 
-In a new terminal, use one of these methods:
-
-**Option A: Using `ocm` CLI (Easiest)**
-
-If you have the [ocm CLI](https://github.com/openshift-online/ocm-cli) installed:
+Follow the [Authentication Setup for Testing](#authentication-setup-for-testing)
+section above to configure database records and obtain a token (`RED_HAT_TOKEN`).
+You must complete that setup first — without it, the agent will reject requests
+with `"No active order found for this client"` (403).
 
 ```bash
-# Login to OCM (if not already logged in)
-ocm login --use-auth-code
-
-# Get access token
-export RED_HAT_TOKEN=$(ocm token)
-
-# Verify token is valid
+# Verify token is set and valid (should show decoded JWT payload)
 echo $RED_HAT_TOKEN | cut -d. -f2 | base64 -d 2>/dev/null | jq .
 ```
 
@@ -1138,7 +1352,8 @@ The [A2A Inspector](https://github.com/a2aproject/a2a-inspector) provides a web-
 ```bash
 # Make sure the proxy is running (from step 1 above)
 # Make sure AGENT_PROVIDER_URL is set to http://localhost:8099 (from step 2 above)
-# Make sure you have a Red Hat SSO token (from step 3 above)
+# Make sure you have completed the Authentication Setup for Testing (from step 3 above)
+# Make sure RED_HAT_TOKEN is set (via ocm token or client_credentials grant)
 ```
 
 **2. Start A2A Inspector:**
@@ -1159,7 +1374,7 @@ In the A2A Inspector web UI (usually at `http://localhost:5001`):
 1. **Agent URL**: Enter `http://localhost:8099/`
 2. **Authentication**:
    - Select "Bearer Token" or "OAuth"
-   - Paste your Red Hat SSO token: `$(ocm token)`
+   - Paste your `RED_HAT_TOKEN` (obtained via [Authentication Setup for Testing](#authentication-setup-for-testing))
 3. Click "Connect" - it will fetch the agent card from `http://localhost:8099/.well-known/agent-card.json`
 
 The A2A Inspector will read the agent card and see `"url": "http://localhost:8099/"`, which points back to your local proxy. All messages will flow through the proxy to Cloud Run.
@@ -1175,9 +1390,38 @@ The inspector will send properly formatted JSON-RPC requests with `messageId` fi
 
 ### Cleanup After Testing
 
-When you're done testing, clean up the local proxy and restore the production configuration.
+When you're done testing, clean up the local proxy, restore the production
+configuration, and remove any test database records.
 
-**1. Restore AGENT_PROVIDER_URL to the real Cloud Run URL:**
+**1. Remove test database records:**
+
+Follow the [Cleanup test records](#cleanup-test-records) steps in the
+Authentication Setup section to remove any DCR clients and entitlements you
+seeded. This requires the Cloud SQL Auth Proxy to still be running.
+
+```bash
+# Remove seeded DCR client and entitlement
+python scripts/seed_dcr_clients.py delete --order-id "$TEST_ORDER_ID" --confirm
+
+python3 -c "
+import asyncio, os
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import create_async_engine
+
+async def main():
+    engine = create_async_engine(os.environ['DATABASE_URL'])
+    async with engine.begin() as conn:
+        result = await conn.execute(text('''
+            DELETE FROM marketplace_entitlements WHERE id = :id
+        '''), {'id': os.environ['TEST_ORDER_ID']})
+        print(f'Deleted {result.rowcount} entitlement(s)')
+    await engine.dispose()
+
+asyncio.run(main())
+"
+```
+
+**2. Restore AGENT_PROVIDER_URL to the real Cloud Run URL:**
 
 ```bash
 # Get the actual Cloud Run service URL
@@ -1198,11 +1442,11 @@ curl -H "Authorization: Bearer $(gcloud auth print-identity-token)" \
 # Should show: https://lightspeed-agent-xxxxx.run.app/
 ```
 
-**2. Stop the proxy:**
+**3. Stop the proxy:**
 
 Press `Ctrl+C` in the terminal where the proxy is running.
 
-**3. Clean up port (if needed):**
+**4. Clean up port (if needed):**
 
 If the port is still in use:
 
@@ -1233,11 +1477,9 @@ If you prefer to test without the proxy, you'll need to:
      --role="roles/run.invoker"
    ```
 
-2. **Test directly** with the Cloud Run URL:
+2. **Test directly** with the Cloud Run URL (requires [auth setup](#authentication-setup-for-testing)):
    ```bash
-   # Get Red Hat SSO token (using ocm or OAuth flow)
-   export RED_HAT_TOKEN=$(ocm token)
-
+   # RED_HAT_TOKEN must be set via the Authentication Setup for Testing section
    curl -X POST $AGENT_URL/ \
      -H "Authorization: Bearer $RED_HAT_TOKEN" \
      -H "Content-Type: application/json" \
@@ -1264,9 +1506,7 @@ If you prefer to test without the proxy, you'll need to:
 This usually means you're testing the endpoint without proper authentication or the request format is incorrect:
 
 ```bash
-# Make sure you're using the proxy and have a valid token
-export RED_HAT_TOKEN=$(ocm token)
-
+# Make sure you have a valid token (see Authentication Setup for Testing)
 # Verify token is valid (should show decoded JWT payload)
 echo $RED_HAT_TOKEN | cut -d. -f2 | base64 -d 2>/dev/null | jq .
 
@@ -1275,10 +1515,53 @@ echo $RED_HAT_TOKEN | cut -d. -f2 | base64 -d 2>/dev/null | jq .
 gcloud run services proxy lightspeed-agent --region=us-central1 --port=8080
 ```
 
+**"No active order found for this client"** (403 Forbidden)
+
+The token is valid but the auth middleware cannot find a matching DCR client or
+active entitlement in the database. This is the most common issue when testing.
+
+The middleware performs these lookups:
+1. Looks up the token's `azp` (client_id) in the `dcr_clients` table
+2. Uses the `order_id` from that record to check `marketplace_entitlements`
+3. Verifies the entitlement `state` is `active`
+
+Fix: Complete the [Authentication Setup for Testing](#authentication-setup-for-testing)
+to seed the required database records.
+
+```bash
+# Decode your token to see the azp claim being looked up
+echo $RED_HAT_TOKEN | cut -d. -f2 | base64 -d 2>/dev/null | jq -r '.azp'
+
+# Check if a DCR client exists for that azp
+python scripts/seed_dcr_clients.py list
+
+# Check if the entitlement exists and is active (replace <order-id>)
+python3 -c "
+import asyncio, os
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import create_async_engine
+
+async def main():
+    engine = create_async_engine(os.environ['DATABASE_URL'])
+    async with engine.connect() as conn:
+        result = await conn.execute(text('''
+            SELECT id, state FROM marketplace_entitlements WHERE id = :id
+        '''), {'id': '<order-id>'})
+        row = result.first()
+        if row:
+            print(f'Entitlement: id={row.id}, state={row.state}')
+        else:
+            print('ERROR: No entitlement found for this order_id')
+    await engine.dispose()
+
+asyncio.run(main())
+"
+```
+
 **"Invalid Authorization header format"**
 
 The agent expects a Red Hat SSO Bearer token, not a Google Cloud identity token. Make sure:
-- You're using `ocm token` or completing the OAuth flow
+- You're using a token from the [Authentication Setup](#authentication-setup-for-testing)
 - The token is a valid JWT from Red Hat SSO
 - You're including it as: `-H "Authorization: Bearer $RED_HAT_TOKEN"`
 
@@ -1312,27 +1595,33 @@ you will see:
 {"jsonrpc":"2.0","error":{"code":-32003,"message":"Forbidden","data":{"detail":"Token is missing required scope(s): api.console, api.ocm"}},"id":null}
 ```
 
-To temporarily disable the scope check for testing, set `AGENT_REQUIRED_SCOPE`
-to an empty string on the agent service:
+To temporarily adjust the required scopes for testing (e.g. when using
+`ocm token` which carries `openid,roles,web-origins`), set both
+`AGENT_REQUIRED_SCOPE` and `AGENT_ALLOWED_SCOPES` to match the token's scopes:
 
 ```bash
 gcloud run services update ${SERVICE_NAME:-lightspeed-agent} \
   --region=$GOOGLE_CLOUD_LOCATION \
   --project=$GOOGLE_CLOUD_PROJECT \
-  --update-env-vars="AGENT_REQUIRED_SCOPE="
+  --update-env-vars="AGENT_REQUIRED_SCOPE=openid,roles,web-origins" \
+  --update-env-vars="AGENT_ALLOWED_SCOPES=openid,roles,web-origins"
 ```
 
-To restore the scope requirement:
+To restore the default scope requirements:
 
 ```bash
 gcloud run services update ${SERVICE_NAME:-lightspeed-agent} \
   --region=$GOOGLE_CLOUD_LOCATION \
   --project=$GOOGLE_CLOUD_PROJECT \
-  --update-env-vars="AGENT_REQUIRED_SCOPE=api.console,api.ocm"
+  --update-env-vars="AGENT_REQUIRED_SCOPE=api.console,api.ocm" \
+  --update-env-vars="AGENT_ALLOWED_SCOPES=openid,profile,email,api.console,api.ocm"
 ```
 
-This setting is also configurable in `service.yaml` via the
-`AGENT_REQUIRED_SCOPE` environment variable.
+> **Note:** Both `AGENT_REQUIRED_SCOPE` and `AGENT_ALLOWED_SCOPES` must not be
+> empty in production environments. The agent validates at startup that required
+> scopes are a subset of allowed scopes.
+
+These settings are also configurable in `service.yaml`.
 
 **"Token carries disallowed scope(s): ..."**
 
@@ -1363,154 +1652,40 @@ This setting is also configurable in `service.yaml` via the
   # Should show: True;True;True
   ```
 
-## Testing DCR on Cloud Run
+## GMA SSO API Configuration (Staging vs Production)
 
-This section explains how to test the DCR (Dynamic Client Registration) flow
-against a deployed marketplace handler using **static credentials** mode.
-The caller provides `client_id` and `client_secret` in the DCR request body.
+The marketplace handler creates OAuth tenant clients in Red Hat SSO via the GMA API. Two environment variables control which SSO environment is used:
 
-```
-┌──────────────┐
-│  Test Script │
-│  (local)     │
-└──────┬───────┘
-       │ POST /dcr
-       │ (software_statement JWT
-       │  + client_id + client_secret)
-       │ + Cloud Run ID token
-       ▼
-┌──────────────────────┐
-│  Marketplace Handler │
-│  (Cloud Run)         │
-│                      │
-│  DCR_ENABLED=false   │
-│  Validates, stores   │
-│  and returns creds   │
-└──────────────────────┘
-```
+| Variable | Description |
+|----------|-------------|
+| `RED_HAT_SSO_ISSUER` | SSO issuer URL. The token endpoint (`/protocol/openid-connect/token`) is derived from this. |
+| `GMA_API_BASE_URL` | GMA tenant creation API endpoint. |
 
-Both options require `SKIP_JWT_VALIDATION=true` on the handler to accept test
-JWTs not signed by Google's production `cloud-agentspace` service account.
+### Environment Values
 
-Both options also require a signing service account. Create one if you don't
-have one already:
+| Environment | `RED_HAT_SSO_ISSUER` | `GMA_API_BASE_URL` |
+|-------------|----------------------|--------------------|
+| **Production** | `https://sso.redhat.com/auth/realms/redhat-external` | `https://sso.redhat.com/auth/realms/redhat-external/apis/beta/acs/v1/` |
+| **Staging** | `https://sso.stage.redhat.com/auth/realms/redhat-external` | `https://sso.stage.redhat.com/auth/realms/redhat-external/apis/beta/acs/v1/` |
+
+Both values are set in `marketplace-handler.yaml`. To switch to staging, update both variables and use staging-specific `GMA_CLIENT_ID` / `GMA_CLIENT_SECRET` credentials:
 
 ```bash
-gcloud iam service-accounts create dcr-test \
-  --display-name "DCR test signer" \
-  --project=$GOOGLE_CLOUD_PROJECT
-
-# NOTE: GCP may need a few seconds to propagate the new service account.
-# If the next command fails with NOT_FOUND, wait ~10 seconds and retry.
-sleep 10
-
-gcloud iam service-accounts keys create dcr-test-key.json \
-  --iam-account=dcr-test@$GOOGLE_CLOUD_PROJECT.iam.gserviceaccount.com \
-  --project=$GOOGLE_CLOUD_PROJECT
-```
-
-### Static Credentials Mode
-
-This mode skips GMA SSO API client creation. The caller provides `client_id` and
-`client_secret` in the DCR request body alongside the `software_statement`.
-The handler validates them (skipped with `SKIP_JWT_VALIDATION=true`), encrypts
-and stores them linked to the order, and returns them. No pre-seeding required.
-
-**1. Configure the handler:**
-
-```bash
-# Generate and store Fernet encryption key (if not already set)
-FERNET_KEY=$(python3 -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')
-echo -n "$FERNET_KEY" | \
-  gcloud secrets versions add dcr-encryption-key \
-    --data-file=- --project=$GOOGLE_CLOUD_PROJECT
-
-# Update handler env vars (deploys a new revision)
-gcloud run services update marketplace-handler \
+gcloud run services update ${HANDLER_SERVICE_NAME:-marketplace-handler} \
   --region=$GOOGLE_CLOUD_LOCATION \
   --project=$GOOGLE_CLOUD_PROJECT \
   --update-env-vars="\
-DCR_ENABLED=false,\
-SKIP_JWT_VALIDATION=true"
+RED_HAT_SSO_ISSUER=https://sso.stage.redhat.com/auth/realms/redhat-external,\
+GMA_API_BASE_URL=https://sso.stage.redhat.com/auth/realms/redhat-external/apis/beta/acs/v1/"
+
+# Update GMA credentials in Secret Manager with staging values
+echo -n 'your-staging-gma-client-id' | \
+  gcloud secrets versions add gma-client-id --data-file=- --project=$GOOGLE_CLOUD_PROJECT
+echo -n 'your-staging-gma-client-secret' | \
+  gcloud secrets versions add gma-client-secret --data-file=- --project=$GOOGLE_CLOUD_PROJECT
 ```
 
-**2. Run the test script with static credentials:**
-
-```bash
-HANDLER_URL=$(gcloud run services describe marketplace-handler \
-  --region=$GOOGLE_CLOUD_LOCATION \
-  --project=$GOOGLE_CLOUD_PROJECT \
-  --format='value(status.url)')
-
-export MARKETPLACE_HANDLER_URL=$HANDLER_URL
-export TEST_SA_KEY_FILE=dcr-test-key.json
-export TEST_CLIENT_ID=test-client-id
-export TEST_CLIENT_SECRET=test-client-secret
-# Generate a fresh order ID for each test run
-export TEST_ORDER_ID="order-$(uuidgen || python3 -c 'import uuid; print(uuid.uuid4())')"
-# Don't set SKIP_CLOUD_RUN_AUTH -- script fetches an ID token automatically
-
-python scripts/test_deployed_dcr.py
-```
-
-The script sends `client_id` and `client_secret` in the request body. The
-handler stores them and returns them. The second request verifies idempotency
-(same credentials returned for the same order).
-
-> **Note:** If the handler was deployed with `--allow-unauthenticated`, you can
-> set `export SKIP_CLOUD_RUN_AUTH=true` to skip ID token authentication.
-
-**3. Restore production configuration:**
-
-```bash
-gcloud run services update marketplace-handler \
-  --region=$GOOGLE_CLOUD_LOCATION \
-  --project=$GOOGLE_CLOUD_PROJECT \
-  --update-env-vars="\
-DCR_ENABLED=true,\
-SKIP_JWT_VALIDATION=false"
-```
-
-#### Admin Tool: seed_dcr_clients.py
-
-The `seed_dcr_clients.py` script is still available as an admin tool for
-managing DCR client records in the database (listing, deleting, or bulk
-inserting credentials). It is no longer required as a prerequisite for the
-static credentials flow.
-
-```bash
-# Connect to Cloud SQL first (requires Cloud SQL Auth Proxy)
-./cloud-sql-proxy --port 5432 ${GOOGLE_CLOUD_PROJECT}:${GOOGLE_CLOUD_LOCATION}:${DB_INSTANCE_NAME:-lightspeed-agent-db}
-
-# Fetch DATABASE_URL and DCR_ENCRYPTION_KEY from Secret Manager
-CLOUD_DB_URL=$(gcloud secrets versions access latest \
-  --secret=database-url --project=$GOOGLE_CLOUD_PROJECT)
-DB_PASSWORD=$(echo "$CLOUD_DB_URL" | sed -n 's|.*://insights:\([^@]*\)@.*|\1|p')
-export DATABASE_URL="postgresql+asyncpg://insights:${DB_PASSWORD}@localhost:5432/lightspeed_agent"
-export DCR_ENCRYPTION_KEY=$(gcloud secrets versions access latest \
-  --secret=dcr-encryption-key --project=$GOOGLE_CLOUD_PROJECT)
-
-# List existing entries
-python scripts/seed_dcr_clients.py list
-
-# Delete an entry
-python scripts/seed_dcr_clients.py delete --order-id order-12345 --confirm
-```
-
-### Test Script Reference
-
-The test script at `scripts/test_deployed_dcr.py` is configurable via environment variables:
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `MARKETPLACE_HANDLER_URL` | (required) | Cloud Run handler URL |
-| `TEST_SA_KEY_FILE` | - | Path to SA key file (Method A) |
-| `TEST_SERVICE_ACCOUNT` | - | SA email for IAM API signing (Method B) |
-| `PROVIDER_URL` | `https://www.redhat.com` | JWT audience claim (must match handler's `AGENT_PROVIDER_ORGANIZATION_URL`) |
-| `SKIP_CLOUD_RUN_AUTH` | `false` | Skip Cloud Run ID token auth |
-| `TEST_ORDER_ID` | random UUID | Fixed order ID |
-| `TEST_ACCOUNT_ID` | `test-procurement-account-001` | Procurement account ID |
-| `TEST_REDIRECT_URIS` | `https://gemini.google.com/callback` | Comma-separated redirect URIs |
+**Important:** `RED_HAT_SSO_ISSUER` and `GMA_API_BASE_URL` must point to the same SSO environment. The GMA client credentials (`GMA_CLIENT_ID` / `GMA_CLIENT_SECRET`) are environment-specific and cannot be shared between staging and production.
 
 ## Audit Logging
 
