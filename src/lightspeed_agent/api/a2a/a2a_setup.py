@@ -23,6 +23,7 @@ from google.adk.sessions import InMemorySessionService
 
 from lightspeed_agent.api.a2a.agent_card import build_agent_card
 from lightspeed_agent.api.a2a.logging_plugin import AgentLoggingPlugin
+from lightspeed_agent.api.a2a.mcp_output_size_guard_plugin import MCPOutputSizeGuardPlugin
 from lightspeed_agent.api.a2a.usage_plugin import UsageTrackingPlugin
 from lightspeed_agent.config import get_settings
 from lightspeed_agent.core import create_agent
@@ -73,7 +74,9 @@ def _get_session_service() -> Any:
     settings = get_settings()
 
     if settings.session_backend == "database":
-        from google.adk.sessions import DatabaseSessionService
+        from lightspeed_agent.api.a2a.session_service import (
+            RetryingDatabaseSessionService,
+        )
 
         # SESSION_DATABASE_URL is guaranteed non-empty by the model validator
         db_url = _normalize_db_url(settings.session_database_url)
@@ -82,17 +85,17 @@ def _get_session_service() -> Any:
         parsed = urlparse(db_url)
         db_host = parsed.hostname or parsed.query or "local"
         logger.info(
-            "Using DatabaseSessionService for session persistence (host=%s)",
+            "Using RetryingDatabaseSessionService for session persistence (host=%s)",
             db_host,
         )
 
         try:
-            return DatabaseSessionService(db_url=db_url)
+            return RetryingDatabaseSessionService(db_url=db_url)
         except Exception as e:
             # Sanitize error message to avoid leaking credentials from URLs
             sanitized_msg = re.sub(r"://[^@]+@", "://***@", str(e))
             raise RuntimeError(
-                f"Failed to initialize DatabaseSessionService: {sanitized_msg}"
+                f"Failed to initialize RetryingDatabaseSessionService: {sanitized_msg}"
             ) from None
 
     logger.info("Using InMemorySessionService for session management")
@@ -117,7 +120,7 @@ def _create_runner() -> Runner:
     app = App(
         name=settings.agent_name,
         root_agent=agent,
-        plugins=[AgentLoggingPlugin(), UsageTrackingPlugin()],
+        plugins=[AgentLoggingPlugin(), UsageTrackingPlugin(), MCPOutputSizeGuardPlugin()],
     )
 
     # Use database-backed session service for production
