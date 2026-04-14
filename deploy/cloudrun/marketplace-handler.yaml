@@ -89,6 +89,11 @@ spec:
               value: "true"
             - name: DCR_CLIENT_NAME_PREFIX
               value: "gemini-order-"
+            # GMA SSO API base URL for tenant creation.
+            # Production: https://sso.redhat.com/auth/realms/redhat-external/apis/beta/acs/v1/
+            # Staging:    https://sso.stage.redhat.com/auth/realms/redhat-external/apis/beta/acs/v1/
+            - name: GMA_API_BASE_URL
+              value: "https://sso.redhat.com/auth/realms/redhat-external/apis/beta/acs/v1/"
             # Secrets from Secret Manager
             - name: RED_HAT_SSO_CLIENT_ID
               valueFrom:
