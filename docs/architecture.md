@@ -54,8 +54,8 @@ The system consists of **two separate services**:
 │  │                           FastAPI Application                             │  │
 │  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────┐                    │  │
 │  │  │   A2A API   │  │ Agent Card  │  │  Health/Ready   │                    │  │
-│  │  │     /       │  │ /.well-     │  │  /health        │                    │  │
-│  │  │  (JSON-RPC) │  │  known/     │  │  /ready         │                    │  │
+│  │  │     /       │  │ /.well-     │  │  /health :8002  │                    │  │
+│  │  │  (JSON-RPC) │  │  known/     │  │  /ready  :8002  │                    │  │
 │  │  └──────┬──────┘  │  agent.json │  └─────────────────┘                    │  │
 │  │         │         └─────────────┘                                         │  │
 │  │         ▼                                                                 │  │
@@ -114,7 +114,7 @@ A separate FastAPI application for provisioning, providing:
 - **Hybrid /dcr Endpoint**: Single endpoint handling both:
   - Pub/Sub events (account and entitlement approvals, filtered by product)
   - DCR requests (OAuth client creation)
-- **Health Endpoints**: Kubernetes-compatible health checks
+- **Health Endpoints**: Kubernetes-compatible health checks on separate probe port (8003, configurable via `HANDLER_PROBE_PORT`)
 - **Database Access**: PostgreSQL for persistent storage
 
 ### Lightspeed Agent Service
@@ -123,7 +123,7 @@ The main AI agent FastAPI application, providing:
 
 - **A2A Endpoints**: Agent-to-Agent protocol implementation (JSON-RPC)
 - **Agent Card**: `/.well-known/agent.json` with capabilities and DCR extension
-- **Health Endpoints**: Kubernetes-compatible health and readiness checks
+- **Health Endpoints**: Kubernetes-compatible health and readiness checks on separate probe port (8002, configurable via `AGENT_PROBE_PORT`)
 
 ### Authentication Layer
 
@@ -285,8 +285,8 @@ src/lightspeed_agent/
 
 | Image | Service | Port | Purpose |
 |-------|---------|------|---------|
-| `lightspeed-agent` | Agent | 8000 | A2A protocol, user queries |
-| `marketplace-handler` | Handler | 8001 | Pub/Sub events, DCR |
+| `lightspeed-agent` | Agent | 8000 (app), 8002 (probes) | A2A protocol, user queries |
+| `marketplace-handler` | Handler | 8001 (app), 8003 (probes) | Pub/Sub events, DCR |
 | `insights-mcp` | MCP Sidecar | 8081 | Red Hat Lightspeed tools |
 
 ## External Dependencies
@@ -342,11 +342,12 @@ src/lightspeed_agent/
 
 Certain endpoints must be publicly accessible per A2A protocol:
 
-| Service | Endpoint | Reason |
-|---------|----------|--------|
-| Agent | `/.well-known/agent.json` | A2A discovery (no auth per spec) |
-| Handler | `/dcr` | Pub/Sub push and DCR requests |
-| Handler | `/health` | Health checks |
+| Service | Endpoint | Port | Reason |
+|---------|----------|------|--------|
+| Agent | `/.well-known/agent.json` | 8000 | A2A discovery (no auth per spec) |
+| Handler | `/dcr` | 8001 | Pub/Sub push and DCR requests |
+| Agent | `/health`, `/ready` | 8002 | Health probes (separate server, no auth) |
+| Handler | `/health`, `/ready` | 8003 | Health probes (separate server, no auth) |
 
 Both services are deployed with `--allow-unauthenticated` on Cloud Run.
 Authentication is enforced at the **application layer** via OAuth middleware.
