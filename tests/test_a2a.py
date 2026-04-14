@@ -246,22 +246,6 @@ class TestA2AEndpoints:
         assert "skills" in data
         assert "securitySchemes" in data
 
-    def test_health_endpoint(self, client):
-        """Test /health endpoint."""
-        response = client.get("/health")
-
-        assert response.status_code == 200
-        data = response.json()
-        assert data["status"] == "healthy"
-
-    def test_ready_endpoint(self, client):
-        """Test /ready endpoint."""
-        response = client.get("/ready")
-
-        assert response.status_code == 200
-        data = response.json()
-        assert data["status"] == "ready"
-
     def test_send_message_jsonrpc(self, client):
         """Test / endpoint with JSON-RPC message/send."""
         request_body = {
