@@ -181,7 +181,8 @@ db_secrets=(
 
 # Rate limiting (Redis - REQUIRED for agent)
 redis_secrets=(
-    "rate-limit-redis-url"      # redis://REDIS_IP:6379/0 (Cloud Memorystore instance)
+    "rate-limit-redis-url"      # rediss://REDIS_IP:6379/0 (Cloud Memorystore instance, TLS)
+    "redis-ca-cert"             # Cloud Memorystore server CA certificate (PEM)
 )
 
 # Combine all optional secrets
@@ -351,8 +352,11 @@ echo "   CONNECTION_NAME=\$(gcloud sql instances describe $DB_INSTANCE_NAME --pr
 echo "   echo -n \"postgresql+asyncpg://insights:\$MARKETPLACE_DB_PASSWORD@/lightspeed_agent?host=/cloudsql/\$CONNECTION_NAME\" | gcloud secrets versions add database-url --data-file=- --project=$PROJECT_ID"
 echo "   echo -n \"postgresql+asyncpg://sessions:\$SESSION_DB_PASSWORD@/agent_sessions?host=/cloudsql/\$CONNECTION_NAME\" | gcloud secrets versions add session-database-url --data-file=- --project=$PROJECT_ID"
 echo ""
-echo "   # Rate limit Redis URL (after Cloud Memorystore setup - see deploy/cloudrun/README.md)"
-echo "   echo -n 'redis://REDIS_IP:6379/0' | gcloud secrets versions add rate-limit-redis-url --data-file=- --project=$PROJECT_ID"
+echo "   # Rate limit Redis URL and CA cert (after Cloud Memorystore setup - see deploy/cloudrun/README.md)"
+echo "   # Note: TLS-enabled instances use port 6378, not 6379. Read the port from: gcloud redis instances describe INSTANCE --format='value(port)'"
+echo "   echo -n 'rediss://REDIS_IP:6378/0' | gcloud secrets versions add rate-limit-redis-url --data-file=- --project=$PROJECT_ID"
+echo "   # Download and store the Redis server CA certificate for TLS verification:"
+echo "   gcloud redis instances describe lightspeed-redis --region=\$REGION --project=$PROJECT_ID --format='value(serverCaCerts[0].cert)' | gcloud secrets versions add redis-ca-cert --data-file=- --project=$PROJECT_ID"
 echo ""
 echo "3. Copy the MCP server image to GCR (Cloud Run doesn't support Quay.io):"
 echo "   docker pull quay.io/redhat-services-prod/insights-management-tenant/insights-mcp/red-hat-lightspeed-mcp:latest"
