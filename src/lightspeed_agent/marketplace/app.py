@@ -17,6 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from lightspeed_agent.config import get_settings
 from lightspeed_agent.marketplace.router import router as handler_router
+from lightspeed_agent.security import SecurityHeadersMiddleware
 
 logger = logging.getLogger(__name__)
 
@@ -94,6 +95,9 @@ def create_app() -> FastAPI:
     # Include the main handler router
     # This provides the /dcr endpoint that handles both Pub/Sub and DCR
     app.include_router(handler_router)
+
+    # Add security headers middleware (HSTS, X-Content-Type-Options, X-Frame-Options)
+    app.add_middleware(SecurityHeadersMiddleware)
 
     # Add CORS middleware
     app.add_middleware(
