@@ -185,7 +185,11 @@ class Settings(BaseSettings):
     )
     rate_limit_redis_url: str = Field(
         default="redis://localhost:6379/0",
-        description="Redis URL for distributed rate limiting",
+        description="Redis URL for distributed rate limiting (use rediss:// for TLS)",
+    )
+    rate_limit_redis_ca_cert: str = Field(
+        default="",
+        description="Path to Redis server CA certificate for TLS verification",
     )
     rate_limit_redis_timeout_ms: int = Field(
         default=200,
