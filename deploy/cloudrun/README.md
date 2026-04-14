@@ -1652,6 +1652,41 @@ This setting is also configurable in `service.yaml` via the
   # Should show: True;True;True
   ```
 
+## GMA SSO API Configuration (Staging vs Production)
+
+The marketplace handler creates OAuth tenant clients in Red Hat SSO via the GMA API. Two environment variables control which SSO environment is used:
+
+| Variable | Description |
+|----------|-------------|
+| `RED_HAT_SSO_ISSUER` | SSO issuer URL. The token endpoint (`/protocol/openid-connect/token`) is derived from this. |
+| `GMA_API_BASE_URL` | GMA tenant creation API endpoint. |
+
+### Environment Values
+
+| Environment | `RED_HAT_SSO_ISSUER` | `GMA_API_BASE_URL` |
+|-------------|----------------------|--------------------|
+| **Production** | `https://sso.redhat.com/auth/realms/redhat-external` | `https://sso.redhat.com/auth/realms/redhat-external/apis/beta/acs/v1/` |
+| **Staging** | `https://sso.stage.redhat.com/auth/realms/redhat-external` | `https://sso.stage.redhat.com/auth/realms/redhat-external/apis/beta/acs/v1/` |
+
+Both values are set in `marketplace-handler.yaml`. To switch to staging, update both variables and use staging-specific `GMA_CLIENT_ID` / `GMA_CLIENT_SECRET` credentials:
+
+```bash
+gcloud run services update ${HANDLER_SERVICE_NAME:-marketplace-handler} \
+  --region=$GOOGLE_CLOUD_LOCATION \
+  --project=$GOOGLE_CLOUD_PROJECT \
+  --update-env-vars="\
+RED_HAT_SSO_ISSUER=https://sso.stage.redhat.com/auth/realms/redhat-external,\
+GMA_API_BASE_URL=https://sso.stage.redhat.com/auth/realms/redhat-external/apis/beta/acs/v1/"
+
+# Update GMA credentials in Secret Manager with staging values
+echo -n 'your-staging-gma-client-id' | \
+  gcloud secrets versions add gma-client-id --data-file=- --project=$GOOGLE_CLOUD_PROJECT
+echo -n 'your-staging-gma-client-secret' | \
+  gcloud secrets versions add gma-client-secret --data-file=- --project=$GOOGLE_CLOUD_PROJECT
+```
+
+**Important:** `RED_HAT_SSO_ISSUER` and `GMA_API_BASE_URL` must point to the same SSO environment. The GMA client credentials (`GMA_CLIENT_ID` / `GMA_CLIENT_SECRET`) are environment-specific and cannot be shared between staging and production.
+
 ## Audit Logging
 
 The agent automatically produces structured audit logs that correlate each user session with Red Hat API requests. When `LOG_FORMAT=json` (the default in Cloud Run), every log record includes:
