@@ -54,9 +54,20 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         raise
 
     # Startup: Start the probe server on a separate port
+    async def _check_database() -> None:
+        from lightspeed_agent.db import get_engine
+
+        engine = get_engine()
+        async with engine.begin() as conn:
+            await conn.exec_driver_sql("SELECT 1")
+
     probe_port = int(os.getenv("HANDLER_PROBE_PORT", "8003"))
     logger.info("Starting probe server on port %d", probe_port)
-    await start_probe_server(probe_port, "marketplace-handler")
+    await start_probe_server(
+        probe_port,
+        "marketplace-handler",
+        readiness_checks={"database": _check_database},
+    )
 
     yield
 

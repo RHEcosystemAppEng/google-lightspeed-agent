@@ -69,8 +69,22 @@ async def lifespan(app: A2AFastAPI) -> AsyncIterator[None]:
             logger.error("Failed to start reporting scheduler: %s", e)
 
     # Startup: Start the probe server on a separate port
+    async def _check_database() -> None:
+        from lightspeed_agent.db import get_engine
+
+        engine = get_engine()
+        async with engine.begin() as conn:
+            await conn.exec_driver_sql("SELECT 1")
+
+    async def _check_redis() -> None:
+        await get_redis_rate_limiter().verify_connection()
+
     logger.info("Starting probe server on port %d", settings.agent_probe_port)
-    await start_probe_server(settings.agent_probe_port, settings.agent_name)
+    await start_probe_server(
+        settings.agent_probe_port,
+        settings.agent_name,
+        readiness_checks={"database": _check_database, "redis": _check_redis},
+    )
 
     yield
 
