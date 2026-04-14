@@ -9,6 +9,7 @@ using smart routing based on request content.
 """
 
 import logging
+import os
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
@@ -17,6 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from lightspeed_agent.config import get_settings
 from lightspeed_agent.marketplace.router import router as handler_router
+from lightspeed_agent.probes import start_probe_server, stop_probe_server
 from lightspeed_agent.security import SecurityHeadersMiddleware
 
 logger = logging.getLogger(__name__)
@@ -51,7 +53,26 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         logger.error("Failed to initialize DCR service: %s", e)
         raise
 
+    # Startup: Start the probe server on a separate port
+    async def _check_database() -> None:
+        from lightspeed_agent.db import get_engine
+
+        engine = get_engine()
+        async with engine.begin() as conn:
+            await conn.exec_driver_sql("SELECT 1")
+
+    probe_port = int(os.getenv("HANDLER_PROBE_PORT", "8003"))
+    logger.info("Starting probe server on port %d", probe_port)
+    await start_probe_server(
+        probe_port,
+        "marketplace-handler",
+        readiness_checks={"database": _check_database},
+    )
+
     yield
+
+    # Shutdown: Stop the probe server
+    await stop_probe_server()
 
     # Shutdown: Close database connection
     try:
@@ -79,18 +100,6 @@ def create_app() -> FastAPI:
         redoc_url="/redoc" if settings.debug else None,
         lifespan=lifespan,
     )
-
-    # Health check endpoint
-    @app.get("/health")
-    async def health_check() -> dict[str, str]:
-        """Health check endpoint."""
-        return {"status": "healthy", "service": "marketplace-handler"}
-
-    # Ready check endpoint
-    @app.get("/ready")
-    async def ready_check() -> dict[str, str]:
-        """Readiness check endpoint."""
-        return {"status": "ready", "service": "marketplace-handler"}
 
     # Include the main handler router
     # This provides the /dcr endpoint that handles both Pub/Sub and DCR
