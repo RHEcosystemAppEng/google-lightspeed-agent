@@ -21,6 +21,7 @@ from lightspeed_agent.api.a2a.agent_card import get_agent_card_dict
 from lightspeed_agent.auth import AuthenticationMiddleware
 from lightspeed_agent.config import get_settings
 from lightspeed_agent.ratelimit import RateLimitMiddleware, get_redis_rate_limiter
+from lightspeed_agent.security import SecurityHeadersMiddleware
 
 logger = logging.getLogger(__name__)
 
@@ -145,9 +146,12 @@ def create_app() -> A2AFastAPI:
     # Can be disabled with SKIP_JWT_VALIDATION=true for development
     app.add_middleware(AuthenticationMiddleware)
 
+    # Add security headers middleware (HSTS, X-Content-Type-Options, X-Frame-Options)
+    app.add_middleware(SecurityHeadersMiddleware)
+
     # Add CORS middleware for A2A Inspector and other browser-based clients
     # This must be added after other middleware to be processed first
-    # Middleware execution order: CORS -> Auth -> RateLimit -> Handler
+    # Middleware execution order: CORS -> SecurityHeaders -> Auth -> RateLimit -> Handler
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],  # Allow all origins for development
