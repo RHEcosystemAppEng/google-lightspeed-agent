@@ -13,8 +13,15 @@ Configuration is managed through environment variables. Copy `.env.example` to `
 | `GOOGLE_GENAI_USE_VERTEXAI` | `FALSE` | Use Vertex AI instead of Google AI Studio |
 | `GOOGLE_API_KEY` | - | Google AI Studio API key (required if not using Vertex AI) |
 | `GOOGLE_CLOUD_PROJECT` | - | GCP project ID (required for Vertex AI) |
-| `GOOGLE_CLOUD_LOCATION` | `us-central1` | GCP region for Vertex AI |
+| `GOOGLE_CLOUD_LOCATION` | `global` | Vertex AI model location (use `global` for pay-as-you-go) |
 | `GEMINI_MODEL` | `gemini-2.5-flash` | Gemini model to use |
+| `GEMINI_HTTP_RETRY_ATTEMPTS` | `5` | Max HTTP attempts per model call (including the first). Use `1` to disable SDK retries. Aligns with [google-genai defaults](https://cloud.google.com/vertex-ai/generative-ai/docs/retry-strategy). |
+| `GEMINI_HTTP_RETRY_INITIAL_DELAY` | `1.0` | Initial backoff delay in seconds (exponential backoff with jitter). |
+| `GEMINI_HTTP_RETRY_MAX_DELAY` | `60.0` | Maximum delay in seconds between retries. |
+| `GEMINI_HTTP_RETRY_EXP_BASE` | `2.0` | Backoff multiplier between attempts. |
+| `GEMINI_HTTP_RETRY_JITTER` | `1.0` | Jitter factor to reduce synchronized retries across clients. |
+
+HTTP retries use **exponential backoff with jitter** via the Google Gen AI SDK for transient errors (for example HTTP 429, 408, and 5xx). Retries help with short spikes; they do **not** replace raising [Vertex AI quotas](https://cloud.google.com/vertex-ai/generative-ai/docs/quotas) or fixing sustained overload. See the [Vertex AI retry strategy](https://cloud.google.com/vertex-ai/generative-ai/docs/retry-strategy) documentation.
 
 **Using Google AI Studio:**
 
@@ -28,7 +35,7 @@ GOOGLE_API_KEY=your-api-key
 ```bash
 GOOGLE_GENAI_USE_VERTEXAI=TRUE
 GOOGLE_CLOUD_PROJECT=your-project-id
-GOOGLE_CLOUD_LOCATION=us-central1
+GOOGLE_CLOUD_LOCATION=global
 ```
 
 ### Red Hat SSO / OAuth 2.0
@@ -191,7 +198,8 @@ Rate limiting uses a Redis-backed sliding window algorithm for distributed deplo
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `RATE_LIMIT_REDIS_URL` | `redis://localhost:6379/0` | Redis URL used for rate limiting |
+| `RATE_LIMIT_REDIS_URL` | `redis://localhost:6379/0` | Redis URL used for rate limiting. Use `rediss://` (double s) for TLS in production. |
+| `RATE_LIMIT_REDIS_CA_CERT` | (empty) | Path to Redis server CA certificate for TLS verification. Required when using `rediss://` with Cloud Memorystore. |
 | `RATE_LIMIT_REDIS_TIMEOUT_MS` | `200` | Redis operation timeout in milliseconds |
 | `RATE_LIMIT_KEY_PREFIX` | `lightspeed:ratelimit` | Prefix for Redis rate limit keys |
 | `RATE_LIMIT_REQUESTS_PER_MINUTE` | `60` | Max requests per minute |
@@ -200,7 +208,11 @@ Rate limiting uses a Redis-backed sliding window algorithm for distributed deplo
 **Example:**
 
 ```bash
+# Local development (no TLS)
 RATE_LIMIT_REDIS_URL=redis://localhost:6379/0
+# Production with Cloud Memorystore (TLS enabled, port 6378)
+# RATE_LIMIT_REDIS_URL=rediss://10.x.x.x:6378/0
+# RATE_LIMIT_REDIS_CA_CERT=/secrets/redis-ca-cert/latest
 RATE_LIMIT_REDIS_TIMEOUT_MS=200
 RATE_LIMIT_KEY_PREFIX=lightspeed:ratelimit
 RATE_LIMIT_REQUESTS_PER_MINUTE=120
@@ -240,6 +252,7 @@ See [Usage Tracking and Metering](metering.md) for details on the plugin system 
 | `LOG_LEVEL` | `INFO` | Log level: DEBUG, INFO, WARNING, ERROR |
 | `LOG_FORMAT` | `json` | Log format: `json` or `text` |
 | `AGENT_LOGGING_DETAIL` | `basic` | Agent execution logging detail: `basic` or `detailed` |
+| `TOOL_RESULT_MAX_CHARS` | `51200` | Max character length for MCP tool results sent to the LLM. Oversized results are replaced with a message advising the user to narrow down or paginate. Set to `0` to disable. |
 
 **Example:**
 
@@ -248,6 +261,27 @@ LOG_LEVEL=DEBUG
 LOG_FORMAT=text  # Human-readable for development
 AGENT_LOGGING_DETAIL=detailed  # Include tool args/results in logs
 ```
+
+#### MCP Output Size Guard
+
+MCP tools can return very large responses (e.g., listing all advisories or inventory systems). These responses are passed in full to the LLM as input context, which can inflate token counts significantly (270K+ tokens observed) and trigger Vertex AI token-per-minute (TPM) rate limits (HTTP 429 `RESOURCE_EXHAUSTED`).
+
+The `TOOL_RESULT_MAX_CHARS` setting controls a size guard that detects oversized tool results and replaces them with an actionable message telling the LLM to guide the user toward narrowing down their query or using pagination.
+
+```bash
+# Default: 50K characters (conservative, works within standard TPM quotas)
+TOOL_RESULT_MAX_CHARS=51200
+
+# Allow larger results if you have higher TPM quotas
+TOOL_RESULT_MAX_CHARS=100000
+
+# Disable the guard entirely (not recommended — may cause 429 errors)
+TOOL_RESULT_MAX_CHARS=0
+```
+
+When a result exceeds the limit, the LLM receives an error message instead of the raw data, allowing it to inform the user and suggest alternatives. Monitor `Tool result too large` warning logs to track which tools trigger the guard.
+
+**Choosing the right limit:** The optimal value depends on the model's context window and expected session length. Each tool result, along with all previous messages and tool results in the conversation, counts toward the model's input token budget. Longer sessions accumulate more context, leaving less room for individual tool results. A conservative limit (the default) works well for multi-turn sessions where context builds up over time. If your sessions are typically short (single-turn queries), you can increase the limit to allow richer results without risk of hitting context or TPM limits.
 
 #### Audit Logging
 
