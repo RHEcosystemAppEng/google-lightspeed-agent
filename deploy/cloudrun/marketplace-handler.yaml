@@ -120,18 +120,21 @@ spec:
                 secretKeyRef:
                   name: database-url
                   key: latest
-          # Health checks
+            # Probe server port (health/readiness checks on separate port)
+            - name: HANDLER_PROBE_PORT
+              value: "8003"
+          # Health checks (served by the probe server on a separate port)
           startupProbe:
             httpGet:
               path: /health
-              port: 8001
+              port: 8003
             initialDelaySeconds: 3
             periodSeconds: 5
             failureThreshold: 3
           livenessProbe:
             httpGet:
               path: /health
-              port: 8001
+              port: 8003
             periodSeconds: 30
             failureThreshold: 3
   traffic:
