@@ -223,15 +223,17 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
     # Paths to skip rate limiting
     SKIP_PATHS = {
-        "/metrics",
-        "/.well-known/agent.json",
         "/docs",
         "/openapi.json",
         "/redoc",
     }
 
-    # Paths that should be rate limited (A2A JSON-RPC endpoint)
-    RATE_LIMITED_PATHS = {"/"}
+    # Paths that should be rate limited
+    RATE_LIMITED_PATHS = {
+        "/",                            # A2A JSON-RPC endpoint
+        "/.well-known/agent.json",      # AgentCard discovery
+        "/.well-known/agent-card.json",  # AgentCard alias
+    }
 
     def __init__(self, app: Any):
         super().__init__(app)

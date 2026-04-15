@@ -58,14 +58,20 @@ Rate limits are evaluated across multiple principal dimensions:
 If both `order_id` and `user_id` are present, the request must pass both checks.
 If either dimension exceeds the configured limit, the request is rejected with `429`.
 
+### Rate-Limited Paths
+
+These paths are subject to rate limiting:
+
+- `/` - A2A JSON-RPC endpoint (authenticated — keyed by order, user, or client)
+- `/.well-known/agent.json` - AgentCard discovery (unauthenticated — keyed by IP)
+- `/.well-known/agent-card.json` - AgentCard alias (unauthenticated — keyed by IP)
+
 ### Skipped Paths
 
 These paths are never rate-limited:
 
-- `/health`, `/healthz`, `/ready` - Health checks (now served on a separate probe port entirely, so they never reach the rate limiting middleware)
-- `/metrics` - Prometheus metrics
-- `/.well-known/agent.json` - Agent card
-- `/docs`, `/openapi.json`, `/redoc` - Documentation
+- `/health`, `/healthz`, `/ready` - Health checks (served on a separate probe port, never reach the rate limiting middleware)
+- `/docs`, `/openapi.json`, `/redoc` - Documentation (disabled in production via `DEBUG=false`)
 
 ## Response Headers
 
