@@ -137,6 +137,10 @@ class Settings(BaseSettings):
         default=8000,
         description="Server port",
     )
+    agent_probe_port: int = Field(
+        default=8002,
+        description="Port for health/readiness probe server",
+    )
 
     # Marketplace Handler Configuration
     # The marketplace handler is a separate service that handles DCR and Pub/Sub events

@@ -62,7 +62,7 @@ If either dimension exceeds the configured limit, the request is rejected with `
 
 These paths are never rate-limited:
 
-- `/health`, `/healthz`, `/ready` - Health checks
+- `/health`, `/healthz`, `/ready` - Health checks (now served on a separate probe port entirely, so they never reach the rate limiting middleware)
 - `/metrics` - Prometheus metrics
 - `/.well-known/agent.json` - Agent card
 - `/docs`, `/openapi.json`, `/redoc` - Documentation

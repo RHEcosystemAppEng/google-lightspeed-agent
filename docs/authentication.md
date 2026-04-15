@@ -283,12 +283,12 @@ curl -X POST http://localhost:8000/ \
 
 ### Protected vs Public Endpoints
 
-| Endpoint | Authentication |
-|----------|----------------|
-| `GET /health` | Public |
-| `GET /ready` | Public |
-| `GET /.well-known/agent.json` | Public |
-| `POST /` | Required (A2A JSON-RPC) |
+| Endpoint | Port | Authentication |
+|----------|------|----------------|
+| `GET /health` | Probe port (8002/8003) | Not applicable (separate server, no auth middleware) |
+| `GET /ready` | Probe port (8002/8003) | Not applicable (separate server, no auth middleware) |
+| `GET /.well-known/agent.json` | 8000 | Public |
+| `POST /` | 8000 | Required (A2A JSON-RPC) |
 
 ## Red Hat SSO Configuration
 
@@ -375,9 +375,9 @@ This is the easiest way to test without needing real Red Hat SSO credentials.
    python -m lightspeed_agent.main
    ```
 
-3. **Test the health endpoint**:
+3. **Test the health endpoint** (on the probe port):
    ```bash
-   curl http://localhost:8000/health
+   curl http://localhost:8002/health
    # Expected: {"status": "healthy"}
    ```
 

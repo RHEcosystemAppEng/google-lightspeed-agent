@@ -223,9 +223,6 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
     # Paths to skip rate limiting
     SKIP_PATHS = {
-        "/health",
-        "/healthz",
-        "/ready",
         "/metrics",
         "/.well-known/agent.json",
         "/docs",
