@@ -113,6 +113,8 @@ The deployment uses **two separate service accounts** following the principle of
 
 Both are created automatically by `setup.sh`. The Pub/Sub Invoker SA is only created when `ENABLE_MARKETPLACE=true` (the default).
 
+**Impersonation:** When the Pub/Sub topic is a cross-project reference (fully-qualified `projects/.../topics/...` path), `deploy.sh` uses `--impersonate-service-account` to create the subscription as the Pub/Sub Invoker SA. This requires the deployer to have `roles/iam.serviceAccountTokenCreator` on the Pub/Sub Invoker SA. `setup.sh` grants this automatically to the active `gcloud` account. Note that IAM changes can take up to 7-10 minutes to propagate — if `deploy.sh` fails with `PERMISSION_DENIED` on impersonation right after running `setup.sh`, wait a few minutes and retry.
+
 ## Prerequisites
 
 - [Google Cloud CLI](https://cloud.google.com/sdk/docs/install) installed and authenticated
