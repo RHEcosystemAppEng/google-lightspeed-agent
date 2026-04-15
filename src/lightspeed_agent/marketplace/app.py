@@ -19,7 +19,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from lightspeed_agent.config import get_settings
 from lightspeed_agent.marketplace.router import router as handler_router
 from lightspeed_agent.probes import start_probe_server, stop_probe_server
-from lightspeed_agent.security import SecurityHeadersMiddleware
+from lightspeed_agent.security import RequestBodyLimitMiddleware, SecurityHeadersMiddleware
 
 logger = logging.getLogger(__name__)
 
@@ -107,6 +107,9 @@ def create_app() -> FastAPI:
 
     # Add security headers middleware (HSTS, X-Content-Type-Options, X-Frame-Options)
     app.add_middleware(SecurityHeadersMiddleware)
+
+    # Add request body size limit (1 MB — Pub/Sub messages and DCR requests are small)
+    app.add_middleware(RequestBodyLimitMiddleware, max_bytes=1 * 1024 * 1024)
 
     # Add CORS middleware
     app.add_middleware(
