@@ -7,6 +7,7 @@ from google.genai import types
 
 from lightspeed_agent.api.a2a.response_formatter_plugin import (
     FIRST_RESPONSE_NOTICE,
+    RESPONSE_FOOTER,
     ResponseFormatterPlugin,
 )
 
@@ -46,7 +47,7 @@ class TestResponseFormatterPluginFirstNotice:
 
         assert result is event
         assert result.content.parts[0].text.startswith(FIRST_RESPONSE_NOTICE)
-        assert result.content.parts[0].text.endswith("Here is your answer.")
+        assert "Here is your answer." in result.content.parts[0].text
 
     @pytest.mark.asyncio
     async def test_skips_notice_on_subsequent_response(self):
@@ -62,7 +63,7 @@ class TestResponseFormatterPluginFirstNotice:
         )
 
         assert result is event
-        assert result.content.parts[0].text == "Follow-up answer."
+        assert not result.content.parts[0].text.startswith(FIRST_RESPONSE_NOTICE)
 
     @pytest.mark.asyncio
     async def test_skips_non_final_events(self):
@@ -172,4 +173,87 @@ class TestResponseFormatterPluginFirstNotice:
         assert result.content.parts[0].function_call is not None
         # Second part (text) should have the notice prepended
         assert result.content.parts[1].text.startswith(FIRST_RESPONSE_NOTICE)
-        assert result.content.parts[1].text.endswith("Actual answer.")
+        assert "Actual answer." in result.content.parts[1].text
+
+
+class TestResponseFormatterPluginFooter:
+    """Tests for disclaimer footer injection."""
+
+    @pytest.mark.asyncio
+    async def test_appends_footer_on_every_final_response(self):
+        """The footer should be appended to every final text response."""
+        plugin = ResponseFormatterPlugin()
+        event = _make_event(text="Some answer.")
+
+        # Simulate a subsequent response (not first)
+        prior_event = _make_event(text="Earlier answer.", author="agent")
+        ctx = _make_invocation_context(session_events=[prior_event])
+
+        result = await plugin.on_event_callback(
+            invocation_context=ctx, event=event
+        )
+
+        assert result is event
+        assert result.content.parts[0].text.endswith(RESPONSE_FOOTER)
+
+    @pytest.mark.asyncio
+    async def test_footer_present_on_first_response_too(self):
+        """The first response should have both the notice and the footer."""
+        plugin = ResponseFormatterPlugin()
+        event = _make_event(text="Welcome answer.")
+        ctx = _make_invocation_context(session_events=[])
+
+        result = await plugin.on_event_callback(
+            invocation_context=ctx, event=event
+        )
+
+        assert result is event
+        text = result.content.parts[0].text
+        assert text.startswith(FIRST_RESPONSE_NOTICE)
+        assert text.endswith(RESPONSE_FOOTER)
+
+    @pytest.mark.asyncio
+    async def test_footer_not_added_to_non_final_events(self):
+        """Non-final events should not get the footer."""
+        plugin = ResponseFormatterPlugin()
+        event = _make_event(text="streaming chunk", is_final=False)
+        ctx = _make_invocation_context()
+
+        result = await plugin.on_event_callback(
+            invocation_context=ctx, event=event
+        )
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_footer_appended_to_last_text_part(self):
+        """In multi-part events, the footer goes on the last text part."""
+        plugin = ResponseFormatterPlugin()
+        parts = [
+            types.Part(text="First paragraph."),
+            types.Part(text="Second paragraph."),
+        ]
+        content = types.Content(parts=parts, role="model")
+
+        event = MagicMock()
+        event.is_final_response.return_value = True
+        event.content = content
+
+        prior_event = _make_event(text="Earlier.", author="agent")
+        ctx = _make_invocation_context(session_events=[prior_event])
+
+        result = await plugin.on_event_callback(
+            invocation_context=ctx, event=event
+        )
+
+        assert result is event
+        # First text part should NOT have the footer
+        assert not result.content.parts[0].text.endswith(RESPONSE_FOOTER)
+        # Last text part should have the footer
+        assert result.content.parts[1].text.endswith(RESPONSE_FOOTER)
+
+    @pytest.mark.asyncio
+    async def test_footer_contains_disclaimer_text(self):
+        """Verify the footer contains the expected disclaimer wording."""
+        assert "Always review AI-generated content" in RESPONSE_FOOTER
+        assert "---" in RESPONSE_FOOTER
