@@ -20,6 +20,7 @@ from lightspeed_agent.api.a2a.a2a_setup import setup_a2a_routes
 from lightspeed_agent.api.a2a.agent_card import get_agent_card_dict
 from lightspeed_agent.auth import AuthenticationMiddleware
 from lightspeed_agent.config import get_settings
+from lightspeed_agent.probes import start_probe_server, stop_probe_server
 from lightspeed_agent.ratelimit import RateLimitMiddleware, get_redis_rate_limiter
 from lightspeed_agent.security import SecurityHeadersMiddleware
 
@@ -67,7 +68,28 @@ async def lifespan(app: A2AFastAPI) -> AsyncIterator[None]:
         except Exception as e:
             logger.error("Failed to start reporting scheduler: %s", e)
 
+    # Startup: Start the probe server on a separate port
+    async def _check_database() -> None:
+        from lightspeed_agent.db import get_engine
+
+        engine = get_engine()
+        async with engine.begin() as conn:
+            await conn.exec_driver_sql("SELECT 1")
+
+    async def _check_redis() -> None:
+        await get_redis_rate_limiter().verify_connection()
+
+    logger.info("Starting probe server on port %d", settings.agent_probe_port)
+    await start_probe_server(
+        settings.agent_probe_port,
+        settings.agent_name,
+        readiness_checks={"database": _check_database, "redis": _check_redis},
+    )
+
     yield
+
+    # Shutdown: Stop the probe server
+    await stop_probe_server()
 
     # Shutdown: Stop the usage reporting scheduler
     if settings.service_control_enabled and settings.service_control_service_name:
@@ -111,18 +133,6 @@ def create_app() -> A2AFastAPI:
         redoc_url="/redoc" if settings.debug else None,
         lifespan=lifespan,
     )
-
-    # Health check endpoint
-    @app.get("/health")
-    async def health_check() -> dict[str, str]:
-        """Health check endpoint."""
-        return {"status": "healthy", "agent": settings.agent_name}
-
-    # Ready check endpoint
-    @app.get("/ready")
-    async def ready_check() -> dict[str, str]:
-        """Readiness check endpoint."""
-        return {"status": "ready", "agent": settings.agent_name}
 
     # Set up A2A protocol routes using ADK's built-in integration
     # This provides:
