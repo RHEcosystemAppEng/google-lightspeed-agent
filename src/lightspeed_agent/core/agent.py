@@ -47,9 +47,24 @@ then query its CVEs with the appropriate filter parameters (Vulnerability).
 (Inventory), then get CVEs for those systems filtered by severity (Vulnerability).
 
 When a tool supports filter or query parameters, use them to narrow results rather \
-than retrieving everything and telling the user to ask again. If you are unsure what \
-parameters a tool accepts, call the corresponding get_openapi tool (e.g., \
-vulnerability__get_openapi) to discover the available parameters.
+than retrieving everything and telling the user to ask again.
+
+### Common filter parameters
+
+**vulnerability__get_cves**: `limit`, `offset`, `sort` (e.g., `-cvss_score`), \
+`severity` (Critical, Important, Moderate, Low), `known_exploit` (true/false), \
+`affecting` (true/false — only CVEs affecting at least one system).
+
+**vulnerability__get_system_cves**: `limit`, `offset`, `sort`, `severity`, \
+`status` (Applicable, Not applicable), `known_exploit`, `remediation` \
+(Applicable — has a remediation available).
+
+**inventory__list_hosts**: `limit`, `offset`, `hostname_or_id`, \
+`display_name`, `tags`, `operating_system`, `order_by`, `order_how` (ASC/DESC).
+
+For parameters not listed here or for other tool categories, call the \
+corresponding `*_get_openapi` tool (e.g., `vulnerability__get_openapi`) as a \
+fallback — but prefer the parameters above to avoid large OpenAPI responses.
 
 Always prefer completing the full workflow yourself over asking the user to make \
 follow-up requests for information you can retrieve.
@@ -110,8 +125,8 @@ so the first page alone often returns zero matches.
 with JSON arguments from the tool schema (see **Tool invocation format** above). \
 [Red Hat Lightspeed MCP](https://github.com/RedHatInsights/insights-mcp) returns Insights \
 API JSON as-is; list responses are often JSON:API-style (`data`, `meta`, `links`) or \
-`results` with `page`/`per_page`/`total` — read the fields present and use `*_get_openapi` \
-when unsure how to advance pages.
+`results` with `page`/`per_page`/`total` — read the fields present. If the pagination \
+shape is unclear, fall back to `*_get_openapi` to confirm.
 
 **Vulnerability tools** (OpenAPI `application/vnd.api+json`): Paginated responses include \
 three required top-level keys: **`data`**, **`links`**, and **`meta`**. Use query \
@@ -143,9 +158,9 @@ If the user asked for "N pages" but fewer pages exist, stop when (1)–(3) say s
 report that fewer pages were available (avoids empty-page / out-of-range errors).
 
 **Other tool categories** (Advisor, Inventory, Image Builder, …) may use different \
-parameter names or response shapes; use that category's `get_openapi` tool to confirm \
-request and response before multi-page loops. After each response, advance `offset`/`page` \
-using `meta`/`links.next` or `total`/`per_page` as appropriate for that API.
+parameter names or response shapes. After each response, advance `offset`/`page` \
+using `meta`/`links.next` or `total`/`per_page` as appropriate for that API. \
+If the pagination shape is unfamiliar, use `*_get_openapi` to confirm before looping.
 
 ## Handling Oversized Tool Results [PREFERRED]
 
