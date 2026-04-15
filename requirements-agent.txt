@@ -101,9 +101,9 @@ attrs==25.4.0 \
     # via
     #   jsonschema
     #   referencing
-authlib==1.6.9 \
-    --hash=sha256:d8f2421e7e5980cc1ddb4e32d3f5fa659cfaf60d8eaf3281ebed192e4ab74f04 \
-    --hash=sha256:f08b4c14e08f0861dc18a32357b33fbcfd2ea86cfe3fe149484b4d764c4a0ac3
+Authlib==1.6.10 \
+    --hash=sha256:856a4f54d6ef3361ca6bb6d14a27e8b88f8097cca795fb428ffe13720e2ecde6 \
+    --hash=sha256:aa639b43292554539924a3b4aaa9e81cd67ab64d3e28b22428c61f1200240287
     # via google-adk
 certifi==2026.2.25 \
     --hash=sha256:027692e4402ad994f1c42e52a4997a9763c646b73e4096e4d5d6db8af1d6f0fa \
