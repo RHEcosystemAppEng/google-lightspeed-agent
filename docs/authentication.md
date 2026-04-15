@@ -503,7 +503,7 @@ The token is valid but missing a required scope:
 
 #### "CORS errors" in browser
 
-If testing from a browser on a different origin, you may need to configure CORS. The agent should handle this, but verify your browser isn't blocking requests.
+CORS is disabled by default in production (both services are server-to-server). If testing from a browser on a different origin, either set `DEBUG=true` (allows all origins without credentials) or set `CORS_ALLOWED_ORIGINS` to the specific origin (e.g., `CORS_ALLOWED_ORIGINS=http://localhost:3000`).
 
 #### Server not starting
 

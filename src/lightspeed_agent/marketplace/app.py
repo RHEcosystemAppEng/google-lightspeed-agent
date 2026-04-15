@@ -132,15 +132,27 @@ def create_app() -> FastAPI:
     # Add request body size limit (1 MB — Pub/Sub messages and DCR requests are small)
     app.add_middleware(RequestBodyLimitMiddleware, max_bytes=1 * 1024 * 1024)
 
-    # Add CORS middleware
+    # Add CORS middleware (same policy as agent service).
+    # The marketplace handler is server-to-server (Pub/Sub push, DCR from Gemini),
+    # so CORS is only needed for dev tools / debugging.
     # Middleware execution order:
     #   CORS -> BodyLimit -> SecurityHeaders -> RateLimit -> Handler
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+    cors_origins = settings.cors_origins_list
+    if settings.debug and not cors_origins:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=["*"],
+            allow_credentials=False,
+            allow_methods=["POST"],
+            allow_headers=["Content-Type", "Accept"],
+        )
+    elif cors_origins:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=cors_origins,
+            allow_credentials=True,
+            allow_methods=["POST"],
+            allow_headers=["Content-Type", "Accept"],
+        )
 
     return app

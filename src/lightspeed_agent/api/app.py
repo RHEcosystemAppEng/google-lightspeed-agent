@@ -163,18 +163,41 @@ def create_app() -> A2AFastAPI:
     # Add request body size limit (10 MB — rejects oversized payloads before processing)
     app.add_middleware(RequestBodyLimitMiddleware, max_bytes=10 * 1024 * 1024)
 
-    # Add CORS middleware for A2A Inspector and other browser-based clients
-    # This must be added after other middleware to be processed first
+    # Add CORS middleware for A2A Inspector and other browser-based clients.
+    # - debug mode: allow all origins (no credentials) for dev tools
+    # - production with CORS_ALLOWED_ORIGINS set: allow those origins with credentials
+    # - production without CORS_ALLOWED_ORIGINS: skip CORS entirely (server-to-server)
     # Middleware execution order:
     #   CORS -> BodyLimit -> SecurityHeaders -> RateLimit -> Auth -> Handler
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],  # Allow all origins for development
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-        expose_headers=["*"],
-    )
+    cors_origins = settings.cors_origins_list
+    if settings.debug and not cors_origins:
+        # Development: wide-open for A2A Inspector / browser dev tools
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=["*"],
+            allow_credentials=False,
+            allow_methods=["GET", "POST"],
+            allow_headers=["Authorization", "Content-Type", "Accept"],
+            expose_headers=[
+                "X-RateLimit-Limit",
+                "X-RateLimit-Remaining",
+                "Retry-After",
+            ],
+        )
+    elif cors_origins:
+        # Explicit origin allowlist (production or dev override)
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=cors_origins,
+            allow_credentials=True,
+            allow_methods=["GET", "POST"],
+            allow_headers=["Authorization", "Content-Type", "Accept"],
+            expose_headers=[
+                "X-RateLimit-Limit",
+                "X-RateLimit-Remaining",
+                "Retry-After",
+            ],
+        )
 
     # Include Service Control router (admin endpoints for usage reporting)
     # Provides:
