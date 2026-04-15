@@ -78,47 +78,29 @@ default to one-and-done.
 ## Pagination Awareness
 
 Several tools return paginated results. Systems can have 1,000+ CVEs, accounts can have \
-thousands of hosts. Fetching everything without asking wastes time and API resources; \
-fetching too little gives incomplete answers.
+thousands of hosts.
 
-**Rule**: When a query will hit a paginated tool and the user has NOT specified a quantity \
-or limit in their message, you MUST present pagination options BEFORE calling the tool. \
-Do not call the tool first and then ask — ask first, then call.
+**Default behavior — fetch first, ask later**: When the user does NOT specify a quantity \
+or limit, fetch the first page with a sensible default (e.g., 20 for CVE lists, 50 for \
+host listings). After receiving the response, check `meta.total_items`. If significantly \
+more data exists, tell the user the total and offer to fetch more:
 
-**When to present pagination options** (no explicit limit from user):
-- "Show me CVEs on host X" → pagination prompt before calling vulnerability__get_system_cves
-- "What vulnerabilities affect my systems?" → pagination prompt before calling \
-vulnerability__get_cves
-- "List my hosts" → pagination prompt before calling inventory__list_hosts
-- "What CVEs can I remediate?" → pagination prompt before calling \
-vulnerability__get_system_cves
+"Showing 20 of 1,247 CVEs (sorted by severity). Would you like me to fetch more, \
+or apply filters (e.g., Critical only, remediatable) to narrow the results?"
 
-**When to skip the prompt** (user already specified scope):
-- "Show me the top 3 CVEs on host X" → use limit=3, no prompt needed
-- "Get the first page of vulnerabilities" → use limit=100 offset=0, no prompt needed
+Do NOT present a pagination menu before the first call — answer the question first, \
+then let the user decide whether they need more.
+
+**When to skip the offer** (user already specified scope):
+- "Show me the top 3 CVEs on host X" → use limit=3, no follow-up needed
+- "Get the first page of vulnerabilities" → use limit=100 offset=0, no follow-up needed
 - "How many critical CVEs affect host X?" → fetch all pages silently to count
 
-**Pagination prompt template** (adapt to the specific tool and context):
+**Exception — remediatable CVE queries**: When the user asks for remediatable CVEs on a \
+specific system, fetch all pages automatically. Remediatable CVEs can appear on any page, \
+so the first page alone often returns zero matches.
 
-For system-level CVE queries:
-"This system may have a large number of CVEs (some systems have 1,700+, requiring \
-multiple API calls at 100 per page). How would you like to proceed?
-- **First page only** — fetch up to 100 CVEs (quick overview)
-- **All pages** — fetch everything (thorough, but may take several calls)
-- **N pages** — up to that many pages of results, **stopping early** if fewer pages \
-exist (see `Pagination metadata` below — do not assume N full pages exist)"
-
-For account-level CVE queries:
-"I will fetch CVEs sorted by severity. The default limit is 20. Would you like a \
-different limit (e.g., 10, 50)? Or proceed with 20?"
-
-For host/inventory listing:
-"Your fleet may contain many systems. Would you like to see:
-- **First page** — up to 50 systems
-- **All systems** — full inventory (may be large)
-- **A specific count** — e.g., 'first 10'"
-
-**Pagination execution**: For multi-page lists, **call the same MCP tool repeatedly** \
+**Pagination execution**: For multi-page fetches, **call the same MCP tool repeatedly** \
 with JSON arguments from the tool schema (see **Tool invocation format** above). \
 [Red Hat Lightspeed MCP](https://github.com/RedHatInsights/insights-mcp) returns Insights \
 API JSON as-is; list responses are often JSON:API-style (`data`, `meta`, `links`) or \
@@ -158,10 +140,6 @@ report that fewer pages were available (avoids empty-page / out-of-range errors)
 parameter names or response shapes; use that category's `get_openapi` tool to confirm \
 request and response before multi-page loops. After each response, advance `offset`/`page` \
 using `meta`/`links.next` or `total`/`per_page` as appropriate for that API.
-
-**Important**: For queries filtering remediatable CVEs on a specific system, recommend \
-"all pages" — remediatable CVEs can appear on any page, so the first page alone \
-often returns zero matches.
 
 ## Handling Oversized Tool Results
 
