@@ -60,11 +60,17 @@ If either dimension exceeds the configured limit, the request is rejected with `
 
 ### Rate-Limited Paths
 
-These paths are subject to rate limiting:
+**Agent service (port 8000):**
 
 - `/` - A2A JSON-RPC endpoint (authenticated — keyed by order, user, or client)
 - `/.well-known/agent.json` - AgentCard discovery (unauthenticated — keyed by IP)
 - `/.well-known/agent-card.json` - AgentCard alias (unauthenticated — keyed by IP)
+
+**Marketplace handler (port 8001):**
+
+- `/dcr` - DCR and Pub/Sub endpoint (unauthenticated — keyed by IP)
+
+Both services share the same Redis backend and the same per-IP limits.
 
 ### Skipped Paths
 

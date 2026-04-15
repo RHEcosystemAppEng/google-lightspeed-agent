@@ -221,23 +221,37 @@ def get_redis_rate_limiter() -> RedisRateLimiter:
 class RateLimitMiddleware(BaseHTTPMiddleware):
     """Middleware for global Redis-backed rate limiting."""
 
-    # Paths to skip rate limiting
-    SKIP_PATHS = {
+    # Default paths to skip rate limiting
+    DEFAULT_SKIP_PATHS: set[str] = {
         "/docs",
         "/openapi.json",
         "/redoc",
     }
 
-    # Paths that should be rate limited
-    RATE_LIMITED_PATHS = {
+    # Default paths that should be rate limited
+    DEFAULT_RATE_LIMITED_PATHS: set[str] = {
         "/",                            # A2A JSON-RPC endpoint
         "/.well-known/agent.json",      # AgentCard discovery
         "/.well-known/agent-card.json",  # AgentCard alias
     }
 
-    def __init__(self, app: Any):
+    def __init__(
+        self,
+        app: Any,
+        *,
+        rate_limited_paths: set[str] | None = None,
+        skip_paths: set[str] | None = None,
+    ):
         super().__init__(app)
         self._limiter = get_redis_rate_limiter()
+        self._rate_limited_paths = (
+            rate_limited_paths
+            if rate_limited_paths is not None
+            else self.DEFAULT_RATE_LIMITED_PATHS
+        )
+        self._skip_paths = (
+            skip_paths if skip_paths is not None else self.DEFAULT_SKIP_PATHS
+        )
 
     async def dispatch(
         self,
@@ -294,11 +308,11 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
     def _should_skip(self, path: str) -> bool:
         """Check if path should skip rate limiting."""
-        if path in self.SKIP_PATHS:
+        if path in self._skip_paths:
             return True
 
         # Only rate limit specific paths
-        for rate_limited_path in self.RATE_LIMITED_PATHS:
+        for rate_limited_path in self._rate_limited_paths:
             if path == rate_limited_path or path.startswith(f"{rate_limited_path}/"):
                 return False
 

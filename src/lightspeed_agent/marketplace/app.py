@@ -19,6 +19,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from lightspeed_agent.config import get_settings
 from lightspeed_agent.marketplace.router import router as handler_router
 from lightspeed_agent.probes import start_probe_server, stop_probe_server
+from lightspeed_agent.ratelimit import RateLimitMiddleware, get_redis_rate_limiter
 from lightspeed_agent.security import RequestBodyLimitMiddleware, SecurityHeadersMiddleware
 
 logger = logging.getLogger(__name__)
@@ -53,6 +54,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         logger.error("Failed to initialize DCR service: %s", e)
         raise
 
+    # Startup: Verify Redis connectivity for rate limiting
+    try:
+        await get_redis_rate_limiter().verify_connection()
+        logger.info("Rate limiter Redis backend is reachable")
+    except Exception as e:
+        logger.error("Rate limiter Redis backend is unavailable: %s", e)
+        raise
+
     # Startup: Start the probe server on a separate port
     async def _check_database() -> None:
         from lightspeed_agent.db import get_engine
@@ -61,12 +70,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         async with engine.begin() as conn:
             await conn.exec_driver_sql("SELECT 1")
 
+    async def _check_redis() -> None:
+        await get_redis_rate_limiter().verify_connection()
+
     probe_port = int(os.getenv("HANDLER_PROBE_PORT", "8003"))
     logger.info("Starting probe server on port %d", probe_port)
     await start_probe_server(
         probe_port,
         "marketplace-handler",
-        readiness_checks={"database": _check_database},
+        readiness_checks={"database": _check_database, "redis": _check_redis},
     )
 
     yield
@@ -82,6 +94,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         await close_database()
     except Exception as e:
         logger.error("Failed to close database: %s", e)
+
+    # Shutdown: Close Redis connection used by rate limiter
+    try:
+        await get_redis_rate_limiter().close()
+    except Exception as e:
+        logger.error("Failed to close rate limiter Redis connection: %s", e)
 
 
 def create_app() -> FastAPI:
@@ -105,6 +123,9 @@ def create_app() -> FastAPI:
     # This provides the /dcr endpoint that handles both Pub/Sub and DCR
     app.include_router(handler_router)
 
+    # Add rate limiting middleware for /dcr endpoint (IP-based, no auth on this service)
+    app.add_middleware(RateLimitMiddleware, rate_limited_paths={"/dcr"})
+
     # Add security headers middleware (HSTS, X-Content-Type-Options, X-Frame-Options)
     app.add_middleware(SecurityHeadersMiddleware)
 
@@ -112,6 +133,8 @@ def create_app() -> FastAPI:
     app.add_middleware(RequestBodyLimitMiddleware, max_bytes=1 * 1024 * 1024)
 
     # Add CORS middleware
+    # Middleware execution order:
+    #   CORS -> BodyLimit -> SecurityHeaders -> RateLimit -> Handler
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
