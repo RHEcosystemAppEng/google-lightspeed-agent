@@ -422,13 +422,13 @@ google-api-core==2.30.0 \
     #   google-cloud-speech
     #   google-cloud-storage
     #   google-cloud-trace
-google-api-python-client==2.190.0 \
-    --hash=sha256:5357f34552e3724d80d2604c8fa146766e0a9d6bb0afada886fafed9feafeef6 \
-    --hash=sha256:d9b5266758f96c39b8c21d9bbfeb4e58c14dbfba3c931f7c5a8d7fdcd292dd57
+google-api-python-client==2.194.0 \
+    --hash=sha256:61eaaac3b8fc8fdf11c08af87abc3d1342d1b37319cc1b57405f86ef7697e717 \
+    --hash=sha256:db92647bd1a90f40b79c9618461553c2b20b6a43ce7395fa6de07132dc14f023
     # via google-adk
-google-auth==2.48.0 \
-    --hash=sha256:2e2a537873d449434252a9632c28bfc268b0adb1e53f9fb62afc5333a975903f \
-    --hash=sha256:4f7e706b0cd3208a3d940a19a822c37a476ddba5450156c3e6624a71f7c841ce
+google-auth==2.49.2 \
+    --hash=sha256:c1ae38500e73065dcae57355adb6278cf8b5c8e391994ae9cbadbcb9631ab409 \
+    --hash=sha256:c2720924dfc82dedb962c9f52cabb2ab16714fd0a6a707e40561d217574ed6d5
     # via
     #   google-adk
     #   google-api-core
@@ -456,9 +456,9 @@ google-auth-httplib2==0.3.0 \
     --hash=sha256:177898a0175252480d5ed916aeea183c2df87c1f9c26705d74ae6b951c268b0b \
     --hash=sha256:426167e5df066e3f5a0fc7ea18768c08e7296046594ce4c8c409c2457dd1f776
     # via google-api-python-client
-google-cloud-aiplatform==1.139.0 \
-    --hash=sha256:3190b255cf510bce9e4b1adc8162ab0b3f9eca48801657d7af058d8e1d5ad9d0 \
-    --hash=sha256:cfaa95375bfb79a97b8c949c3ec1600505a4a9c08ca2b01c36ed659a5e05e37c
+google-cloud-aiplatform==1.147.0 \
+    --hash=sha256:29f7ae020718d3c45094f0475464e06a97f81b1572bea150ae6a1b22c5f45997 \
+    --hash=sha256:b2e1b669ba37f02426e03eb13187eebf4cbfeaa0a3bfed37b5578abb375ab689
     # via google-adk
 google-cloud-appengine-logging==1.8.0 \
     --hash=sha256:84b705a69e4109fc2f68dfe36ce3df6a34d5c3d989eee6d0ac1b024dda0ba6f5 \
@@ -491,9 +491,9 @@ google-cloud-core==2.5.0 \
     #   google-cloud-logging
     #   google-cloud-spanner
     #   google-cloud-storage
-google-cloud-discoveryengine==0.13.12 \
-    --hash=sha256:295f8c6df3fb26b90fb82c2cd6fbcf4b477661addcb19a94eea16463a5c4e041 \
-    --hash=sha256:d6b9f8fadd8ad0d2f4438231c5eb7772a317e9f59cafbcbadc19b5d54c609419
+google-cloud-discoveryengine==0.18.0 \
+    --hash=sha256:632585a880ba316382d9e795269689c65412e466135d07ceb097a619bf26230e \
+    --hash=sha256:fcd3dd1292c46b08c51fff70ea5278d2b0383ad096bc5a4e04b502e0e00dc257
     # via google-adk
 google-cloud-iam==2.21.0 \
     --hash=sha256:1b4a21302b186a31f3a516ccff303779638308b7c801fb61a2406b6a0c6293c4 \
