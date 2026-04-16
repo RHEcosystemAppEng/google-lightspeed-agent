@@ -28,7 +28,7 @@ graph TB
 
     subgraph "Agent Pod"
         direction TB
-        AGENT["Lightspeed Agent<br/>FastAPI :8000<br/>─────────────<br/>POST / (JSON-RPC 2.0 A2A)<br/>GET /.well-known/agent.json<br/>GET /health, /ready<br/>GET /service-control/status<br/>POST /service-control/report"]
+        AGENT["Lightspeed Agent<br/>FastAPI :8000<br/>Probes :8002<br/>─────────────<br/>POST / (JSON-RPC 2.0 A2A)<br/>GET /.well-known/agent.json<br/>GET /service-control/status<br/>POST /service-control/report<br/>─────────────<br/>:8002 GET /health, /ready"]
 
         MCP["MCP Sidecar<br/>:8080 (Cloud Run)<br/>:8081 (Podman)<br/>─────────────<br/>/mcp endpoint<br/>stdio | http | sse"]
 
@@ -37,7 +37,7 @@ graph TB
 
     subgraph "Marketplace Handler Pod"
         direction TB
-        MKTPLACE["Marketplace Handler<br/>FastAPI :8001<br/>─────────────<br/>POST /dcr (hybrid)<br/>GET /health, /ready"]
+        MKTPLACE["Marketplace Handler<br/>FastAPI :8001<br/>Probes :8003<br/>─────────────<br/>POST /dcr (hybrid)<br/>─────────────<br/>:8003 GET /health, /ready"]
 
         MKDB[("Marketplace DB<br/>PostgreSQL :5432<br/>─────────────<br/>accounts, entitlements<br/>DCR clients, usage")]
     end
@@ -95,8 +95,10 @@ graph TB
 
 | Port | Protocol | Component | Direction | Purpose |
 |------|----------|-----------|-----------|---------|
-| **8000** | HTTP/S | Agent Service | **Ingress** | A2A JSON-RPC, AgentCard, health checks, service-control admin |
+| **8000** | HTTP/S | Agent Service | **Ingress** | A2A JSON-RPC, AgentCard, service-control admin |
 | **8001** | HTTP/S | Marketplace Handler | **Ingress** | DCR registration, Pub/Sub provisioning events |
+| **8002** | HTTP | Agent Probe Server | **Ingress** | Agent health (`/health`) and readiness (`/ready`) probes |
+| **8003** | HTTP | Handler Probe Server | **Ingress** | Handler health (`/health`) and readiness (`/ready`) probes |
 | **8080** | HTTP | MCP Sidecar (Cloud Run) | **Internal** | Agent to MCP tool calls with JWT forwarding |
 | **8081** | HTTP | MCP Sidecar (Podman) | **Internal** | Agent to MCP tool calls with JWT forwarding |
 | **5432** | TCP | PostgreSQL (Marketplace) | **Internal** | Accounts, entitlements, DCR clients, usage records |

@@ -432,10 +432,26 @@ class TestDCRRouter:
     @pytest_asyncio.fixture
     async def client(self, db_session):
         """Create test client with marketplace handler app."""
+        import lightspeed_agent.ratelimit.middleware as rl_mod
         from lightspeed_agent.marketplace.app import create_app as create_marketplace_app
 
-        app = create_marketplace_app()
-        return TestClient(app)
+        mock_limiter = AsyncMock()
+        mock_limiter.is_allowed = AsyncMock(
+            return_value=(True, {
+                "requests_this_minute": 1,
+                "requests_this_hour": 1,
+                "limit_per_minute": 60,
+                "limit_per_hour": 1000,
+                "exceeded": "ok",
+                "retry_after": 0,
+                "limited_principal": "none",
+            })
+        )
+        rl_mod._rate_limiter = None
+        with patch.object(rl_mod, "get_redis_rate_limiter", return_value=mock_limiter):
+            app = create_marketplace_app()
+            yield TestClient(app)
+        rl_mod._rate_limiter = None
 
     @pytest.mark.asyncio
     async def test_dcr_endpoint_invalid_jwt(self, client):
@@ -456,10 +472,26 @@ class TestPubSubHandler:
     @pytest_asyncio.fixture
     async def client(self, db_session):
         """Create test client with marketplace handler app."""
+        import lightspeed_agent.ratelimit.middleware as rl_mod
         from lightspeed_agent.marketplace.app import create_app as create_marketplace_app
 
-        app = create_marketplace_app()
-        return TestClient(app)
+        mock_limiter = AsyncMock()
+        mock_limiter.is_allowed = AsyncMock(
+            return_value=(True, {
+                "requests_this_minute": 1,
+                "requests_this_hour": 1,
+                "limit_per_minute": 60,
+                "limit_per_hour": 1000,
+                "exceeded": "ok",
+                "retry_after": 0,
+                "limited_principal": "none",
+            })
+        )
+        rl_mod._rate_limiter = None
+        with patch.object(rl_mod, "get_redis_rate_limiter", return_value=mock_limiter):
+            app = create_marketplace_app()
+            yield TestClient(app)
+        rl_mod._rate_limiter = None
 
     def _make_pubsub_body(self, event_data: dict, message_id: str = "msg-001") -> dict:
         """Build a Pub/Sub push message body."""
@@ -746,21 +778,38 @@ class TestAgentCardDCRExtension:
     @pytest.mark.asyncio
     async def test_agent_card_endpoint_returns_dcr(self, db_session):
         """Test that AgentCard endpoint includes DCR extension."""
-        app = create_app()
-        client = TestClient(app)
+        import lightspeed_agent.ratelimit.middleware as rl_mod
 
-        response = client.get("/.well-known/agent.json")
+        mock_limiter = AsyncMock()
+        mock_limiter.is_allowed = AsyncMock(
+            return_value=(True, {
+                "requests_this_minute": 1,
+                "requests_this_hour": 1,
+                "limit_per_minute": 60,
+                "limit_per_hour": 1000,
+                "exceeded": "ok",
+                "retry_after": 0,
+                "limited_principal": "none",
+            })
+        )
+        rl_mod._rate_limiter = None
+        with patch.object(rl_mod, "get_redis_rate_limiter", return_value=mock_limiter):
+            app = create_app()
+            client = TestClient(app)
 
-        assert response.status_code == 200
-        data = response.json()
-        assert "capabilities" in data
-        assert "extensions" in data["capabilities"]
-        # Extensions are now a list
-        extensions = data["capabilities"]["extensions"]
-        assert len(extensions) > 0
-        dcr_ext = extensions[0]
-        assert "dcr" in dcr_ext["uri"]
-        assert "target_url" in dcr_ext["params"]
+            response = client.get("/.well-known/agent.json")
+
+            assert response.status_code == 200
+            data = response.json()
+            assert "capabilities" in data
+            assert "extensions" in data["capabilities"]
+            # Extensions are now a list
+            extensions = data["capabilities"]["extensions"]
+            assert len(extensions) > 0
+            dcr_ext = extensions[0]
+            assert "dcr" in dcr_ext["uri"]
+            assert "target_url" in dcr_ext["params"]
+        rl_mod._rate_limiter = None
 
 
 class TestGMAClient:
