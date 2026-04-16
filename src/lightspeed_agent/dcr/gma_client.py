@@ -4,6 +4,7 @@ import logging
 import time
 from dataclasses import dataclass
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
 
@@ -176,10 +177,16 @@ class GMAClient:
         """
         if redirect_uris:
             for uri in redirect_uris:
-                if not uri.startswith(("https://", "http://localhost")):
+                parsed = urlparse(uri)
+                is_https = parsed.scheme == "https"
+                is_localhost_http = parsed.scheme == "http" and parsed.hostname in (
+                    "localhost",
+                    "127.0.0.1",
+                )
+                if not (is_https or is_localhost_http):
                     raise GMAClientError(
                         f"Invalid redirect URI: {uri}. "
-                        "Must start with 'https://' or 'http://localhost'.",
+                        "Must use https:// or http://localhost.",
                         status_code=400,
                     )
 

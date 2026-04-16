@@ -96,6 +96,12 @@ return {1, "ok", min_remaining_minute, min_remaining_hour, 0, 0}
     def __init__(self) -> None:
         settings = get_settings()
         timeout_seconds = max(settings.rate_limit_redis_timeout_ms, 1) / 1000.0
+        # Validate Redis URL scheme to prevent SSRF via unexpected protocols.
+        if not settings.rate_limit_redis_url.startswith(("redis://", "rediss://")):
+            raise ValueError(
+                "RATE_LIMIT_REDIS_URL must use redis:// or rediss:// scheme. "
+                f"Got: {settings.rate_limit_redis_url}"
+            )
         # TLS handshake (certificate exchange) needs more time than plain TCP.
         # Use a separate, longer timeout for connection establishment so that
         # the per-operation timeout can stay low for fast fail-open behaviour.
