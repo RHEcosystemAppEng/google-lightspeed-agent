@@ -422,9 +422,9 @@ google-api-core==2.30.0 \
     #   google-cloud-speech
     #   google-cloud-storage
     #   google-cloud-trace
-google-api-python-client==2.190.0 \
-    --hash=sha256:5357f34552e3724d80d2604c8fa146766e0a9d6bb0afada886fafed9feafeef6 \
-    --hash=sha256:d9b5266758f96c39b8c21d9bbfeb4e58c14dbfba3c931f7c5a8d7fdcd292dd57
+google-api-python-client==2.194.0 \
+    --hash=sha256:61eaaac3b8fc8fdf11c08af87abc3d1342d1b37319cc1b57405f86ef7697e717 \
+    --hash=sha256:db92647bd1a90f40b79c9618461553c2b20b6a43ce7395fa6de07132dc14f023
     # via google-adk
 google-auth==2.48.0 \
     --hash=sha256:2e2a537873d449434252a9632c28bfc268b0adb1e53f9fb62afc5333a975903f \
