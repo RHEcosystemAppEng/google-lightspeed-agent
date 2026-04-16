@@ -329,6 +329,11 @@ class Settings(BaseSettings):
     )
 
     @property
+    def cors_origins_list(self) -> list[str]:
+        """Parse comma-separated cors_allowed_origins into a list."""
+        return [s.strip() for s in self.cors_allowed_origins.split(",") if s.strip()]
+
+    @property
     def required_scopes_list(self) -> list[str]:
         """Parse comma-separated agent_required_scope into a list."""
         return [s.strip() for s in self.agent_required_scope.split(",") if s.strip()]
@@ -347,6 +352,16 @@ class Settings(BaseSettings):
     def sso_token_endpoint(self) -> str:
         """Get the Red Hat SSO token endpoint URL."""
         return f"{self.red_hat_sso_issuer}/protocol/openid-connect/token"
+
+    # CORS Configuration
+    cors_allowed_origins: str = Field(
+        default="",
+        description=(
+            "Comma-separated list of allowed CORS origins."
+            " In debug mode, defaults to '*' (allow all)."
+            " In production, CORS is disabled when empty."
+        ),
+    )
 
     # Development Settings
     debug: bool = Field(

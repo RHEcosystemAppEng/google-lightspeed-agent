@@ -22,7 +22,7 @@ from lightspeed_agent.auth import AuthenticationMiddleware
 from lightspeed_agent.config import get_settings
 from lightspeed_agent.probes import start_probe_server, stop_probe_server
 from lightspeed_agent.ratelimit import RateLimitMiddleware, get_redis_rate_limiter
-from lightspeed_agent.security import SecurityHeadersMiddleware
+from lightspeed_agent.security import RequestBodyLimitMiddleware, SecurityHeadersMiddleware
 
 logger = logging.getLogger(__name__)
 
@@ -148,28 +148,56 @@ def create_app() -> A2AFastAPI:
         """AgentCard endpoint (alias for agent.json)."""
         return get_agent_card_dict()
 
-    # Add rate limiting middleware
-    app.add_middleware(RateLimitMiddleware)
-
-    # Add authentication middleware for A2A endpoint
+    # Add authentication middleware for A2A endpoint (innermost layer)
     # Validates Red Hat SSO JWT tokens on POST / requests
     # Can be disabled with SKIP_JWT_VALIDATION=true for development
     app.add_middleware(AuthenticationMiddleware)
 
+    # Add rate limiting middleware (runs before auth so unauthenticated
+    # floods are throttled at the IP level before any auth processing)
+    app.add_middleware(RateLimitMiddleware)
+
     # Add security headers middleware (HSTS, X-Content-Type-Options, X-Frame-Options)
     app.add_middleware(SecurityHeadersMiddleware)
 
-    # Add CORS middleware for A2A Inspector and other browser-based clients
-    # This must be added after other middleware to be processed first
-    # Middleware execution order: CORS -> SecurityHeaders -> Auth -> RateLimit -> Handler
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],  # Allow all origins for development
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-        expose_headers=["*"],
-    )
+    # Add request body size limit (10 MB — rejects oversized payloads before processing)
+    app.add_middleware(RequestBodyLimitMiddleware, max_bytes=10 * 1024 * 1024)
+
+    # Add CORS middleware for A2A Inspector and other browser-based clients.
+    # - debug mode: allow all origins (no credentials) for dev tools
+    # - production with CORS_ALLOWED_ORIGINS set: allow those origins with credentials
+    # - production without CORS_ALLOWED_ORIGINS: skip CORS entirely (server-to-server)
+    # Middleware execution order:
+    #   CORS -> BodyLimit -> SecurityHeaders -> RateLimit -> Auth -> Handler
+    cors_origins = settings.cors_origins_list
+    if settings.debug and not cors_origins:
+        # Development: wide-open for A2A Inspector / browser dev tools
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=["*"],
+            allow_credentials=False,
+            allow_methods=["GET", "POST"],
+            allow_headers=["Authorization", "Content-Type", "Accept"],
+            expose_headers=[
+                "X-RateLimit-Limit",
+                "X-RateLimit-Remaining",
+                "Retry-After",
+            ],
+        )
+    elif cors_origins:
+        # Explicit origin allowlist (production or dev override)
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=cors_origins,
+            allow_credentials=True,
+            allow_methods=["GET", "POST"],
+            allow_headers=["Authorization", "Content-Type", "Accept"],
+            expose_headers=[
+                "X-RateLimit-Limit",
+                "X-RateLimit-Remaining",
+                "Retry-After",
+            ],
+        )
 
     # Include Service Control router (admin endpoints for usage reporting)
     # Provides:
