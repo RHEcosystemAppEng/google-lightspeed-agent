@@ -136,6 +136,7 @@ class TestAgentCard:
         assert "protocolVersion" in card_dict  # aliased field
         assert "securitySchemes" in card_dict  # aliased field
         assert "defaultInputModes" in card_dict  # aliased field
+        assert "iconUrl" not in card_dict  # injected dynamically at the endpoint level
 
     def test_agent_card_all_fields(self):
         """Validate structural correctness of every AgentCard field."""
@@ -329,7 +330,7 @@ class TestA2AEndpoints:
         rl_mod._rate_limiter = None
 
     def test_agent_card_endpoint(self, client):
-        """Test /.well-known/agent.json endpoint."""
+        """Test /.well-known/agent.json endpoint returns card with dynamic iconUrl."""
         response = client.get("/.well-known/agent.json")
 
         assert response.status_code == 200
@@ -337,6 +338,21 @@ class TestA2AEndpoints:
         assert "name" in data
         assert "skills" in data
         assert "securitySchemes" in data
+        assert data["iconUrl"] == "http://testserver/static/logo.png"
+
+    def test_agent_card_alias_matches(self, client):
+        """Test /.well-known/agent-card.json returns the same card as agent.json."""
+        main = client.get("/.well-known/agent.json").json()
+        alias = client.get("/.well-known/agent-card.json").json()
+
+        assert alias["iconUrl"] == main["iconUrl"]
+
+    def test_logo_endpoint(self, client):
+        """Test GET /static/logo.png serves an image/png response."""
+        response = client.get("/static/logo.png")
+
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "image/png"
 
     def test_send_message_jsonrpc(self, client):
         """Test / endpoint with JSON-RPC message/send."""
