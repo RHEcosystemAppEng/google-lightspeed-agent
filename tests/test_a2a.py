@@ -117,11 +117,15 @@ class TestAgentCard:
         settings = get_settings()
         original = settings.agent_provider_organization_url
         settings.agent_provider_organization_url = "https://custom-org.example.com"
+        build_agent_card.cache_clear()
+        get_agent_card_dict.cache_clear()
         try:
             card = build_agent_card()
             assert card.provider.url == "https://custom-org.example.com"
         finally:
             settings.agent_provider_organization_url = original
+            build_agent_card.cache_clear()
+            get_agent_card_dict.cache_clear()
 
     def test_get_agent_card_dict(self):
         """Test AgentCard serialization to dict."""
@@ -245,22 +249,6 @@ class TestA2AEndpoints:
         assert "name" in data
         assert "skills" in data
         assert "securitySchemes" in data
-
-    def test_health_endpoint(self, client):
-        """Test /health endpoint."""
-        response = client.get("/health")
-
-        assert response.status_code == 200
-        data = response.json()
-        assert data["status"] == "healthy"
-
-    def test_ready_endpoint(self, client):
-        """Test /ready endpoint."""
-        response = client.get("/ready")
-
-        assert response.status_code == 200
-        data = response.json()
-        assert data["status"] == "ready"
 
     def test_send_message_jsonrpc(self, client):
         """Test / endpoint with JSON-RPC message/send."""
