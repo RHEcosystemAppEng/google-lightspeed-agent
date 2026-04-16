@@ -6,9 +6,11 @@ This guide helps diagnose and resolve common issues with the Lightspeed Agent.
 
 ### Health Check
 
+Health and readiness probes are served on a separate probe port (agent: 8002, handler: 8003).
+
 ```bash
-# Check if agent is running
-curl http://localhost:8000/health
+# Check if agent is running (probe port)
+curl http://localhost:8002/health
 
 # Expected response
 {"status": "healthy", "agent": "lightspeed_agent"}
@@ -17,8 +19,8 @@ curl http://localhost:8000/health
 ### Readiness Check
 
 ```bash
-# Check if agent is ready to accept requests
-curl http://localhost:8000/ready
+# Check if agent is ready to accept requests (probe port)
+curl http://localhost:8002/ready
 
 # Expected response
 {"status": "ready", "agent": "lightspeed_agent"}
@@ -372,8 +374,8 @@ gcloud run revisions list --service=lightspeed-agent --region=us-central1
 **Diagnose**:
 
 ```bash
-# Time a request
-time curl http://localhost:8000/health
+# Time a health check request (probe port)
+time curl http://localhost:8002/health
 
 # Profile with detailed timing
 curl -w "@curl-format.txt" -o /dev/null -s http://localhost:8000/a2a
@@ -455,7 +457,7 @@ Before reporting an issue, collect:
 
 4. **Request/Response** (redact tokens):
    ```bash
-   curl -v http://localhost:8000/health 2>&1
+   curl -v http://localhost:8002/health 2>&1
    ```
 
 ### Report Issues
