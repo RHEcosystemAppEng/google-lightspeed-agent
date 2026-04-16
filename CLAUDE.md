@@ -111,10 +111,12 @@ The agent loads tools from a Red Hat Lightspeed MCP server running as a sidecar:
 - Tool categories: Advisor, Inventory, Vulnerability, Remediations, Planning, Image Builder, Subscription Management, Content Sources
 - MCP toolset creation is in `tools/insights_tools.py`; config in `tools/mcp_config.py`
 
-### Key Middleware Stack (bottom to top)
+### Key Middleware Stack (request order, outermost first)
 1. CORS
-2. JWT authentication (`auth/middleware.py`)
-3. Redis rate limiting (`ratelimit/middleware.py`) — 60 req/min, 1000 req/hour
+2. Request body size limit (`security/body_limit.py`) — 10 MB agent, 1 MB marketplace handler
+3. Security headers (`security/middleware.py`) — HSTS, X-Content-Type-Options, X-Frame-Options
+4. Redis rate limiting (`ratelimit/middleware.py`) — 60 req/min, 1000 req/hour
+5. JWT authentication (`auth/middleware.py`)
 
 ### DCR (Dynamic Client Registration)
 
