@@ -163,22 +163,25 @@ spec:
               value: "60"
             - name: RATE_LIMIT_REQUESTS_PER_HOUR
               value: "1000"
+            # Probe server port (health/readiness checks on separate port)
+            - name: AGENT_PROBE_PORT
+              value: "8002"
           volumeMounts:
             - name: redis-ca-cert
               mountPath: /secrets/redis-ca-cert
               readOnly: true
-          # Health checks
+          # Health checks (served by the probe server on a separate port)
           startupProbe:
             httpGet:
               path: /health
-              port: 8000
+              port: 8002
             initialDelaySeconds: 5
             periodSeconds: 10
             failureThreshold: 3
           livenessProbe:
             httpGet:
               path: /health
-              port: 8000
+              port: 8002
             periodSeconds: 30
             failureThreshold: 3
 

@@ -398,7 +398,7 @@ podman kube down deploy/podman/my-secrets.yaml
 
 | Service | URL | Description |
 |---------|-----|-------------|
-| Handler Health | http://localhost:8001/health | Handler health status |
+| Handler Health | http://localhost:8003/health | Handler health probe (port 8003) |
 | DCR Endpoint | http://localhost:8001/dcr | Pub/Sub + DCR hybrid endpoint |
 
 **Lightspeed Agent:**
@@ -406,7 +406,7 @@ podman kube down deploy/podman/my-secrets.yaml
 | Service | URL | Description |
 |---------|-----|-------------|
 | Agent API | http://localhost:8000 | Main A2A endpoint |
-| Health Check | http://localhost:8000/health | Agent health status |
+| Health Check | http://localhost:8002/health | Agent health probe (port 8002) |
 | AgentCard | http://localhost:8000/.well-known/agent.json | A2A discovery |
 | MCP Server | http://localhost:8081 | MCP server (internal) |
 | A2A Inspector | http://localhost:8080 | Web UI for agent interaction |
