@@ -117,11 +117,15 @@ class TestAgentCard:
         settings = get_settings()
         original = settings.agent_provider_organization_url
         settings.agent_provider_organization_url = "https://custom-org.example.com"
+        build_agent_card.cache_clear()
+        get_agent_card_dict.cache_clear()
         try:
             card = build_agent_card()
             assert card.provider.url == "https://custom-org.example.com"
         finally:
             settings.agent_provider_organization_url = original
+            build_agent_card.cache_clear()
+            get_agent_card_dict.cache_clear()
 
     def test_get_agent_card_dict(self):
         """Test AgentCard serialization to dict."""

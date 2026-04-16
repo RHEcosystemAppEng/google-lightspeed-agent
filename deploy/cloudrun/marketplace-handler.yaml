@@ -40,6 +40,9 @@ spec:
         run.googleapis.com/startup-cpu-boost: "true"
         # Cloud SQL connection
         run.googleapis.com/cloudsql-instances: "${PROJECT_ID}:${REGION}:${DB_INSTANCE_NAME}"
+        # VPC connector for Cloud Memorystore Redis (rate limiting)
+        run.googleapis.com/vpc-access-connector: projects/${PROJECT_ID}/locations/${REGION}/connectors/${VPC_CONNECTOR_NAME}
+        run.googleapis.com/vpc-access-egress: private-ranges-only
     spec:
       containerConcurrency: 80
       timeoutSeconds: 60
@@ -125,9 +128,31 @@ spec:
                 secretKeyRef:
                   name: database-url
                   key: latest
+            # Rate Limiting (Redis-backed, shared with Agent service)
+            # Uses rediss:// (TLS) for in-transit encryption to Cloud Memorystore
+            - name: RATE_LIMIT_REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: rate-limit-redis-url
+                  key: latest
+            # Path to the Cloud Memorystore server CA certificate for TLS verification
+            - name: RATE_LIMIT_REDIS_CA_CERT
+              value: "/secrets/redis-ca-cert/latest"
+            - name: RATE_LIMIT_REDIS_TIMEOUT_MS
+              value: "200"
+            - name: RATE_LIMIT_KEY_PREFIX
+              value: "lightspeed:ratelimit"
+            - name: RATE_LIMIT_REQUESTS_PER_MINUTE
+              value: "60"
+            - name: RATE_LIMIT_REQUESTS_PER_HOUR
+              value: "1000"
             # Probe server port (health/readiness checks on separate port)
             - name: HANDLER_PROBE_PORT
               value: "8003"
+          volumeMounts:
+            - name: redis-ca-cert
+              mountPath: /secrets/redis-ca-cert
+              readOnly: true
           # Health checks (served by the probe server on a separate port)
           startupProbe:
             httpGet:
@@ -142,6 +167,13 @@ spec:
               port: 8003
             periodSeconds: 30
             failureThreshold: 3
+      volumes:
+        - name: redis-ca-cert
+          secret:
+            secretName: redis-ca-cert
+            items:
+              - key: latest
+                path: latest
   traffic:
     - percent: 100
       latestRevision: true

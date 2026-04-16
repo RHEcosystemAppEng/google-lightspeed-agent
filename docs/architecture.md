@@ -369,8 +369,11 @@ Authentication is enforced at the **application layer** via OAuth middleware.
 ### Network Security
 
 - HTTPS enforced in production
-- CORS configured for allowed origins
-- Rate limiting prevents abuse
+- CORS disabled in production by default (server-to-server); configurable via `CORS_ALLOWED_ORIGINS`
+- Rate limiting prevents abuse (runs before authentication to throttle unauthenticated floods)
+- Request body size limits enforced via ASGI middleware (10 MB agent, 1 MB marketplace handler) to mitigate CWE-400 uncontrolled resource consumption
+- Security headers on all responses (HSTS, X-Content-Type-Options, X-Frame-Options)
+- AgentCard responses cached at the application level to reduce CPU cost under load
 - Pub/Sub verification via message signature
 
 ## Database Schema
