@@ -29,8 +29,10 @@ def main() -> None:
     # Get host and port from environment
     host = os.getenv("HANDLER_HOST", "0.0.0.0")
     port = int(os.getenv("HANDLER_PORT", "8001"))
+    probe_port = int(os.getenv("HANDLER_PROBE_PORT", "8003"))
 
     logging.info(f"Starting Marketplace Handler on {host}:{port}")
+    logging.info(f"Probe server will start on port {probe_port}")
 
     uvicorn.run(
         "lightspeed_agent.marketplace.app:create_app",
