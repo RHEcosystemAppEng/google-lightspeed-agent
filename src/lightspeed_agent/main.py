@@ -57,9 +57,11 @@ def main() -> None:
             "model": settings.gemini_model,
             "host": settings.agent_host,
             "port": settings.agent_port,
+            "probe_port": settings.agent_probe_port,
             "otel_enabled": settings.otel_enabled,
         },
     )
+    logger.info("Probe server will start on port %d", settings.agent_probe_port)
 
     # Import app here to ensure environment is configured
     from lightspeed_agent.api.app import create_app

@@ -582,7 +582,7 @@ sed -e "s|\${PROJECT_ID}|$GOOGLE_CLOUD_PROJECT|g" \
 
 ### Rate Limiting (Redis)
 
-The agent uses Cloud Memorystore for Redis for distributed rate limiting. Required configuration:
+Both the agent and the marketplace handler use Cloud Memorystore for Redis for distributed rate limiting. The same Redis instance and configuration are shared by both services. Required configuration:
 
 | Variable | Source | Description |
 |----------|--------|-------------|
@@ -593,7 +593,7 @@ The agent uses Cloud Memorystore for Redis for distributed rate limiting. Requir
 | `RATE_LIMIT_REQUESTS_PER_MINUTE` | Env | Max requests per minute per principal |
 | `RATE_LIMIT_REQUESTS_PER_HOUR` | Env | Max requests per hour per principal |
 
-The service uses a VPC connector to reach the Redis instance. Set `VPC_CONNECTOR_NAME` (default: `lightspeed-redis-conn`) when deploying. In-transit encryption (TLS) is enabled on the Memorystore instance; the CA certificate is mounted from Secret Manager as a volume (see `service.yaml`). See [Rate Limiting — Testing](../../docs/rate-limiting.md#testing-rate-limiting) for how to validate rate limiting.
+Both services use a VPC connector to reach the Redis instance. Set `VPC_CONNECTOR_NAME` (default: `lightspeed-redis-conn`) when deploying. In-transit encryption (TLS) is enabled on the Memorystore instance; the CA certificate is mounted from Secret Manager as a volume (see `service.yaml` and `marketplace-handler.yaml`). See [Rate Limiting — Testing](../../docs/rate-limiting.md#testing-rate-limiting) for how to validate rate limiting.
 
 ### MCP Output Size Guard
 
