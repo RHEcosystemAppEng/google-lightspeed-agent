@@ -171,13 +171,13 @@ DCR allows Google Cloud Marketplace customers to automatically register as OAuth
 | `GMA_CLIENT_ID` | - | Client ID for GMA SSO API (client_credentials grant with `api.iam.clients.gma` scope) |
 | `GMA_CLIENT_SECRET` | - | Client secret for GMA SSO API |
 | `GMA_API_BASE_URL` | `https://sso.redhat.com/auth/realms/redhat-external/apis/beta/acs/v1/` | GMA SSO API base URL |
-| `DCR_ENCRYPTION_KEY` | - | Fernet key for encrypting stored client secrets |
+| `DCR_ENCRYPTION_KEY` | - | AES-256-GCM key for encrypting stored client secrets |
 | `DCR_CLIENT_NAME_PREFIX` | `gemini-order-` | Prefix for generated client names |
 
 **Generate Encryption Key:**
 
 ```bash
-python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'
+python -c "import base64, os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())"
 ```
 
 **Example Configuration:**
@@ -186,7 +186,7 @@ python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().d
 DCR_ENABLED=true
 GMA_CLIENT_ID=your-gma-client-id
 GMA_CLIENT_SECRET=your-gma-client-secret
-DCR_ENCRYPTION_KEY=your-generated-fernet-key
+DCR_ENCRYPTION_KEY=your-generated-aes256-key
 DCR_CLIENT_NAME_PREFIX=gemini-order-
 ```
 

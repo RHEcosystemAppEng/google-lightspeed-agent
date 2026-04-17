@@ -142,7 +142,7 @@ Gemini Enterprise                     Agent (Marketplace Handler)             Re
    - `name`: prefixed with `DCR_CLIENT_NAME_PREFIX` + order ID
    - `redirectUris`: from the Google JWT claims
    - `orgId`: the marketplace order ID
-5. Encrypts the `client_secret` (Fernet symmetric encryption) and stores the
+5. Encrypts the `client_secret` (AES-256-GCM symmetric encryption) and stores the
    mapping `order_id → client_id` in the database.
 6. Returns the `client_id` and `client_secret` to Gemini Enterprise.
 
@@ -727,7 +727,7 @@ independently. This mode preserves the user's identity end-to-end.
   be present in the access token. Tokens without these scopes receive
   `403 Forbidden`.
 - **Secrets encrypted at rest**: All client secrets stored in the database are
-  encrypted with Fernet (symmetric AES-128-CBC with HMAC-SHA256).
+  encrypted with AES-256-GCM (authenticated encryption with 256-bit key).
 - **Token introspection (not local JWT verification)**: The agent validates
   tokens by calling the authorization server's introspection endpoint. This
   ensures revoked tokens are immediately rejected without waiting for

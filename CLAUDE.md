@@ -124,7 +124,7 @@ Two modes controlled by `DCR_ENABLED`:
 - **Real DCR** (`true`): Creates OAuth tenant clients in Red Hat SSO via the GMA API (`dcr/gma_client.py`). Authenticates with `GMA_CLIENT_ID`/`GMA_CLIENT_SECRET` using `scope=api.iam.clients.gma`.
 - **Static credentials** (`false`): Accepts pre-seeded client_id/secret in DCR request body
 
-Client secrets are Fernet-encrypted at rest (`DCR_ENCRYPTION_KEY`).
+Client secrets are AES-256-GCM encrypted at rest (`DCR_ENCRYPTION_KEY`).
 
 ### Usage Metering
 

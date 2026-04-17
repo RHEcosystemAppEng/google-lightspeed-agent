@@ -170,7 +170,7 @@ secrets=(
 dcr_secrets=(
     "gma-client-id"             # GMA SSO API client ID for tenant creation
     "gma-client-secret"         # GMA SSO API client secret
-    "dcr-encryption-key"        # Fernet key for encrypting client secrets
+    "dcr-encryption-key"        # AES-256-GCM key for encrypting client secrets
 )
 
 # Database secrets (PostgreSQL for production - REQUIRED)
@@ -344,8 +344,8 @@ echo ""
 echo "   # DCR (Dynamic Client Registration) credentials — GMA SSO API"
 echo "   echo -n 'YOUR_GMA_CLIENT_ID' | gcloud secrets versions add gma-client-id --data-file=- --project=$PROJECT_ID"
 echo "   echo -n 'YOUR_GMA_CLIENT_SECRET' | gcloud secrets versions add gma-client-secret --data-file=- --project=$PROJECT_ID"
-echo "   # Generate Fernet key: python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'"
-echo "   echo -n 'YOUR_FERNET_KEY' | gcloud secrets versions add dcr-encryption-key --data-file=- --project=$PROJECT_ID"
+echo "   # Generate AES-256-GCM key: python -c \"import base64, os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())\""
+echo "   echo -n 'YOUR_AES256_KEY' | gcloud secrets versions add dcr-encryption-key --data-file=- --project=$PROJECT_ID"
 echo ""
 echo "   # Database URLs (after Cloud SQL setup)"
 echo "   CONNECTION_NAME=\$(gcloud sql instances describe $DB_INSTANCE_NAME --project=$PROJECT_ID --format='value(connectionName)')"
