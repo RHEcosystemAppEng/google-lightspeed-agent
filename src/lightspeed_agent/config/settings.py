@@ -1,8 +1,10 @@
 """Application settings and configuration management."""
 
+import ipaddress
 import os
 from functools import lru_cache
 from typing import Literal
+from urllib.parse import urlparse
 
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -399,6 +401,57 @@ class Settings(BaseSettings):
             )
         return self
 
+    @model_validator(mode="after")
+    def _validate_mcp_server_url(self) -> "Settings":
+        """Validate MCP_SERVER_URL to mitigate SSRF risks.
+
+        Ensures the URL uses http/https scheme and does not target
+        cloud metadata endpoints or other dangerous addresses.
+        """
+        if self.mcp_transport_mode in ("http", "sse") and self.mcp_server_url:
+            parsed = urlparse(self.mcp_server_url)
+            if parsed.scheme not in ("http", "https"):
+                raise ValueError(
+                    f"MCP_SERVER_URL must use http:// or https:// "
+                    f"(got '{parsed.scheme}://')"
+                )
+            if parsed.hostname:
+                try:
+                    ip = ipaddress.ip_address(parsed.hostname)
+                    if ip == ipaddress.ip_address("169.254.169.254"):
+                        raise ValueError(
+                            "MCP_SERVER_URL cannot target the cloud metadata endpoint "
+                            "(169.254.169.254)"
+                        )
+                except ValueError as e:
+                    if "metadata" in str(e):
+                        raise
+                    # Not an IP address — hostname is fine
+        return self
+
+    @model_validator(mode="after")
+    def _validate_sso_issuer_scheme(self) -> "Settings":
+        """Ensure RED_HAT_SSO_ISSUER uses HTTPS when JWT validation is active."""
+        if not self.skip_jwt_validation and self.red_hat_sso_issuer:
+            parsed = urlparse(self.red_hat_sso_issuer)
+            if parsed.scheme != "https":
+                raise ValueError(
+                    f"RED_HAT_SSO_ISSUER must use https:// (got '{parsed.scheme}://')"
+                )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_gma_api_url(self) -> "Settings":
+        """Ensure GMA_API_BASE_URL uses HTTPS when DCR is enabled."""
+        if self.dcr_enabled and self.gma_api_base_url:
+            parsed = urlparse(self.gma_api_base_url)
+            if parsed.scheme != "https":
+                raise ValueError(
+                    f"GMA_API_BASE_URL must use https:// when DCR is enabled "
+                    f"(got '{parsed.scheme}://')"
+                )
+        return self
+
     # OpenTelemetry Configuration
     otel_enabled: bool = Field(
         default=False,
@@ -435,6 +488,23 @@ class Settings(BaseSettings):
         default=1.0,
         description="Sampler argument (e.g., ratio for traceidratio)",
     )
+
+    @model_validator(mode="after")
+    def _validate_otel_endpoints(self) -> "Settings":
+        """Ensure OTEL exporter endpoints use http/https when enabled."""
+        if self.otel_enabled and self.otel_exporter_type in ("otlp", "otlp-http"):
+            endpoints = {
+                "OTEL_EXPORTER_OTLP_ENDPOINT": self.otel_exporter_otlp_endpoint,
+                "OTEL_EXPORTER_OTLP_HTTP_ENDPOINT": self.otel_exporter_otlp_http_endpoint,
+            }
+            for name, url in endpoints.items():
+                parsed = urlparse(url)
+                if parsed.scheme not in ("http", "https"):
+                    raise ValueError(
+                        f"{name} must use http:// or https:// "
+                        f"(got '{parsed.scheme}://')"
+                    )
+        return self
 
 
 @lru_cache
