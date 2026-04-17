@@ -152,7 +152,7 @@ DCR_ENABLED=true
 GMA_CLIENT_ID="<gma-client-id>"
 GMA_CLIENT_SECRET="<gma-client-secret>"
 DCR_CLIENT_NAME_PREFIX="gemini-order-"
-DCR_ENCRYPTION_KEY="<fernet-key>"   # Encrypts stored client secrets
+DCR_ENCRYPTION_KEY="<aes256-key>"   # Encrypts stored client secrets
 
 # GMA API base URL (default: derived from Red Hat SSO issuer)
 # GMA_API_BASE_URL="https://sso.redhat.com/auth/realms/redhat-external/apis/beta/acs/v1/"
@@ -170,8 +170,8 @@ A test script is available at `scripts/test_dcr.py` that signs a software_statem
 ### Security Considerations
 
 - **Order ID validation**: The handler verifies the order exists in the database before creating a client. Without this check, any valid Google JWT (even for a different product) could register a client.
-- **Secret encryption**: Client secrets are encrypted with Fernet before storage in PostgreSQL.
-- **Client secrets**: Encrypted with Fernet before storage in PostgreSQL.
+- **Secret encryption**: Client secrets are encrypted with AES-256-GCM before storage in PostgreSQL.
+- **Client secrets**: Encrypted with AES-256-GCM before storage in PostgreSQL.
 
 ## MCP Sidecar Authentication
 

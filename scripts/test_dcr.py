@@ -93,7 +93,7 @@ The handler must be started with at least these environment variables:
     # GMA_CLIENT_SECRET=<your-gma-client-secret>
 
     # Always required
-    DCR_ENCRYPTION_KEY=<generate with: python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'>
+    DCR_ENCRYPTION_KEY=<generate with: python -c "import base64, os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())">
     DATABASE_URL=sqlite+aiosqlite:///./lightspeed_agent.db
 
     # Must match PROVIDER_URL below (or set AGENT_PROVIDER_ORGANIZATION_URL on the handler)

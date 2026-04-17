@@ -156,7 +156,7 @@ class RegisteredClient(BaseModel):
     """
 
     client_id: str = Field(..., description="OAuth client ID")
-    client_secret_encrypted: str = Field(..., description="Encrypted client secret (Fernet)")
+    client_secret_encrypted: str = Field(..., description="Encrypted client secret (AES-256-GCM)")
     order_id: str = Field(..., description="Associated Order ID")
     account_id: str = Field(..., description="Associated Account ID")
     redirect_uris: list[str] = Field(
