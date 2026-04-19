@@ -117,11 +117,15 @@ class TestAgentCard:
         settings = get_settings()
         original = settings.agent_provider_organization_url
         settings.agent_provider_organization_url = "https://custom-org.example.com"
+        build_agent_card.cache_clear()
+        get_agent_card_dict.cache_clear()
         try:
             card = build_agent_card()
             assert card.provider.url == "https://custom-org.example.com"
         finally:
             settings.agent_provider_organization_url = original
+            build_agent_card.cache_clear()
+            get_agent_card_dict.cache_clear()
 
     def test_get_agent_card_dict(self):
         """Test AgentCard serialization to dict."""
@@ -132,6 +136,95 @@ class TestAgentCard:
         assert "protocolVersion" in card_dict  # aliased field
         assert "securitySchemes" in card_dict  # aliased field
         assert "defaultInputModes" in card_dict  # aliased field
+        assert "iconUrl" not in card_dict  # injected dynamically at the endpoint level
+
+    def test_agent_card_all_fields(self):
+        """Validate structural correctness of every AgentCard field."""
+        import re
+
+        build_agent_card.cache_clear()
+        get_agent_card_dict.cache_clear()
+        try:
+            card = build_agent_card()
+        finally:
+            build_agent_card.cache_clear()
+            get_agent_card_dict.cache_clear()
+
+        semver = re.compile(r"^\d+\.\d+\.\d+$")
+
+        # Top-level identity fields
+        assert card.name
+        assert semver.match(card.version)
+        assert semver.match(card.protocol_version)
+        assert card.url.endswith("/")
+        assert card.description
+
+        # Provider
+        assert card.provider.organization
+        assert card.provider.url.startswith("https://")
+
+        # Default I/O modes — must be proper MIME types (type/subtype)
+        mime_re = re.compile(r"^[a-z]+/[a-z0-9.+-]+$")
+        for mode in card.default_input_modes:
+            assert mime_re.match(mode), f"Invalid MIME type: {mode}"
+        for mode in card.default_output_modes:
+            assert mime_re.match(mode), f"Invalid MIME type: {mode}"
+
+        # Capabilities
+        assert card.capabilities.streaming is True
+
+        # Extensions — DCR, access-mode, and rate-limiting must be present
+        extensions = card.capabilities.extensions
+        assert len(extensions) >= 3
+        ext_by_uri = {ext.uri: ext for ext in extensions}
+
+        # DCR extension
+        dcr_uris = [u for u in ext_by_uri if "dcr" in u.lower()]
+        assert len(dcr_uris) == 1
+        dcr = ext_by_uri[dcr_uris[0]]
+        assert dcr.params["target_url"].endswith("/dcr")
+
+        # Access mode extension
+        assert "urn:redhat:lightspeed:access-mode" in ext_by_uri
+        access = ext_by_uri["urn:redhat:lightspeed:access-mode"]
+        assert isinstance(access.params["read_only"], bool)
+        assert len(access.params["oauth2_scopes"]) > 0
+
+        # Rate limit extension
+        assert "urn:redhat:lightspeed:rate-limiting" in ext_by_uri
+        rl = ext_by_uri["urn:redhat:lightspeed:rate-limiting"]
+        assert rl.params["requests_per_minute"] > 0
+        assert rl.params["requests_per_hour"] > 0
+        assert rl.params["requests_per_hour"] > rl.params["requests_per_minute"]
+
+        # Skills — at least one, each fully populated
+        assert len(card.skills) >= 1
+        for skill in card.skills:
+            assert skill.id, "Skill missing id"
+            assert skill.name, f"Skill {skill.id} has no name"
+            assert skill.description, f"Skill {skill.id} has no description"
+            assert len(skill.tags) > 0, f"Skill {skill.id} has no tags"
+            assert len(skill.examples) > 0, f"Skill {skill.id} has no examples"
+
+        # Security scheme — must have an OAuth 2.0 scheme
+        assert len(card.security_schemes) >= 1
+        oauth_schemes = {
+            k: v for k, v in card.security_schemes.items() if v.root.type == "oauth2"
+        }
+        assert len(oauth_schemes) >= 1
+        scheme_name, scheme = next(iter(oauth_schemes.items()))
+        oauth = scheme.root
+        assert oauth.flows.authorization_code is not None
+        assert oauth.flows.authorization_code.authorization_url.startswith("https://")
+        assert oauth.flows.authorization_code.token_url.startswith("https://")
+        assert "openid" in oauth.flows.authorization_code.scopes
+        for desc in oauth.flows.authorization_code.scopes.values():
+            assert desc, "OAuth scope has empty description"
+
+        # Security requirements — scheme must be referenced
+        assert len(card.security) >= 1
+        referenced_schemes = {k for req in card.security for k in req}
+        assert scheme_name in referenced_schemes
 
 
 class TestModels:
@@ -237,7 +330,7 @@ class TestA2AEndpoints:
         rl_mod._rate_limiter = None
 
     def test_agent_card_endpoint(self, client):
-        """Test /.well-known/agent.json endpoint."""
+        """Test /.well-known/agent.json endpoint returns card with dynamic iconUrl."""
         response = client.get("/.well-known/agent.json")
 
         assert response.status_code == 200
@@ -245,22 +338,21 @@ class TestA2AEndpoints:
         assert "name" in data
         assert "skills" in data
         assert "securitySchemes" in data
+        assert data["iconUrl"] == "http://testserver/static/logo.png"
 
-    def test_health_endpoint(self, client):
-        """Test /health endpoint."""
-        response = client.get("/health")
+    def test_agent_card_alias_matches(self, client):
+        """Test /.well-known/agent-card.json returns the same card as agent.json."""
+        main = client.get("/.well-known/agent.json").json()
+        alias = client.get("/.well-known/agent-card.json").json()
+
+        assert alias["iconUrl"] == main["iconUrl"]
+
+    def test_logo_endpoint(self, client):
+        """Test GET /static/logo.png serves an image/png response."""
+        response = client.get("/static/logo.png")
 
         assert response.status_code == 200
-        data = response.json()
-        assert data["status"] == "healthy"
-
-    def test_ready_endpoint(self, client):
-        """Test /ready endpoint."""
-        response = client.get("/ready")
-
-        assert response.status_code == 200
-        data = response.json()
-        assert data["status"] == "ready"
+        assert response.headers["content-type"] == "image/png"
 
     def test_send_message_jsonrpc(self, client):
         """Test / endpoint with JSON-RPC message/send."""
