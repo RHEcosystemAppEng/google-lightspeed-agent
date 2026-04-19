@@ -1,5 +1,6 @@
 """AgentCard builder for the Lightspeed Agent using a2a-sdk."""
 
+from functools import lru_cache
 from typing import Any
 
 from a2a.types import (
@@ -144,6 +145,7 @@ def _build_capabilities() -> AgentCapabilities:
     )
 
 
+@lru_cache(maxsize=1)
 def build_agent_card() -> AgentCard:
     """Build the complete AgentCard for the Lightspeed Agent.
 
@@ -177,13 +179,14 @@ def build_agent_card() -> AgentCard:
         security=[
             {"redhat_sso": ["openid", "api.console", "api.ocm"]},
         ],
-        default_input_modes=["text"],
-        default_output_modes=["text"],
+        default_input_modes=["text/plain"],
+        default_output_modes=["text/plain"],
     )
 
     return agent_card
 
 
+@lru_cache(maxsize=1)
 def get_agent_card_dict() -> dict[str, Any]:
     """Get the AgentCard as a dictionary for JSON serialization.
 

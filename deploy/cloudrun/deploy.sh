@@ -242,6 +242,7 @@ deploy_handler() {
         -e "s|\${HANDLER_SERVICE_NAME}|${HANDLER_SERVICE_NAME}|g" \
         -e "s|\${DB_INSTANCE_NAME}|${DB_INSTANCE_NAME}|g" \
         -e "s|\${SERVICE_CONTROL_SERVICE_NAME}|${SERVICE_CONTROL_SERVICE_NAME}|g" \
+        -e "s|\${VPC_CONNECTOR_NAME}|${VPC_CONNECTOR_NAME}|g" \
         deploy/cloudrun/marketplace-handler.yaml > "$tmp_yaml"
 
     # Deploy using the YAML
