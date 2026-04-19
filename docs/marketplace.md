@@ -329,8 +329,8 @@ curl -X POST http://localhost:8001/dcr \
     "software_statement": "your-test-jwt"
   }'
 
-# Test the agent health
-curl http://localhost:8000/health
+# Test the agent health (probe port)
+curl http://localhost:8002/health
 ```
 
 ### Test Procurement Events
