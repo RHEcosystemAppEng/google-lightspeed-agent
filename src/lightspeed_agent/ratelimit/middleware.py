@@ -271,17 +271,16 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         try:
             allowed, status = await self._limiter.is_allowed(principal_keys=principals)
         except RuntimeError:
-            logger.error(
-                "Rate limiter backend unavailable, returning 503 (principals=%s)",
+            # Fail open: allow the request through when Redis is unavailable.
+            # Blocking all traffic on a rate-limiter outage would be a
+            # self-inflicted denial of service.
+            logger.warning(
+                "Rate limiter backend unavailable, allowing request (fail-open). "
+                "principals=%s",
                 principals,
             )
-            return JSONResponse(
-                status_code=503,
-                content={
-                    "error": "rate_limiter_unavailable",
-                    "message": "Rate limiter backend unavailable",
-                },
-            )
+            response = await call_next(request)
+            return response
 
         if not allowed:
             logger.warning(

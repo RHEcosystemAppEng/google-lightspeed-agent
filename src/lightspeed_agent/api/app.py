@@ -9,12 +9,15 @@ marketplace-handler service. See lightspeed_agent.marketplace.
 """
 
 import logging
+import pathlib
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
 
 from a2a.server.apps.jsonrpc.fastapi_app import A2AFastAPI
+from fastapi import Request
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.responses import FileResponse
 
 from lightspeed_agent.api.a2a.a2a_setup import setup_a2a_routes
 from lightspeed_agent.api.a2a.agent_card import get_agent_card_dict
@@ -24,7 +27,16 @@ from lightspeed_agent.probes import start_probe_server, stop_probe_server
 from lightspeed_agent.ratelimit import RateLimitMiddleware, get_redis_rate_limiter
 from lightspeed_agent.security import RequestBodyLimitMiddleware, SecurityHeadersMiddleware
 
+_LOGO_PATH = pathlib.Path(__file__).parent.parent / "static" / "logo.png"
+
 logger = logging.getLogger(__name__)
+
+
+def _agent_card_response(request: Request) -> dict[str, Any]:
+    """Build agent card dict with a dynamic iconUrl derived from the request base URL."""
+    card = get_agent_card_dict()
+    icon_url = f"{str(request.base_url).rstrip('/')}/static/logo.png"
+    return {**card, "iconUrl": icon_url}
 
 
 @asynccontextmanager
@@ -134,9 +146,22 @@ def create_app() -> A2AFastAPI:
         lifespan=lifespan,
     )
 
+    # Serve the Red Hat logo for the agent card iconUrl
+    @app.get("/static/logo.png")
+    async def serve_logo() -> FileResponse:
+        """Serve the agent logo image."""
+        return FileResponse(_LOGO_PATH, media_type="image/png")
+
+    # Custom agent card endpoint registered BEFORE setup_a2a_routes so
+    # FastAPI's first-match routing picks it up instead of the SDK default.
+    @app.get("/.well-known/agent.json")
+    async def agent_card_with_icon(request: Request) -> dict[str, Any]:
+        """AgentCard endpoint with dynamic iconUrl."""
+        return _agent_card_response(request)
+
     # Set up A2A protocol routes using ADK's built-in integration
     # This provides:
-    # - GET /.well-known/agent.json - AgentCard
+    # - GET /.well-known/agent.json - AgentCard (overridden above)
     # - POST / - JSON-RPC 2.0 endpoint for message/send, message/stream, etc.
     # The ADK integration handles SSE streaming, task management, and
     # event conversion automatically.
@@ -144,9 +169,9 @@ def create_app() -> A2AFastAPI:
 
     # Alias for agent card (some clients use agent-card.json)
     @app.get("/.well-known/agent-card.json")
-    async def agent_card_alias() -> dict[str, Any]:
+    async def agent_card_alias(request: Request) -> dict[str, Any]:
         """AgentCard endpoint (alias for agent.json)."""
-        return get_agent_card_dict()
+        return _agent_card_response(request)
 
     # Add authentication middleware for A2A endpoint (innermost layer)
     # Validates Red Hat SSO JWT tokens on POST / requests

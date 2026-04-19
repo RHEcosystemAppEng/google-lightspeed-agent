@@ -179,8 +179,8 @@ def build_agent_card() -> AgentCard:
         security=[
             {"redhat_sso": ["openid", "api.console", "api.ocm"]},
         ],
-        default_input_modes=["text"],
-        default_output_modes=["text"],
+        default_input_modes=["text/plain"],
+        default_output_modes=["text/plain"],
     )
 
     return agent_card
