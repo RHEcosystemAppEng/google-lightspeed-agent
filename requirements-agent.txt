@@ -523,9 +523,9 @@ google-cloud-secret-manager==2.26.0 \
     --hash=sha256:0d1d6f76327685a0ed78a4cf50f289e1bfbbe56026ed0affa98663b86d6d50d6 \
     --hash=sha256:940a5447a6ec9951446fd1a0f22c81a4303fde164cd747aae152c5f5c8e6723e
     # via google-adk
-google-cloud-service-control==1.18.0 \
-    --hash=sha256:645fac1f03410055d8f83b12e3f24a4a386ca45dfca052f70de609952ecbd1bd \
-    --hash=sha256:7ab97cbf55da9934cc402fa74c4bf066e699c0ef863f8abeba7044dd8723c0e4
+google-cloud-service-control==1.19.0 \
+    --hash=sha256:0f13f58402c8d28bbac7ecd9db45a1e4f6c9c355764deb7683b252ef4639bf6c \
+    --hash=sha256:667e617c14fa79fc6cc82cfb7ce11a031c779123315bc951ad03fb83b7826929
     # via lightspeed-agent (pyproject.toml)
 google-cloud-spanner==3.63.0 \
     --hash=sha256:6ffae0ed589bbbd2d8831495e266198f3d069005cfe65c664448c9a727c88e7b \
