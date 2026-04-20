@@ -52,6 +52,8 @@ PUBSUB_INVOKER_SA="${PUBSUB_INVOKER_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
 # Pub/Sub configuration
 PUBSUB_TOPIC="${PUBSUB_TOPIC:-marketplace-entitlements}"
 PUBSUB_SUBSCRIPTION="${PUBSUB_SUBSCRIPTION:-${PUBSUB_TOPIC}-sub}"
+ROTATION_TOPIC="${ROTATION_TOPIC:-secret-rotation-trigger}"
+ROTATION_SUBSCRIPTION="${ROTATION_SUBSCRIPTION:-secret-rotation-trigger-sub}"
 
 # Parse arguments
 FORCE=false
@@ -82,9 +84,11 @@ echo ""
 echo "  - Cloud Run services: $SERVICE_NAME, $HANDLER_SERVICE_NAME"
 echo "  - Pub/Sub topic: $PUBSUB_TOPIC"
 echo "  - Pub/Sub subscription: $PUBSUB_SUBSCRIPTION"
+echo "  - Rotation Pub/Sub topic: $ROTATION_TOPIC"
+echo "  - Rotation Pub/Sub subscription: $ROTATION_SUBSCRIPTION"
 echo "  - Secrets: redhat-sso-client-id, redhat-sso-client-secret, database-url,"
 echo "             session-database-url, gma-client-id, gma-client-secret, dcr-encryption-key,"
-echo "             rate-limit-redis-url"
+echo "             rate-limit-redis-url, redis-ca-cert"
 echo "  - Service accounts: $SERVICE_ACCOUNT"
 echo "                      $PUBSUB_INVOKER_SA"
 echo ""
@@ -170,6 +174,7 @@ secrets=(
     "gma-client-secret"
     "dcr-encryption-key"
     "rate-limit-redis-url"
+    "redis-ca-cert"
 )
 
 for secret in "${secrets[@]}"; do
@@ -182,6 +187,29 @@ for secret in "${secrets[@]}"; do
         log_info "  Secret '$secret' does not exist, skipping"
     fi
 done
+
+# =============================================================================
+# Step 3b: Delete Secret Rotation Topic and Subscription
+# =============================================================================
+log_info "Deleting secret rotation Pub/Sub resources..."
+
+if gcloud pubsub subscriptions describe "$ROTATION_SUBSCRIPTION" --project="$PROJECT_ID" &>/dev/null; then
+    gcloud pubsub subscriptions delete "$ROTATION_SUBSCRIPTION" \
+        --project="$PROJECT_ID" \
+        --quiet
+    log_info "Rotation Pub/Sub subscription '$ROTATION_SUBSCRIPTION' deleted"
+else
+    log_info "Rotation Pub/Sub subscription '$ROTATION_SUBSCRIPTION' does not exist, skipping"
+fi
+
+if gcloud pubsub topics describe "$ROTATION_TOPIC" --project="$PROJECT_ID" &>/dev/null; then
+    gcloud pubsub topics delete "$ROTATION_TOPIC" \
+        --project="$PROJECT_ID" \
+        --quiet
+    log_info "Rotation Pub/Sub topic '$ROTATION_TOPIC' deleted"
+else
+    log_info "Rotation Pub/Sub topic '$ROTATION_TOPIC' does not exist, skipping"
+fi
 
 # =============================================================================
 # Step 4: Remove IAM Bindings and Delete Service Account
@@ -266,6 +294,7 @@ echo ""
 echo "The following resources have been removed:"
 echo "  - Cloud Run services ($SERVICE_NAME, $HANDLER_SERVICE_NAME)"
 echo "  - Pub/Sub topic and subscription"
+echo "  - Secret rotation Pub/Sub subscription and trigger topic"
 echo "  - Secret Manager secrets"
 echo "  - Service accounts (runtime + Pub/Sub invoker) and IAM bindings"
 echo ""

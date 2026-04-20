@@ -13,6 +13,7 @@ Deploy the Red Hat Lightspeed Agent for Google Cloud to Google Cloud Run for pro
   - [3. Set Up Cloud SQL Database](#3-set-up-cloud-sql-database)
   - [4. Redis Setup for Rate Limiting](#4-redis-setup-for-rate-limiting)
   - [5. Configure Secrets](#5-configure-secrets)
+  - [5a. Configure Secret Rotation Schedule](#5a-configure-secret-rotation-schedule)
   - [6. Copy MCP Image to GCR](#6-copy-mcp-image-to-gcr)
   - [7. Deploy](#7-deploy)
 - [Service Configuration](#service-configuration)
@@ -438,6 +439,24 @@ echo -n "postgresql+asyncpg://sessions:$SESSION_DB_PASSWORD@/agent_sessions?host
 # echo -n "rediss://${REDIS_HOST}:${REDIS_PORT}/0" | gcloud secrets versions add rate-limit-redis-url --data-file=- --project=$GOOGLE_CLOUD_PROJECT
 # The CA certificate is stored separately (see Redis Setup step 3).
 ```
+
+### 5a. Configure Secret Rotation Schedule
+
+After secrets are populated, bootstrap the rotation schedule metadata and trigger plumbing:
+
+```bash
+./deploy/cloudrun/setup-secret-rotation.sh
+```
+
+This script configures:
+
+- **Secret Manager rotation metadata** (`next_rotation_time` + `rotation_period`) for:
+  - `redhat-sso-client-secret`
+  - `gma-client-secret`
+- **Secret Manager event notifications** by attaching a Pub/Sub topic to those secrets
+- **Pub/Sub subscription** to receive `SECRET_ROTATE` events
+
+> Note: this does not rotate secret values by itself. It configures schedule + `SECRET_ROTATE` notifications so a rotator worker can handle updates.
 
 ### 6. Copy MCP Image to GCR
 
