@@ -5,15 +5,25 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  issue_comment:
+    types: [created]
 
 jobs:
   lint:
     name: Lint
+    if: >-
+      github.event_name == 'push' ||
+      github.event_name == 'pull_request' ||
+      (github.event_name == 'issue_comment' &&
+       github.event.issue.pull_request &&
+       contains(github.event.comment.body, '/retest'))
     runs-on: ubuntu-latest
     container:
       image: quay.io/centos/centos:stream9
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'issue_comment' && format('refs/pull/{0}/merge', github.event.issue.number) || '' }}
 
       - name: Install Python
         run: dnf install -y python3.12 python3.12-pip python3.12-devel
@@ -29,11 +39,19 @@ jobs:
 
   test:
     name: Test
+    if: >-
+      github.event_name == 'push' ||
+      github.event_name == 'pull_request' ||
+      (github.event_name == 'issue_comment' &&
+       github.event.issue.pull_request &&
+       contains(github.event.comment.body, '/retest'))
     runs-on: ubuntu-latest
     container:
       image: quay.io/centos/centos:stream9
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'issue_comment' && format('refs/pull/{0}/merge', github.event.issue.number) || '' }}
 
       - name: Install Python
         run: dnf install -y python3.12 python3.12-pip python3.12-devel
@@ -46,16 +64,31 @@ jobs:
 
   build:
     name: Build container image
+    if: >-
+      github.event_name == 'push' ||
+      github.event_name == 'pull_request' ||
+      (github.event_name == 'issue_comment' &&
+       github.event.issue.pull_request &&
+       contains(github.event.comment.body, '/retest'))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'issue_comment' && format('refs/pull/{0}/merge', github.event.issue.number) || '' }}
 
       - name: Build image
         run: podman build -t lightspeed-agent:ci -f Containerfile .
 
   ci-gate:
     name: CI Gate
-    if: always()
+    if: >-
+      always() && (
+        github.event_name == 'push' ||
+        github.event_name == 'pull_request' ||
+        (github.event_name == 'issue_comment' &&
+         github.event.issue.pull_request &&
+         contains(github.event.comment.body, '/retest'))
+      )
     needs: [lint, test, build]
     runs-on: ubuntu-latest
     steps:
