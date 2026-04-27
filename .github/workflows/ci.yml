@@ -70,6 +70,10 @@ jobs:
 
   lint:
     name: Lint
+    needs: [konflux-verify]
+    if: >-
+      !cancelled() &&
+      (needs.konflux-verify.result == 'success' || needs.konflux-verify.result == 'skipped')
     runs-on: ubuntu-latest
     container:
       image: quay.io/centos/centos:stream9
@@ -90,6 +94,10 @@ jobs:
 
   test:
     name: Test
+    needs: [konflux-verify]
+    if: >-
+      !cancelled() &&
+      (needs.konflux-verify.result == 'success' || needs.konflux-verify.result == 'skipped')
     runs-on: ubuntu-latest
     container:
       image: quay.io/centos/centos:stream9
@@ -107,6 +115,10 @@ jobs:
 
   build:
     name: Build container image
+    needs: [konflux-verify]
+    if: >-
+      !cancelled() &&
+      (needs.konflux-verify.result == 'success' || needs.konflux-verify.result == 'skipped')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -117,16 +129,22 @@ jobs:
   ci-gate:
     name: CI Gate
     if: always()
-    needs: [lint, test, build]
+    needs: [konflux-verify, lint, test, build]
     runs-on: ubuntu-latest
     steps:
       - name: Check all jobs passed
         run: |
+          # konflux-verify is skipped for non-Konflux PRs and pushes — that's expected
+          if [[ "${{ needs.konflux-verify.result }}" != "success" && "${{ needs.konflux-verify.result }}" != "skipped" ]]; then
+            echo "Konflux verification failed: ${{ needs.konflux-verify.result }}"
+            exit 1
+          fi
           if [[ "${{ needs.lint.result }}" != "success" || "${{ needs.test.result }}" != "success" || "${{ needs.build.result }}" != "success" ]]; then
             echo "One or more CI jobs failed or were cancelled."
-            echo "  lint:  ${{ needs.lint.result }}"
-            echo "  test:  ${{ needs.test.result }}"
-            echo "  build: ${{ needs.build.result }}"
+            echo "  konflux-verify: ${{ needs.konflux-verify.result }}"
+            echo "  lint:           ${{ needs.lint.result }}"
+            echo "  test:           ${{ needs.test.result }}"
+            echo "  build:          ${{ needs.build.result }}"
             exit 1
           fi
           echo "All CI jobs passed."
