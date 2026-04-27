@@ -115,3 +115,6 @@ Thumbs.db
 
 # Claude Code
 .claude/
+
+# Superpowers documentation (development artifacts)
+docs/superpowers/

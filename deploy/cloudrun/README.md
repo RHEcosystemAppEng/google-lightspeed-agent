@@ -458,6 +458,90 @@ This script configures:
 
 > Note: this does not rotate secret values by itself. It configures schedule + `SECRET_ROTATE` notifications so a rotator worker can handle updates.
 
+**Configure Pub/Sub Push Endpoint (after deployment):**
+
+After deploying the marketplace handler to Cloud Run, configure the subscription to push events to the `/rotation` endpoint:
+
+```bash
+# Get the marketplace handler URL
+MARKETPLACE_HANDLER_URL=$(gcloud run services describe marketplace-handler \
+  --region=us-central1 \
+  --format='value(status.url)')
+
+# Get the Cloud Run service account (used for OIDC authentication)
+SERVICE_ACCOUNT=$(gcloud run services describe marketplace-handler \
+  --region=us-central1 \
+  --format='value(spec.template.spec.serviceAccountName)')
+
+# Configure push endpoint with OIDC authentication
+gcloud pubsub subscriptions modify secret-rotation-trigger-sub \
+  --push-endpoint="${MARKETPLACE_HANDLER_URL}/rotation" \
+  --push-auth-service-account="${SERVICE_ACCOUNT}" \
+  --project="${GOOGLE_CLOUD_PROJECT}"
+```
+
+This configures:
+- **Push endpoint**: `https://<marketplace-handler-url>/rotation`
+- **OIDC authentication**: Pub/Sub signs requests with service account JWT
+- **Audience**: Marketplace handler validates JWT audience matches service URL
+
+**Testing the rotation workflow:**
+
+⚠️ **Prerequisites:** The rotation endpoint is deployed and functional, but secret retrieval requires implementing API-based providers in `src/lightspeed_agent/rotation/providers.py`:
+
+1. **Implement `RedHatSSOSecretProvider._fetch_secret_from_api()`**
+   - Authenticate with Red Hat Identity Management API
+   - Request new OAuth client secret for SSO
+   - Return the generated secret as a string
+
+2. **Implement `GMASecretProvider._fetch_secret_from_api()`**
+   - Authenticate with Google Marketplace Admin API  
+   - Request client secret regeneration
+   - Return the generated secret as a string
+
+3. **Register providers in `create_default_registry()`**
+   ```python
+   # Uncomment these lines in providers.py:
+   registry.register("redhat-sso-client-secret", RedHatSSOSecretProvider())
+   registry.register("gma-client-secret", GMASecretProvider())
+   ```
+
+**Current state:** Rotation endpoint will return 500 error with "No provider registered for secret" until providers are implemented.
+
+Once providers are implemented and registered:
+
+```bash
+# Trigger immediate rotation for testing
+gcloud secrets update redhat-sso-client-secret \
+  --next-rotation-time="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  --project="${GOOGLE_CLOUD_PROJECT}"
+
+# Monitor rotation logs
+gcloud logging read "resource.type=cloud_run_revision \
+  AND resource.labels.service_name=marketplace-handler \
+  AND jsonPayload.message=~'event_type=secret_rotation_completed'" \
+  --limit=10 \
+  --format=json \
+  --project="${GOOGLE_CLOUD_PROJECT}"
+```
+
+**What happens during rotation:**
+
+1. **Secret Manager triggers event** when `next_rotation_time` is reached
+2. **Pub/Sub pushes notification** to `/rotation` endpoint with OIDC JWT token
+3. **Rotation endpoint validates** the Pub/Sub OIDC token (transport security)
+4. **Registry routes to provider** based on secret name in the event
+5. **Provider fetches new secret** from upstream API (Red Hat Identity or GMA)
+6. **Provider validates secret** (32+ bytes, 10+ unique characters)
+7. **Secret Manager stores new version** via `add_secret_version` API
+8. **Endpoint logs completion** with `event_type=secret_rotation_completed`
+
+**Error handling:**
+- Invalid OIDC token → 401 response (not retried)
+- Missing provider → 500 response (Pub/Sub retries)
+- API failure → 500 response (Pub/Sub retries)
+- Secret Manager failure → 500 response (Pub/Sub retries)
+
 ### 6. Copy MCP Image to GCR
 
 Cloud Run doesn't support Quay.io directly. Copy the MCP server image to GCR.

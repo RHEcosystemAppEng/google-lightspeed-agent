@@ -18,6 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from lightspeed_agent.config import get_settings
 from lightspeed_agent.marketplace.router import router as handler_router
+from lightspeed_agent.rotation import router as rotation_router
 from lightspeed_agent.probes import start_probe_server, stop_probe_server
 from lightspeed_agent.ratelimit import RateLimitMiddleware, get_redis_rate_limiter
 from lightspeed_agent.security import RequestBodyLimitMiddleware, SecurityHeadersMiddleware
@@ -122,6 +123,10 @@ def create_app() -> FastAPI:
     # Include the main handler router
     # This provides the /dcr endpoint that handles both Pub/Sub and DCR
     app.include_router(handler_router)
+
+    # Include the rotation router
+    # This provides the /rotation endpoint for Secret Manager Pub/Sub events
+    app.include_router(rotation_router)
 
     # Add rate limiting middleware for /dcr endpoint (IP-based, no auth on this service)
     app.add_middleware(RateLimitMiddleware, rate_limited_paths={"/dcr"})
