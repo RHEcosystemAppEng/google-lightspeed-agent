@@ -185,45 +185,12 @@ A2UI is particularly valuable for Insights data because structured UI makes comp
 
 ## Testing
 
-### Verifying A2UI is Disabled (Default)
-
-```bash
-# Start agent
-A2UI_ENABLED=false python -m lightspeed_agent.main
-
-# Check Agent Card
-curl -s http://localhost:8000/.well-known/agent.json | jq '.capabilities.extensions[].uri'
-# Should only show DCR extension
-
-curl -s http://localhost:8000/.well-known/agent.json | jq '.defaultOutputModes'
-# Should be: ["text"]
-```
-
-### Verifying A2UI is Enabled
-
-```bash
-# Start agent with A2UI
-A2UI_ENABLED=true python -m lightspeed_agent.main
-
-# Check Agent Card
-curl -s http://localhost:8000/.well-known/agent.json | jq '.capabilities.extensions[].uri'
-# Should show both DCR and A2UI extensions
-
-curl -s http://localhost:8000/.well-known/agent.json | jq '.defaultOutputModes'
-# Should be: ["text", "application/json+a2ui"]
-```
-
-### ADK Web UI
-
-The ADK development UI (`adk web`) renders A2UI components natively since ADK v1.24. This provides a convenient way to test A2UI rendering locally:
-
-```bash
-A2UI_ENABLED=true adk web agents
-```
-
 ### Unit Tests
 
+Run the A2UI-specific tests (no credentials or services required):
+
 ```bash
+source .venv/bin/activate
 python -m pytest tests/test_a2ui.py -v
 ```
 
@@ -233,6 +200,145 @@ Tests cover:
 - Agent Card extension presence/absence based on `A2UI_ENABLED`
 - Agent Card output modes based on `A2UI_ENABLED`
 - Agent creation with augmented vs. plain instruction
+
+### Agent Card Verification
+
+Start the agent in dev mode and verify the Agent Card reflects A2UI configuration.
+
+**With A2UI enabled:**
+
+```bash
+A2UI_ENABLED=true SKIP_JWT_VALIDATION=true python -m lightspeed_agent.main
+```
+
+In another terminal:
+
+```bash
+# Verify A2UI extension is declared
+curl -s http://localhost:8000/.well-known/agent.json | jq '.capabilities.extensions[].uri'
+# Should show both:
+#   "https://cloud.google.com/marketplace/docs/partners/ai-agents/setup-dcr"
+#   "https://a2ui.org/a2a-extension/a2ui/v0.8"
+
+# Verify output modes include A2UI
+curl -s http://localhost:8000/.well-known/agent.json | jq '.defaultOutputModes'
+# Should be: ["text", "application/json+a2ui"]
+```
+
+**With A2UI disabled (default):**
+
+```bash
+A2UI_ENABLED=false SKIP_JWT_VALIDATION=true python -m lightspeed_agent.main
+```
+
+```bash
+curl -s http://localhost:8000/.well-known/agent.json | jq '.defaultOutputModes'
+# Should be: ["text"]
+
+curl -s http://localhost:8000/.well-known/agent.json | jq '.capabilities.extensions[].uri'
+# Should only show DCR extension
+```
+
+### Interactive Testing with ADK Web UI (Recommended)
+
+The ADK development UI (`adk web`) renders A2UI components natively since ADK v1.24. This is the easiest way to see A2UI rendering in action because it **bypasses the entire FastAPI middleware stack** — no authentication, no order_id validation, no rate limiting. ADK runs the agent directly.
+
+**Prerequisites:**
+- `GOOGLE_API_KEY` set in `.env` (or Vertex AI configured)
+- MCP server running (optional — agent works without it but has no Insights tools)
+
+```bash
+source .venv/bin/activate
+A2UI_ENABLED=true adk web agents
+```
+
+Open the browser URL it prints and try queries like:
+- "Show my system vulnerabilities"
+- "List my registered systems"
+- "What are the top advisor recommendations?"
+
+The responses should include rendered UI components (tables, cards) alongside text.
+
+### Interactive Testing with the API Server
+
+To test A2UI through the full FastAPI stack (auth, rate limiting, A2A protocol), use dev mode with `SKIP_JWT_VALIDATION=true`.
+
+> **Note on order_id:** In production, the auth middleware requires a valid order_id linked to an active marketplace entitlement (returns 403 otherwise). With `SKIP_JWT_VALIDATION=true`, this check is skipped entirely. Usage metering silently logs a warning and continues. Rate limiting falls back to IP-based. The agent executes normally.
+
+**Prerequisites:**
+- `GOOGLE_API_KEY` set in `.env`
+- Redis running (for rate limiting) — or accept 500 on rate limit check
+- MCP server running (optional)
+
+**1. Start the agent:**
+
+```bash
+A2UI_ENABLED=true SKIP_JWT_VALIDATION=true python -m lightspeed_agent.main
+```
+
+**2. Send a query via curl:**
+
+```bash
+curl -X POST http://localhost:8000/ \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "method": "message/send",
+    "id": "1",
+    "params": {
+      "message": {
+        "messageId": "1",
+        "role": "user",
+        "parts": [{"type": "text", "text": "Show my vulnerabilities"}]
+      }
+    }
+  }'
+```
+
+The response will contain A2A parts — text parts with plain text and data parts with `mimeType: application/json+a2ui` containing the UI component JSON.
+
+**3. (Optional) Provide a fake order_id for usage tracking:**
+
+```bash
+curl -X POST http://localhost:8000/ \
+  -H "Content-Type: application/json" \
+  -H "X-Order-Id: test-order-123" \
+  -d '{
+    "jsonrpc": "2.0",
+    "method": "message/send",
+    "id": "1",
+    "params": {
+      "message": {
+        "messageId": "1",
+        "role": "user",
+        "parts": [{"type": "text", "text": "List my systems"}]
+      }
+    }
+  }'
+```
+
+The `X-Order-Id` header is picked up in dev mode so usage tracking also persists metrics.
+
+### Testing with Podman
+
+To test A2UI in a containerized deployment:
+
+1. Set `A2UI_ENABLED: "true"` in `deploy/podman/lightspeed-agent-configmap.yaml`
+2. Rebuild and restart the agent pod:
+
+```bash
+make build-agent
+podman kube down deploy/podman/lightspeed-agent-pod.yaml
+podman kube play \
+  --configmap deploy/podman/lightspeed-agent-configmap.yaml \
+  deploy/podman/lightspeed-agent-pod.yaml
+```
+
+3. Verify via the A2A Inspector at http://localhost:8080 or curl:
+
+```bash
+curl -s http://localhost:8000/.well-known/agent.json | jq '.capabilities.extensions[].uri'
+```
 
 ## References
 
