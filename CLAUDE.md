@@ -144,6 +144,11 @@ Agent behavioral instructions use ADK's progressive-disclosure Skills system ins
 
 CORS → body size limits → security headers → rate limiting (60 req/min, 1000 req/hour) → JWT auth. See `api/app.py` for ordering and configuration.
 
+### A2UI (Agent-to-UI)
+
+Optional rich UI rendering for Gemini Enterprise, controlled by `A2UI_ENABLED` (default `false`).
+When enabled, the agent adds a `SendA2uiToClientToolset` (from `a2ui-agent-sdk`) with the A2UI Basic Catalog v0.8 schema and domain-specific Insights examples. The Agent Card declares the A2UI extension and adds `application/json+a2ui` to input and output modes. Code is in `a2ui/prompt.py` (schema manager, catalog access) and `a2ui/examples.py` (Insights-specific A2UI examples).
+
 ## GitOps Companion Repository
 
 Deployments are managed via ArgoCD using a separate GitOps repo: `https://github.com/RHEcosystemAppEng/google-lightspeed-agent-gitops`.

@@ -110,6 +110,12 @@ class Settings(BaseSettings):
         description="Jitter factor for backoff (reduces synchronized retries).",
     )
 
+    # A2UI (Agent-to-UI) Configuration
+    a2ui_enabled: bool = Field(
+        default=False,
+        description="Enable A2UI rich UI rendering in agent responses",
+    )
+
     # Red Hat SSO Configuration
     red_hat_sso_issuer: str = Field(
         default="https://sso.redhat.com/auth/realms/redhat-external",
