@@ -29,6 +29,7 @@ The Lightspeed Agent is an A2A-ready (Agent-to-Agent) service that provides AI-p
 
 ### Integration
 
+- [A2UI Integration](a2ui.md) - Rich UI rendering for Gemini Enterprise via A2UI protocol
 - [MCP Server Integration](mcp-integration.md) - Red Hat Lightspeed MCP server and console.redhat.com APIs
 - [Marketplace Integration](marketplace.md) - Google Cloud Marketplace, DCR, and billing
 
@@ -42,6 +43,7 @@ The Lightspeed Agent is an A2A-ready (Agent-to-Agent) service that provides AI-p
 
 | Topic | Description |
 |-------|-------------|
+| [A2UI](a2ui.md) | Rich UI rendering |
 | [AgentCard](api.md#get-well-knownagentjson) | A2A agent discovery |
 | [Authentication](authentication.md#token-introspection) | Token validation setup |
 | [Environment Variables](configuration.md#environment-variables) | Configuration reference |
@@ -53,6 +55,7 @@ The Lightspeed Agent is an A2A-ready (Agent-to-Agent) service that provides AI-p
 
 - **AI-Powered**: Built with Google ADK and Gemini 2.5 Flash
 - **A2A Protocol**: Interoperates with other agents
+- **A2UI Protocol**: Rich interactive UI rendering for Gemini Enterprise
 - **OAuth 2.0**: Secure authentication via Red Hat SSO
 - **Marketplace Ready**: Google Cloud Marketplace integration
 - **Usage Metering**: Automatic billing and quota management

@@ -240,11 +240,21 @@ def create_agent() -> LlmAgent:
     if skill_toolset:
         tools.append(skill_toolset)
 
+    instruction = AGENT_INSTRUCTION
+    if settings.a2ui_enabled:
+        try:
+            from lightspeed_agent.a2ui.prompt import generate_a2ui_instruction
+
+            instruction = generate_a2ui_instruction(AGENT_INSTRUCTION)
+            logger.info("A2UI enabled: agent instruction augmented with A2UI schema")
+        except Exception as e:
+            logger.warning(f"Failed to initialize A2UI, using plain instruction: {e}")
+
     return LlmAgent(
         name=settings.agent_name,
         model=model,
         description=settings.agent_description,
-        static_instruction=AGENT_INSTRUCTION,
+        static_instruction=instruction,
         tools=tools,
         planner=PlanReActPlanner(),
     )

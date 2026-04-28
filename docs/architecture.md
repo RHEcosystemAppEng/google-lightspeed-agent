@@ -141,6 +141,7 @@ The AI agent built with Google ADK:
 - **LLM Model**: Uses a configurable LLM (Gemini 2.5 Flash by default) for natural language understanding. Supports alternative providers via LiteLLM.
 - **Tool Orchestration**: Manages tool calls to MCP server
 - **Session Management**: Maintains conversation context
+- **A2UI Rendering**: When enabled (`A2UI_ENABLED=true`), the agent's system prompt is augmented with A2UI component schema, enabling the LLM to generate rich UI components (tables, cards, buttons) alongside text responses. See [A2UI Integration](a2ui.md) for details.
 
 ### MCP Sidecar
 
@@ -245,11 +246,13 @@ This flow handles actual user interactions with the agent:
 
 ```
 src/lightspeed_agent/
+├── a2ui/                       # A2UI integration (rich UI for Gemini Enterprise)
+│   └── prompt.py              # Schema manager + system prompt augmentation
 ├── api/                        # Agent API layer
 │   ├── app.py                 # FastAPI application factory (Agent)
 │   └── a2a/                   # A2A protocol
 │       ├── router.py          # A2A JSON-RPC endpoints
-│       └── agent_card.py      # AgentCard builder
+│       └── agent_card.py      # AgentCard builder (includes A2UI extension)
 ├── auth/                       # Authentication (shared)
 │   ├── introspection.py       # Token introspection (RFC 7662)
 │   ├── middleware.py           # Auth middleware
