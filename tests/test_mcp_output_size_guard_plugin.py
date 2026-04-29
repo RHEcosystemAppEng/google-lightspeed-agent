@@ -27,7 +27,7 @@ class TestMCPOutputSizeGuardPlugin:
         with patch(
             "lightspeed_agent.api.a2a.mcp_output_size_guard_plugin.get_settings"
         ) as mock_settings:
-            mock_settings.return_value.tool_result_max_chars = 51200
+            mock_settings.return_value.tool_result_max_chars = 204800
             got = await plugin.after_tool_callback(
                 tool=_make_tool(),
                 tool_args={},
@@ -41,12 +41,12 @@ class TestMCPOutputSizeGuardPlugin:
     async def test_result_over_limit_returns_error_dict(self):
         """Oversized results should be replaced with an error message."""
         plugin = MCPOutputSizeGuardPlugin()
-        large_result = {"data": "x" * 60000}
+        large_result = {"data": "x" * 210000}
 
         with patch(
             "lightspeed_agent.api.a2a.mcp_output_size_guard_plugin.get_settings"
         ) as mock_settings:
-            mock_settings.return_value.tool_result_max_chars = 51200
+            mock_settings.return_value.tool_result_max_chars = 204800
             got = await plugin.after_tool_callback(
                 tool=_make_tool("big_tool"),
                 tool_args={},
@@ -58,14 +58,14 @@ class TestMCPOutputSizeGuardPlugin:
         assert got["error"] == "tool_result_too_large"
         assert "big_tool" in got["message"]
         assert "narrow down" in got["message"]
-        assert got["limit_chars"] == 51200
-        assert got["original_size_chars"] > 51200
+        assert got["limit_chars"] == 204800
+        assert got["original_size_chars"] > 204800
 
     @pytest.mark.asyncio
     async def test_disabled_when_max_chars_is_zero(self):
         """Setting tool_result_max_chars=0 should disable truncation."""
         plugin = MCPOutputSizeGuardPlugin()
-        large_result = {"data": "x" * 100000}
+        large_result = {"data": "x" * 210000}
 
         with patch(
             "lightspeed_agent.api.a2a.mcp_output_size_guard_plugin.get_settings"
@@ -84,7 +84,7 @@ class TestMCPOutputSizeGuardPlugin:
     async def test_warning_logged_on_oversized_result(self, caplog):
         """A warning should be logged when a result is replaced."""
         plugin = MCPOutputSizeGuardPlugin()
-        large_result = {"data": "x" * 60000}
+        large_result = {"data": "x" * 210000}
 
         with (
             patch(
@@ -92,7 +92,7 @@ class TestMCPOutputSizeGuardPlugin:
             ) as mock_settings,
             caplog.at_level(logging.WARNING),
         ):
-            mock_settings.return_value.tool_result_max_chars = 51200
+            mock_settings.return_value.tool_result_max_chars = 204800
             await plugin.after_tool_callback(
                 tool=_make_tool("inventory_tool"),
                 tool_args={},
@@ -129,13 +129,13 @@ class TestMCPOutputSizeGuardPlugin:
         plugin = MCPOutputSizeGuardPlugin()
         # Create a result with a non-serializable value that str() can handle
         obj = MagicMock()
-        obj.__str__ = lambda self: "x" * 60000
+        obj.__str__ = lambda self: "x" * 210000
         result = {"data": obj}
 
         with patch(
             "lightspeed_agent.api.a2a.mcp_output_size_guard_plugin.get_settings"
         ) as mock_settings:
-            mock_settings.return_value.tool_result_max_chars = 51200
+            mock_settings.return_value.tool_result_max_chars = 204800
             # json.dumps will use default=str, so this should work
             got = await plugin.after_tool_callback(
                 tool=_make_tool(),
