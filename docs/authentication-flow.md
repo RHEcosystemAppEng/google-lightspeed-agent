@@ -16,7 +16,7 @@ through to authenticated API calls.
 | **Gemini Enterprise** | Google's AI platform that acts as the **OAuth 2.0 Client** |
 | **Red Hat SSO** | The **OAuth 2.0 Authorization Server** that issues and validates tokens |
 | **Lightspeed Agent** | The **OAuth 2.0 Resource Server** that serves A2A requests |
-| **Agent (Marketplace Handler)** | Manages marketplace subscriptions, entitlements, and credential registration (DCR / static) |
+| **Agent (Marketplace Handler)** | Manages marketplace subscriptions, entitlements, and credential registration (DCR) |
 | **Red Hat Lightspeed MCP Server** | Downstream tool server that provides access to Red Hat Lightspeed APIs |
 ---
 
@@ -547,28 +547,25 @@ independently. This mode preserves the user's identity end-to-end.
 
  Customer Admin        Customer Admin           Customer User              Gemini Enterprise       Lightspeed Agent
       |                     |                        |                          |                        |
- 1. Subscribe to       2a. [DCR] Gemini          3. User opens             4. Gemini sends          5. Agent calls
-    agent on GCP           auto-creates             agent in                  request to agent         MCP server
-    Marketplace            OAuth client             Gemini                    with Bearer token        with same
-      |                    in Red Hat SSO              |                        |                      Bearer token
+ 1. Subscribe to       2. Gemini auto-           3. User opens             4. Gemini sends          5. Agent calls
+    agent on GCP          creates OAuth             agent in                  request to agent         MCP server
+    Marketplace           client in Red             Gemini                    with Bearer token        with same
+      |                   Hat SSO via DCR              |                        |                      Bearer token
       v                     |                    3a. Redirect to           4a. Agent introspects         |
- order_id created      2b. [Static] Admin            Red Hat SSO               token using its      5a. MCP server
- (ACTIVE state)            requests creds            login page                own credentials          forwards to
-                           via Red Hat                  |                        |                       Lightspeed
-                           Google Form           3b. User logs in          4b. Agent validates          APIs
-                           → receives                with Red Hat              scope and                 |
-                           client_id/secret          credentials               order status         5b. Lightspeed
-                           by email                    |                        |                       APIs validate
-                            |                    3c. Auth code             4c. Request proceeds         token/creds
-                       2b'. Admin enters              exchanged for             if valid                  |
-                           credentials in             access token               |                  5c. Response
-                           Gemini card                  |                        v                      flows back
-                           form                  3d. Access token          Order-bound,                 to user
-                            |                        ready to use          scope-validated
-                       2c. Credentials                                     request
-                           validated and
-                           stored (linked
-                           to order_id)
+ order_id created      2a. Credentials                Red Hat SSO               token using its      5a. MCP server
+ (ACTIVE state)            encrypted and              login page                own credentials          forwards to
+                           stored (linked                |                        |                       Lightspeed
+                           to order_id)          3b. User logs in          4b. Agent validates          APIs
+                            |                        with Red Hat              scope and                 |
+                       2b. Credentials in            credentials               order status         5b. Lightspeed
+                           Gemini card                   |                        |                       APIs validate
+                           form                  3c. Auth code             4c. Request proceeds         token/creds
+                                                      exchanged for             if valid                  |
+                                                      access token               |                  5c. Response
+                                                        |                        v                      flows back
+                                                  3d. Access token          Order-bound,                 to user
+                                                      ready to use          scope-validated
+                                                                            request
 ```
 
 ---

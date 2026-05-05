@@ -3,11 +3,8 @@
 
 Seeds pre-created OAuth client credentials into the dcr_clients table
 so that different customers get different credentials when DCR requests
-come in with DCR_ENABLED=false.
-
-The existing DCR flow checks get_by_order_id() before falling back to
-static credentials. Seeded records are returned automatically without
-any runtime code changes.
+come in. The DCR flow checks get_by_order_id() and returns seeded
+records automatically without any runtime code changes.
 
 Prerequisites:
     export DATABASE_URL="postgresql+asyncpg://user:pass@host/db"
