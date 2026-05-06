@@ -189,6 +189,13 @@ class ProcurementService:
                 event.entitlement.id,
             )
 
+        # Persist the resolved account_id to the entitlement record
+        if account_id:
+            stored = existing or entitlement
+            if stored.account_id != account_id:
+                stored.account_id = account_id
+                await self._entitlement_repo.update(stored)
+
         # Auto-approve the entitlement (raises on failure so Pub/Sub retries)
         await self._approve_entitlement(event.entitlement.id)
 
@@ -210,17 +217,20 @@ class ProcurementService:
         if event.entitlement.product:
             metadata["product_id"] = event.entitlement.product
 
+        account_id = await self._resolve_account_id(event.entitlement.id, event)
+
         entitlement = await self._entitlement_repo.get(event.entitlement.id)
         if entitlement:
             entitlement.state = EntitlementState.ACTIVE
+            if account_id and not entitlement.account_id:
+                entitlement.account_id = account_id
             if metadata:
                 entitlement.metadata = {**entitlement.metadata, **metadata}
             await self._entitlement_repo.update(entitlement)
         else:
-            # Create if not exists (could happen if we missed creation event)
             entitlement = Entitlement(
                 id=event.entitlement.id,
-                account_id="",
+                account_id=account_id or "",
                 state=EntitlementState.ACTIVE,
                 provider_id=event.provider_id,
                 metadata=metadata,
@@ -286,6 +296,8 @@ class ProcurementService:
         else:
             entitlement.state = EntitlementState.ACTIVE
             entitlement.plan = event.entitlement.new_plan
+            if account_id and not entitlement.account_id:
+                entitlement.account_id = account_id
             await self._entitlement_repo.update(entitlement)
 
         # Set offer times

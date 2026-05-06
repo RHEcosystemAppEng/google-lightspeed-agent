@@ -207,6 +207,74 @@ class TestProcurementService:
         assert await service.is_valid_order("order-456")
 
     @pytest.mark.asyncio
+    async def test_entitlement_active_persists_account_id_from_event(self, service):
+        """Test ENTITLEMENT_ACTIVE persists account_id from event payload."""
+        event = ProcurementEvent(
+            event_id="event-acct",
+            event_type=ProcurementEventType.ENTITLEMENT_ACTIVE,
+            provider_id="provider-1",
+            account=AccountInfo(id="account-from-event"),
+            entitlement=EntitlementInfo(id="order-acct-1"),
+        )
+
+        await service.process_event(event)
+
+        ent = await service._entitlement_repo.get("order-acct-1")
+        assert ent is not None
+        assert ent.account_id == "account-from-event"
+
+    @pytest.mark.asyncio
+    async def test_entitlement_active_persists_account_id_from_api(self, service):
+        """Test ENTITLEMENT_ACTIVE resolves and persists account_id from Procurement API."""
+        event = ProcurementEvent(
+            event_id="event-api",
+            event_type=ProcurementEventType.ENTITLEMENT_ACTIVE,
+            provider_id="provider-1",
+            entitlement=EntitlementInfo(id="order-api-1"),
+        )
+
+        mock_response = httpx.Response(
+            status_code=200,
+            json={"account": "providers/proj/accounts/account-from-api"},
+            request=httpx.Request("GET", "https://example.com"),
+        )
+        with (
+            patch.object(service, "_settings") as mock_settings,
+            patch.object(
+                service, "_get_auth_headers", return_value={"Authorization": "Bearer tok"}
+            ),
+            patch("httpx.AsyncClient.get", new_callable=AsyncMock, return_value=mock_response),
+        ):
+            mock_settings.google_cloud_project = "test-project"
+            mock_settings.service_control_service_name = None
+            await service.process_event(event)
+
+        ent = await service._entitlement_repo.get("order-api-1")
+        assert ent is not None
+        assert ent.account_id == "account-from-api"
+
+    @pytest.mark.asyncio
+    async def test_creation_requested_persists_account_id(self, service):
+        """Test ENTITLEMENT_CREATION_REQUESTED persists resolved account_id."""
+        event = ProcurementEvent(
+            event_id="event-create",
+            event_type=ProcurementEventType.ENTITLEMENT_CREATION_REQUESTED,
+            provider_id="provider-1",
+            account=AccountInfo(id="account-created"),
+            entitlement=EntitlementInfo(id="order-create-1", new_plan="basic"),
+        )
+
+        with (
+            patch.object(service, "_approve_account", new_callable=AsyncMock),
+            patch.object(service, "_approve_entitlement", new_callable=AsyncMock),
+        ):
+            await service.process_event(event)
+
+        ent = await service._entitlement_repo.get("order-create-1")
+        assert ent is not None
+        assert ent.account_id == "account-created"
+
+    @pytest.mark.asyncio
     async def test_is_valid_account_active(self, service):
         """Test is_valid_account returns True for active accounts via Procurement API."""
         with patch.object(

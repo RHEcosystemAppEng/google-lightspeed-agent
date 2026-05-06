@@ -20,6 +20,9 @@ Deploy the Red Hat Lightspeed Agent for Google Cloud to Google Cloud Run for pro
   - [Rate Limiting (Redis)](#rate-limiting-redis)
   - [MCP Output Size Guard](#mcp-output-size-guard)
   - [MCP Server Sidecar](#mcp-server-sidecar)
+  - [Copying the MCP Image to GCR](#copying-the-mcp-image-to-gcr)
+  - [Customizing MCP Server Configuration](#customizing-mcp-server-configuration)
+  - [Alternative: Use Docker Hub](#alternative-use-docker-hub)
   - [Scaling](#scaling)
 - [How the MCP Server Works](#how-the-mcp-server-works)
 - [Authentication](#authentication)
@@ -28,7 +31,15 @@ Deploy the Red Hat Lightspeed Agent for Google Cloud to Google Cloud Run for pro
 - [Database Architecture](#database-architecture)
 - [Custom Domain](#custom-domain)
 - [Testing the Agent](#testing-the-agent)
+  - [Authentication Setup for Testing](#authentication-setup-for-testing)
+  - [Test Agent Card](#test-agent-card)
+  - [Test A2A Requests with Local Proxy](#test-a2a-requests-with-local-proxy)
+  - [Test with A2A Inspector](#test-with-a2a-inspector)
+  - [Cleanup After Testing](#cleanup-after-testing)
+  - [Testing Without Proxy (Direct Cloud Run Access)](#testing-without-proxy-direct-cloud-run-access)
+  - [Troubleshooting Testing Issues](#troubleshooting-testing-issues)
 - [Testing DCR on Cloud Run](#testing-dcr-on-cloud-run)
+- [GMA SSO API Configuration (Staging vs Production)](#gma-sso-api-configuration-staging-vs-production)
 - [Audit Logging](#audit-logging)
 - [Monitoring](#monitoring)
 - [Troubleshooting](#troubleshooting)
@@ -1651,6 +1662,143 @@ This setting is also configurable in `service.yaml` via the
     --format='value(status.conditions.status)'
   # Should show: True;True;True
   ```
+
+## Testing DCR on Cloud Run
+
+This section explains how to test the DCR (Dynamic Client Registration) flow
+against a deployed marketplace handler.
+
+```
+┌──────────────┐
+│  Test Script │
+│  (local)     │
+└──────┬───────┘
+       │ POST /dcr
+       │ (software_statement JWT)
+       │ + Cloud Run ID token
+       ▼
+┌──────────────────────┐         ┌──────────────────┐
+│  Marketplace Handler │────────>│  Red Hat SSO      │
+│  (Cloud Run)         │         │  (GMA SSO API)    │
+│                      │<────────│  Creates tenant   │
+│  Validates JWT,      │         └──────────────────┘
+│  creates tenant,     │
+│  returns creds       │
+└──────────────────────┘
+```
+
+Testing requires `SKIP_JWT_VALIDATION=true` on the handler to accept test
+JWTs not signed by Google's production `cloud-agentspace` service account.
+
+Testing also requires a signing service account. Create one if you don't
+have one already:
+
+```bash
+gcloud iam service-accounts create dcr-test \
+  --display-name "DCR test signer" \
+  --project=$GOOGLE_CLOUD_PROJECT
+
+# NOTE: GCP may need a few seconds to propagate the new service account.
+# If the next command fails with NOT_FOUND, wait ~10 seconds and retry.
+sleep 10
+
+gcloud iam service-accounts keys create dcr-test-key.json \
+  --iam-account=dcr-test@$GOOGLE_CLOUD_PROJECT.iam.gserviceaccount.com \
+  --project=$GOOGLE_CLOUD_PROJECT
+```
+
+### Running the DCR Test
+
+**1. Configure the handler for testing:**
+
+```bash
+# Generate and store Fernet encryption key (if not already set)
+FERNET_KEY=$(python3 -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')
+echo -n "$FERNET_KEY" | \
+  gcloud secrets versions add dcr-encryption-key \
+    --data-file=- --project=$GOOGLE_CLOUD_PROJECT
+
+# Update handler env vars (deploys a new revision)
+gcloud run services update marketplace-handler \
+  --region=$GOOGLE_CLOUD_LOCATION \
+  --project=$GOOGLE_CLOUD_PROJECT \
+  --update-env-vars="\
+SKIP_JWT_VALIDATION=true"
+```
+
+**2. Run the test script:**
+
+```bash
+HANDLER_URL=$(gcloud run services describe marketplace-handler \
+  --region=$GOOGLE_CLOUD_LOCATION \
+  --project=$GOOGLE_CLOUD_PROJECT \
+  --format='value(status.url)')
+
+export MARKETPLACE_HANDLER_URL=$HANDLER_URL
+export TEST_SA_KEY_FILE=dcr-test-key.json
+# Generate a fresh order ID for each test run
+export TEST_ORDER_ID="order-$(uuidgen || python3 -c 'import uuid; print(uuid.uuid4())')"
+# Don't set SKIP_CLOUD_RUN_AUTH -- script fetches an ID token automatically
+
+python scripts/test_deployed_dcr.py
+```
+
+The handler creates OAuth tenant credentials via the GMA SSO API and returns
+them. The second request verifies idempotency (same credentials returned for
+the same order).
+
+> **Note:** If the handler was deployed with `--allow-unauthenticated`, you can
+> set `export SKIP_CLOUD_RUN_AUTH=true` to skip ID token authentication.
+
+**3. Restore production configuration:**
+
+```bash
+gcloud run services update marketplace-handler \
+  --region=$GOOGLE_CLOUD_LOCATION \
+  --project=$GOOGLE_CLOUD_PROJECT \
+  --update-env-vars="\
+SKIP_JWT_VALIDATION=false"
+```
+
+#### Admin Tool: seed_dcr_clients.py
+
+The `seed_dcr_clients.py` script is available as an admin tool for
+managing DCR client records in the database (listing, deleting, or bulk
+inserting credentials).
+
+```bash
+# Connect to Cloud SQL first (requires Cloud SQL Auth Proxy)
+./cloud-sql-proxy --port 5432 ${GOOGLE_CLOUD_PROJECT}:${GOOGLE_CLOUD_LOCATION}:${DB_INSTANCE_NAME:-lightspeed-agent-db}
+
+# Fetch DATABASE_URL and DCR_ENCRYPTION_KEY from Secret Manager
+CLOUD_DB_URL=$(gcloud secrets versions access latest \
+  --secret=database-url --project=$GOOGLE_CLOUD_PROJECT)
+DB_PASSWORD=$(echo "$CLOUD_DB_URL" | sed -n 's|.*://insights:\([^@]*\)@.*|\1|p')
+export DATABASE_URL="postgresql+asyncpg://insights:${DB_PASSWORD}@localhost:5432/lightspeed_agent"
+export DCR_ENCRYPTION_KEY=$(gcloud secrets versions access latest \
+  --secret=dcr-encryption-key --project=$GOOGLE_CLOUD_PROJECT)
+
+# List existing entries
+python scripts/seed_dcr_clients.py list
+
+# Delete an entry
+python scripts/seed_dcr_clients.py delete --order-id order-12345 --confirm
+```
+
+### Test Script Reference
+
+The test script at `scripts/test_deployed_dcr.py` is configurable via environment variables:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MARKETPLACE_HANDLER_URL` | (required) | Cloud Run handler URL |
+| `TEST_SA_KEY_FILE` | - | Path to SA key file (Method A) |
+| `TEST_SERVICE_ACCOUNT` | - | SA email for IAM API signing (Method B) |
+| `PROVIDER_URL` | `https://www.redhat.com` | JWT audience claim (must match handler's `AGENT_PROVIDER_ORGANIZATION_URL`) |
+| `SKIP_CLOUD_RUN_AUTH` | `false` | Skip Cloud Run ID token auth |
+| `TEST_ORDER_ID` | random UUID | Fixed order ID |
+| `TEST_ACCOUNT_ID` | `test-procurement-account-001` | Procurement account ID |
+| `TEST_REDIRECT_URIS` | `https://gemini.google.com/callback` | Comma-separated redirect URIs |
 
 ## GMA SSO API Configuration (Staging vs Production)
 

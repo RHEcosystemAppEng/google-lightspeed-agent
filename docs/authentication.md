@@ -135,20 +135,11 @@ The `software_statement` JWT from Google contains:
 | `auth_app_redirect_uris` | Redirect URIs for the OAuth client |
 | `iat` / `exp` | Issued-at and expiration timestamps |
 
-### DCR Modes
-
-| Mode | Setting | Behavior |
-|------|---------|----------|
-| **Real DCR** | `DCR_ENABLED=true` (default) | Creates OAuth tenant clients in Red Hat SSO via the GMA API |
-| **Static credentials** | `DCR_ENABLED=false` | Accepts `client_id` and `client_secret` from the DCR request body, validates them against the Red Hat SSO token endpoint, stores them linked to the order, and returns them |
-
-Real DCR requires `GMA_CLIENT_ID` and `GMA_CLIENT_SECRET` credentials for authenticating against the GMA SSO API with `scope=api.iam.clients.gma`. Static mode requires the caller to provide pre-registered OAuth credentials in the request body alongside the `software_statement`.
-
 ### DCR Configuration
 
+DCR creates OAuth tenant clients in Red Hat SSO via the GMA API. It requires `GMA_CLIENT_ID` and `GMA_CLIENT_SECRET` credentials for authenticating against the GMA SSO API with `scope=api.iam.clients.gma`.
+
 ```bash
-# Real DCR mode
-DCR_ENABLED=true
 GMA_CLIENT_ID="<gma-client-id>"
 GMA_CLIENT_SECRET="<gma-client-secret>"
 DCR_CLIENT_NAME_PREFIX="gemini-order-"
@@ -160,12 +151,9 @@ DCR_ENCRYPTION_KEY="<fernet-key>"   # Encrypts stored client secrets
 
 ### Testing DCR Locally
 
-For local testing without admin access to the production Red Hat SSO, see the [Testing DCR Locally](../README.md#testing-dcr-locally) section in the README. It covers:
+For local testing without admin access to the production Red Hat SSO, see the [Testing DCR Locally](../README.md#testing-dcr-locally) section in the README.
 
-- **Static credentials mode** -- caller provides `client_id` and `client_secret` in the request body (no SSO needed)
-- **Local Red Hat SSO in Podman** -- full DCR flow against a local instance
-
-A test script is available at `scripts/test_dcr.py` that signs a software_statement JWT with a GCP service account you control. For static credentials mode, set `TEST_CLIENT_ID` and `TEST_CLIENT_SECRET` to include them in the request body. When the handler runs with `SKIP_JWT_VALIDATION=true`, it accepts JWTs from any service account and skips credential validation against Red Hat SSO.
+A test script is available at `scripts/test_dcr.py` that signs a software_statement JWT with a GCP service account you control. When the handler runs with `SKIP_JWT_VALIDATION=true`, it accepts JWTs from any service account.
 
 ### Security Considerations
 

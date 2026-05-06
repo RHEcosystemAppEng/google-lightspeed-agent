@@ -83,23 +83,12 @@ class GoogleJWTClaims(BaseModel):
 class DCRRequest(BaseModel):
     """DCR request payload.
 
-    Contains the software_statement JWT signed by Google, and optionally
-    static client credentials (client_id + client_secret) per RFC 7591.
-    When static credentials are provided and DCR_ENABLED=false, they are
-    validated against Red Hat SSO and stored for the order.
+    Contains the software_statement JWT signed by Google.
     """
 
     software_statement: str = Field(
         ...,
         description="JWT signed by Google containing registration claims",
-    )
-    client_id: str | None = Field(
-        None,
-        description="Pre-registered OAuth 2.0 client identifier (static credentials mode)",
-    )
-    client_secret: str | None = Field(
-        None,
-        description="Pre-registered OAuth 2.0 client secret (static credentials mode)",
     )
 
 

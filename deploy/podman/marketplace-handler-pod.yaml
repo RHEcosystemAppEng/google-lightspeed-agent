@@ -49,8 +49,6 @@ spec:
         - name: HANDLER_PORT
           value: "8001"
         # DCR Configuration
-        - name: DCR_ENABLED
-          value: "true"
         - name: DCR_CLIENT_NAME_PREFIX
           value: "gemini-order-"
         # Secrets

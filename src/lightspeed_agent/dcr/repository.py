@@ -18,24 +18,12 @@ class DCRClientRepository:
     """
 
     async def get_by_client_id(self, client_id: str) -> RegisteredClient | None:
-        """Get a registered client by client_id.
-
-        The same client_id may be associated with multiple orders.
-        Returns the most recently created entry.
-
-        Args:
-            client_id: The OAuth client ID.
-
-        Returns:
-            RegisteredClient if found, None otherwise.
-        """
+        """Get a registered client by client_id."""
         async with get_session() as session:
             result = await session.execute(
-                select(DCRClientModel)
-                .where(DCRClientModel.client_id == client_id)
-                .order_by(DCRClientModel.created_at.desc())
+                select(DCRClientModel).where(DCRClientModel.client_id == client_id)
             )
-            model = result.scalars().first()
+            model = result.scalar_one_or_none()
             if model:
                 return self._model_to_entity(model)
             return None

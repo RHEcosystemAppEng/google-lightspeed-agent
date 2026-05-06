@@ -82,15 +82,9 @@ The handler must be started with at least these environment variables:
     # Skip Google JWT signature and issuer verification (required)
     SKIP_JWT_VALIDATION=true
 
-    # --- Static credentials mode ---
-    # Client provides client_id and client_secret in the DCR request body.
-    # Set TEST_CLIENT_ID and TEST_CLIENT_SECRET on this script.
-    DCR_ENABLED=false
-
-    # --- OR: Real DCR via GMA SSO API ---
-    # DCR_ENABLED=true
-    # GMA_CLIENT_ID=<your-gma-client-id>
-    # GMA_CLIENT_SECRET=<your-gma-client-secret>
+    # GMA SSO API credentials for tenant creation
+    GMA_CLIENT_ID=<your-gma-client-id>
+    GMA_CLIENT_SECRET=<your-gma-client-secret>
 
     # Always required
     DCR_ENCRYPTION_KEY=<generate with: python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'>
@@ -148,16 +142,6 @@ Environment variables
 
     TEST_REDIRECT_URIS  (optional, default: https://gemini.google.com/callback)
         Comma-separated list of redirect URIs.
-
-    TEST_CLIENT_ID  (optional -- static credentials mode)
-        Pre-registered OAuth client ID.  When set together with
-        TEST_CLIENT_SECRET, the script sends client_id and client_secret
-        in the DCR request body alongside the software_statement.
-        Used when DCR_ENABLED=false on the handler.
-
-    TEST_CLIENT_SECRET  (optional -- static credentials mode)
-        Pre-registered OAuth client secret.  Must be set together with
-        TEST_CLIENT_ID.
 """
 
 from __future__ import annotations
@@ -178,8 +162,6 @@ HANDLER_URL = os.environ.get("MARKETPLACE_HANDLER_URL", "http://localhost:8001")
 PROVIDER_URL = os.environ.get("PROVIDER_URL", "https://www.redhat.com")
 TEST_SERVICE_ACCOUNT = os.environ.get("TEST_SERVICE_ACCOUNT")
 TEST_SA_KEY_FILE = os.environ.get("TEST_SA_KEY_FILE")
-TEST_CLIENT_ID = os.environ.get("TEST_CLIENT_ID")
-TEST_CLIENT_SECRET = os.environ.get("TEST_CLIENT_SECRET")
 
 CERT_BASE_URL = (
     "https://www.googleapis.com/service_accounts/v1/metadata/x509/"
@@ -345,26 +327,16 @@ def build_software_statement(
 
 def send_dcr_request(
     software_statement: str,
-    client_id: str | None = None,
-    client_secret: str | None = None,
 ) -> None:
     """POST the software_statement to the /dcr endpoint.
 
     Args:
         software_statement: Signed JWT string.
-        client_id: Optional static OAuth client ID.
-        client_secret: Optional static OAuth client secret.
     """
     url = f"{HANDLER_URL.rstrip('/')}/dcr"
     body: dict[str, str] = {"software_statement": software_statement}
-    if client_id:
-        body["client_id"] = client_id
-    if client_secret:
-        body["client_secret"] = client_secret
 
     print(f"\n>>> POST {url}")
-    if client_id:
-        print(f"    (static credentials: client_id={client_id})")
     response = requests.post(
         url,
         json=body,
@@ -398,10 +370,6 @@ def main() -> None:
         "TEST_REDIRECT_URIS", "https://gemini.google.com/callback"
     ).split(",")
 
-    # Static credentials (optional)
-    client_id = TEST_CLIENT_ID
-    client_secret = TEST_CLIENT_SECRET
-
     print("=" * 60)
     print("DCR Test Client")
     print("=" * 60)
@@ -412,11 +380,6 @@ def main() -> None:
     print(f"  Order ID       : {order_id}")
     print(f"  Account ID     : {account_id}")
     print(f"  Redirect URIs  : {redirect_uris}")
-    if client_id:
-        print(f"  Static client  : {client_id}")
-        print(f"  Static secret  : {'*' * min(len(client_secret), 8) if client_secret else '(not set)'}")
-    else:
-        print("  Mode           : dynamic (no static credentials)")
     print()
 
     print("--- Building software_statement JWT ---")
@@ -426,12 +389,12 @@ def main() -> None:
     print(f"\n  JWT (first 80 chars): {software_statement[:80]}...")
 
     print("\n--- Sending DCR request ---")
-    send_dcr_request(software_statement, client_id, client_secret)
+    send_dcr_request(software_statement)
 
     # Send the same request again to test idempotency (should return
     # the same client_id/client_secret per Google's DCR spec)
     print("\n--- Sending duplicate DCR request (idempotency test) ---")
-    send_dcr_request(software_statement, client_id, client_secret)
+    send_dcr_request(software_statement)
 
 
 if __name__ == "__main__":

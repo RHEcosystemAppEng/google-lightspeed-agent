@@ -166,7 +166,6 @@ secrets=(
 )
 
 # DCR (Dynamic Client Registration) secrets
-# Required when DCR_ENABLED=true (default)
 dcr_secrets=(
     "gma-client-id"             # GMA SSO API client ID for tenant creation
     "gma-client-secret"         # GMA SSO API client secret

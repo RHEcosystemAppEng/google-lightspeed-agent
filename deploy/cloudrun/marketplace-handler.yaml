@@ -88,8 +88,6 @@ spec:
             - name: SKIP_JWT_VALIDATION
               value: "false"
             # DCR Configuration
-            - name: DCR_ENABLED
-              value: "true"
             - name: DCR_CLIENT_NAME_PREFIX
               value: "gemini-order-"
             # GMA SSO API base URL for tenant creation.

@@ -16,7 +16,6 @@ from lightspeed_agent.dcr.models import (
     DCRErrorCode,
     DCRRequest,
     DCRResponse,
-    GoogleClaims,
     GoogleJWTClaims,
     RegisteredClient,
 )
@@ -70,20 +69,6 @@ class TestModels:
         request = DCRRequest(software_statement="eyJ...")
 
         assert request.software_statement == "eyJ..."
-        assert request.client_id is None
-        assert request.client_secret is None
-
-    def test_dcr_request_with_static_credentials(self):
-        """Test DCR request model with static credentials."""
-        request = DCRRequest(
-            software_statement="eyJ...",
-            client_id="static-client-id",
-            client_secret="static-client-secret",
-        )
-
-        assert request.software_statement == "eyJ..."
-        assert request.client_id == "static-client-id"
-        assert request.client_secret == "static-client-secret"
 
     def test_dcr_response(self):
         """Test DCR response model."""
@@ -175,88 +160,6 @@ class TestDCRService:
         )
 
     @pytest.mark.asyncio
-    async def test_dcr_disabled_stores_static_credentials(self, service):
-        """Test that DCR_ENABLED=false stores static credentials from the request."""
-        # _store_static_credentials should exist for handling static credentials
-        assert hasattr(service, "_store_static_credentials")
-
-    @pytest.mark.asyncio
-    async def test_store_static_credentials_success(self, service):
-        """Test storing static credentials when both client_id and secret are provided."""
-        request = DCRRequest(
-            software_statement="dummy",
-            client_id="static-client-123",
-            client_secret="static-secret-456",
-        )
-        claims = GoogleJWTClaims(
-            iss="https://example.com",
-            iat=int(time.time()),
-            exp=int(time.time()) + 3600,
-            aud="https://example.com",
-            sub="valid-account-123",
-            google=GoogleClaims(order="valid-order-789"),
-        )
-
-        # Mock credential validation (no real Red Hat SSO in tests)
-        with patch.object(
-            service, "_validate_credentials", new_callable=AsyncMock, return_value=True,
-        ):
-            result = await service._store_static_credentials(request, claims)
-
-        assert isinstance(result, DCRResponse)
-        assert result.client_id == "static-client-123"
-        assert result.client_secret == "static-secret-456"
-        assert result.client_secret_expires_at == 0
-
-        # Verify credentials were stored in the repository
-        stored = await service._client_repository.get_by_order_id("valid-order-789")
-        assert stored is not None
-        assert stored.client_id == "static-client-123"
-
-    @pytest.mark.asyncio
-    async def test_store_static_credentials_missing_client_id(self, service):
-        """Test error when client_id is missing in static mode."""
-        request = DCRRequest(
-            software_statement="dummy",
-            client_secret="secret-only",
-        )
-        claims = GoogleJWTClaims(
-            iss="https://example.com",
-            iat=int(time.time()),
-            exp=int(time.time()) + 3600,
-            aud="https://example.com",
-            sub="valid-account-123",
-            google=GoogleClaims(order="order-no-client-id"),
-        )
-
-        result = await service._store_static_credentials(request, claims)
-
-        assert isinstance(result, DCRError)
-        assert result.error == DCRErrorCode.INVALID_CLIENT_METADATA
-        assert "client_id" in result.error_description
-
-    @pytest.mark.asyncio
-    async def test_store_static_credentials_missing_secret(self, service):
-        """Test error when client_secret is missing in static mode."""
-        request = DCRRequest(
-            software_statement="dummy",
-            client_id="client-only",
-        )
-        claims = GoogleJWTClaims(
-            iss="https://example.com",
-            iat=int(time.time()),
-            exp=int(time.time()) + 3600,
-            aud="https://example.com",
-            sub="valid-account-123",
-            google=GoogleClaims(order="order-no-secret"),
-        )
-
-        result = await service._store_static_credentials(request, claims)
-
-        assert isinstance(result, DCRError)
-        assert result.error == DCRErrorCode.INVALID_CLIENT_METADATA
-
-    @pytest.mark.asyncio
     async def test_get_client(self, service):
         """Test getting client info from pre-seeded credentials."""
         # Seed credentials directly via the repository
@@ -329,7 +232,7 @@ class TestDCRServiceDelete:
             client_secret_encrypted=encrypted_secret,
             order_id="order-gma-del",
             account_id="account-1",
-            metadata={"registration_mode": "gma"},
+            metadata={},
         )
 
         mock_gma = AsyncMock()
@@ -339,26 +242,6 @@ class TestDCRServiceDelete:
 
         mock_gma.delete_tenant.assert_awaited_once_with("gma-client-123")
         assert await service._client_repository.get_by_order_id("order-gma-del") is None
-
-    @pytest.mark.asyncio
-    async def test_delete_client_static_mode(self, service):
-        """Test deleting a static-credentials client skips GMA API."""
-        encrypted_secret = service._encrypt_secret("test-secret")
-        await service._client_repository.create(
-            client_id="static-client-123",
-            client_secret_encrypted=encrypted_secret,
-            order_id="order-static-del",
-            account_id="account-1",
-            metadata={"registration_mode": "static"},
-        )
-
-        mock_gma = AsyncMock()
-        service._gma_client = mock_gma
-
-        await service.delete_client("order-static-del")
-
-        mock_gma.delete_tenant.assert_not_awaited()
-        assert await service._client_repository.get_by_order_id("order-static-del") is None
 
     @pytest.mark.asyncio
     async def test_delete_client_not_found(self, service):

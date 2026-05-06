@@ -81,8 +81,6 @@ async def _handle_dcr_request(body: dict[str, Any]) -> JSONResponse:
     dcr_service = get_dcr_service()
     dcr_request = DCRRequest(
         software_statement=body["software_statement"],
-        client_id=body.get("client_id"),
-        client_secret=body.get("client_secret"),
     )
 
     result = await dcr_service.register_client(dcr_request)

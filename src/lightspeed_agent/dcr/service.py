@@ -6,7 +6,6 @@ import logging
 import os
 from typing import TYPE_CHECKING
 
-import httpx
 from cryptography.fernet import Fernet, InvalidToken
 
 from lightspeed_agent.config import get_settings
@@ -38,15 +37,8 @@ class DCRService:
     This service:
     - Validates software_statement JWTs from Google
     - Cross-references with Marketplace Procurement data
-    - Creates OAuth client credentials (real DCR or static)
+    - Creates OAuth tenant clients in Red Hat SSO via the GMA API
     - Returns RFC 7591 compliant responses
-
-    Modes:
-    - DCR_ENABLED=true: Creates real OAuth tenant clients in Red Hat SSO
-      via the GMA API
-    - DCR_ENABLED=false: Accepts static credentials (client_id + client_secret)
-      provided in the DCR request body. Validates them against the Red Hat SSO
-      token endpoint, stores them, and returns them.
     """
 
     def __init__(
@@ -152,7 +144,7 @@ class DCRService:
         Returns:
             DCRResponse on success, DCRError on failure.
         """
-        logger.info("Processing DCR request (dcr_enabled=%s)", self._settings.dcr_enabled)
+        logger.info("Processing DCR request")
 
         # Step 1: Validate the software_statement JWT
         validation_result = await self._jwt_validator.validate_software_statement(
@@ -191,11 +183,7 @@ class DCRService:
             return await self._return_existing_credentials(existing_client)
 
         # Step 5: Create new OAuth client credentials
-        if self._settings.dcr_enabled:
-            return await self._create_real_client(claims)
-
-        # DCR disabled: accept static credentials from the request body
-        return await self._store_static_credentials(request, claims)
+        return await self._create_real_client(claims)
 
     async def _validate_account(self, account_id: str) -> bool:
         """Validate that the Procurement Account ID is valid."""
@@ -210,132 +198,6 @@ class DCRService:
             logger.warning("Skipping order validation - development mode")
             return True
         return await self._procurement_service.is_valid_order(order_id)
-
-    async def _validate_credentials(self, client_id: str, client_secret: str) -> bool:
-        """Validate static credentials against Red Hat SSO token endpoint.
-
-        Attempts a client_credentials grant to verify the credentials are
-        registered and valid in the OAuth server.
-
-        Args:
-            client_id: The OAuth client ID to validate.
-            client_secret: The OAuth client secret to validate.
-
-        Returns:
-            True if the credentials are valid, False otherwise.
-        """
-        token_url = self._settings.sso_token_endpoint
-        logger.info("Validating static credentials for client_id=%s", client_id)
-
-        try:
-            async with httpx.AsyncClient() as http:
-                resp = await http.post(
-                    token_url,
-                    data={
-                        "grant_type": "client_credentials",
-                        "client_id": client_id,
-                        "client_secret": client_secret,
-                    },
-                    timeout=30.0,
-                )
-
-            if resp.status_code == 200:
-                logger.info("Static credentials validated for client_id=%s", client_id)
-                return True
-
-            logger.warning(
-                "Static credential validation failed for client_id=%s: status=%d",
-                client_id,
-                resp.status_code,
-            )
-            return False
-
-        except httpx.RequestError as e:
-            logger.error(
-                "HTTP error validating credentials for client_id=%s: %s",
-                client_id,
-                e,
-            )
-            return False
-
-    async def _store_static_credentials(
-        self,
-        request: DCRRequest,
-        claims: GoogleJWTClaims,
-    ) -> DCRResponse | DCRError:
-        """Store static credentials provided in the DCR request body.
-
-        When DCR_ENABLED=false, the caller provides pre-registered client_id
-        and client_secret in the request body. This method validates them
-        against the Red Hat SSO token endpoint, encrypts and stores them
-        linked to the order_id, and returns them.
-
-        Args:
-            request: The DCR request containing static credentials.
-            claims: Validated JWT claims.
-
-        Returns:
-            DCRResponse with the stored credentials, or DCRError on failure.
-        """
-        if not request.client_id or not request.client_secret:
-            logger.warning(
-                "Static credentials mode requires client_id and client_secret "
-                "in the request body (order: %s)",
-                claims.order_id,
-            )
-            return DCRError(
-                error=DCRErrorCode.INVALID_CLIENT_METADATA,
-                error_description=(
-                    "Static credentials mode: both client_id and client_secret "
-                    "must be provided in the request body."
-                ),
-            )
-
-        # Validate credentials against Red Hat SSO
-        if not await self._validate_credentials(request.client_id, request.client_secret):
-            return DCRError(
-                error=DCRErrorCode.INVALID_CLIENT_METADATA,
-                error_description=(
-                    f"Invalid client credentials: client_id={request.client_id} "
-                    "failed validation against the OAuth server."
-                ),
-            )
-
-        # Encrypt and store
-        encrypted_secret = self._encrypt_secret(request.client_secret)
-
-        try:
-            await self._client_repository.create(
-                client_id=request.client_id,
-                client_secret_encrypted=encrypted_secret,
-                order_id=claims.order_id,
-                account_id=claims.account_id,
-                redirect_uris=claims.auth_app_redirect_uris,
-                grant_types=["authorization_code", "refresh_token", "client_credentials"],
-                metadata={
-                    "iss": claims.iss,
-                    "aud": claims.aud,
-                    "registration_mode": "static",
-                },
-            )
-        except Exception as e:
-            logger.exception("Failed to store static credentials: %s", e)
-            return DCRError(
-                error=DCRErrorCode.SERVER_ERROR,
-                error_description=f"Failed to store client credentials: {e}",
-            )
-
-        logger.info(
-            "Stored static credentials for order %s: client_id=%s",
-            claims.order_id,
-            request.client_id,
-        )
-
-        return DCRResponse(
-            client_id=request.client_id,
-            client_secret=request.client_secret,
-            client_secret_expires_at=0,
-        )
 
     async def _return_existing_credentials(
         self,
@@ -402,7 +264,6 @@ class DCRService:
                     "iss": claims.iss,
                     "aud": claims.aud,
                     "client_name": response.name,
-                    "registration_mode": "gma",
                 },
             )
 
@@ -439,9 +300,8 @@ class DCRService:
     async def delete_client(self, order_id: str) -> None:
         """Delete an OAuth client associated with a marketplace order.
 
-        For GMA-created clients, deletes the tenant from Red Hat SSO via the
-        GMA API before removing the local DB record. For static credentials,
-        only the local record is removed.
+        Deletes the tenant from Red Hat SSO via the GMA API before removing
+        the local DB record.
 
         Args:
             order_id: The marketplace order ID (entitlement ID).
@@ -454,23 +314,16 @@ class DCRService:
             logger.info("No DCR client found for order_id=%s, nothing to delete", order_id)
             return
 
-        registration_mode = client.metadata.get("registration_mode")
-
-        if registration_mode == "gma":
-            logger.info(
-                "Deleting GMA tenant for order %s: client_id=%s",
-                order_id,
-                client.client_id,
-            )
-            gma_client = self._get_gma_client()
-            await gma_client.delete_tenant(client.client_id)
+        logger.info(
+            "Deleting GMA tenant for order %s: client_id=%s",
+            order_id,
+            client.client_id,
+        )
+        gma_client = self._get_gma_client()
+        await gma_client.delete_tenant(client.client_id)
 
         await self._client_repository.delete_by_order_id(order_id)
-        logger.info(
-            "Deleted DCR client for order %s (mode=%s)",
-            order_id,
-            registration_mode,
-        )
+        logger.info("Deleted DCR client for order %s", order_id)
 
     async def get_client(self, client_id: str) -> RegisteredClient | None:
         """Get a registered client by client_id.

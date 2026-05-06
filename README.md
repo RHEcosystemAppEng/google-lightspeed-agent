@@ -543,9 +543,9 @@ For development without real tokens, set `SKIP_JWT_VALIDATION: "true"` in the co
 
 ### Testing DCR Locally
 
-The Dynamic Client Registration (DCR) flow can be tested locally without admin access to the production Red Hat SSO. The **static credentials** mode allows testing without a real SSO connection.
+The Dynamic Client Registration (DCR) flow can be tested locally.
 
-Both modes require `SKIP_JWT_VALIDATION=true` on the marketplace handler so it accepts JWTs signed by your own GCP service account instead of Google's production `cloud-agentspace` account.
+Testing requires `SKIP_JWT_VALIDATION=true` on the marketplace handler so it accepts JWTs signed by your own GCP service account instead of Google's production `cloud-agentspace` account.
 
 #### Prerequisites
 
@@ -591,9 +591,7 @@ Both modes require `SKIP_JWT_VALIDATION=true` on the marketplace handler so it a
    python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'
    ```
 
-#### Static Credentials Mode
-
-This mode skips OAuth client creation via the GMA SSO API. Instead, the caller provides pre-registered `client_id` and `client_secret` in the DCR request body alongside the `software_statement`. The handler validates them (skipped with `SKIP_JWT_VALIDATION=true`), stores them linked to the order, and returns them.
+#### Running the DCR Test
 
 1. **Copy the secrets template and edit it:**
    ```bash
@@ -604,13 +602,14 @@ This mode skips OAuth client creation via the GMA SSO API. Instead, the caller p
    ```yaml
    stringData:
      DCR_ENCRYPTION_KEY: "<your-fernet-key>"
+     GMA_CLIENT_ID: "<your-gma-client-id>"
+     GMA_CLIENT_SECRET: "<your-gma-client-secret>"
      MARKETPLACE_DATABASE_URL: "postgresql+asyncpg://insights:insights@localhost:5432/lightspeed_agent"
      MARKETPLACE_DB_PASSWORD: "insights"
    ```
 
-2. **Set `DCR_ENABLED` to `false`** in `deploy/podman/lightspeed-agent-configmap.yaml`:
+2. **Set `SKIP_JWT_VALIDATION`** in `deploy/podman/lightspeed-agent-configmap.yaml`:
    ```yaml
-   DCR_ENABLED: "false"
    SKIP_JWT_VALIDATION: "true"
    ```
 
@@ -622,22 +621,18 @@ This mode skips OAuth client creation via the GMA SSO API. Instead, the caller p
      deploy/podman/marketplace-handler-pod.yaml
    ```
 
-4. **Run the test script with static credentials:**
+4. **Run the test script:**
    ```bash
    # Method A (key file):
    export TEST_SA_KEY_FILE=dcr-test-key.json
-   export TEST_CLIENT_ID=my-test-client
-   export TEST_CLIENT_SECRET=my-test-secret
    python scripts/test_dcr.py
 
    # Method B (IAM API):
    export TEST_SERVICE_ACCOUNT=dcr-test@<PROJECT>.iam.gserviceaccount.com
-   export TEST_CLIENT_ID=my-test-client
-   export TEST_CLIENT_SECRET=my-test-secret
    python scripts/test_dcr.py
    ```
 
-   The script sends `client_id` and `client_secret` in the request body. The handler stores them and returns them. The second request verifies idempotency (same credentials returned for the same order).
+   The handler creates OAuth tenant credentials via the GMA SSO API and returns them. The second request verifies idempotency (same credentials returned for the same order).
 
 5. **Clean up:**
    ```bash
@@ -657,10 +652,8 @@ The test script at `scripts/test_dcr.py` is configurable via environment variabl
 | `TEST_ORDER_ID` | random UUID | Marketplace order ID |
 | `TEST_ACCOUNT_ID` | `test-procurement-account-001` | Procurement account ID |
 | `TEST_REDIRECT_URIS` | `https://gemini.google.com/callback` | Comma-separated redirect URIs |
-| `TEST_CLIENT_ID` | | Static OAuth client ID (for `DCR_ENABLED=false` mode) |
-| `TEST_CLIENT_SECRET` | | Static OAuth client secret (for `DCR_ENABLED=false` mode) |
 
-The script sends two identical requests to verify idempotency — per Google's DCR spec, the handler must return the same `client_id`/`client_secret` for the same order. When `TEST_CLIENT_ID` and `TEST_CLIENT_SECRET` are set, the script includes them in the request body for static credentials mode.
+The script sends two identical requests to verify idempotency — per Google's DCR spec, the handler must return the same `client_id`/`client_secret` for the same order.
 
 ### Pod Services
 

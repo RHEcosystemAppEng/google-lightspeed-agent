@@ -443,12 +443,12 @@ The system uses PostgreSQL for persistence. For production deployments, the mark
 
 **Consequences**: Adds SQLAlchemy and asyncpg dependencies. Enables horizontal scaling (multiple instances share state) and provides durability and auditability.
 
-### ADR-3: Configurable DCR Mode
+### ADR-3: DCR via GMA SSO API
 
 **Status**: Accepted
 
-**Context**: Not all deployments have DCR enabled on Red Hat SSO, and development/testing environments may not need real DCR.
+**Context**: Google Cloud Marketplace customers need OAuth client credentials provisioned automatically during onboarding.
 
-**Decision**: Make DCR mode configurable via `DCR_ENABLED`. When `true` (default), real OAuth clients are created via the GMA SSO API. When `false`, static credentials from environment variables are returned.
+**Decision**: DCR creates real OAuth tenant clients in Red Hat SSO via the GMA SSO API. Requires `GMA_CLIENT_ID` and `GMA_CLIENT_SECRET` credentials.
 
-**Consequences**: Two code paths to maintain. Clear documentation needed for each mode. See [Authentication](authentication.md#dynamic-client-registration-dcr) for details.
+**Consequences**: Requires GMA API access. See [Authentication](authentication.md#dynamic-client-registration-dcr) for details.

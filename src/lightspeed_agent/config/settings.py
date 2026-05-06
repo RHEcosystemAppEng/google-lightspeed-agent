@@ -220,7 +220,7 @@ class Settings(BaseSettings):
         "'detailed' also logs tool arguments and truncated results.",
     )
     tool_result_max_chars: int = Field(
-        default=51200,
+        default=204800,
         ge=0,
         description=(
             "Maximum character length for MCP tool results sent to the LLM. "
@@ -230,13 +230,6 @@ class Settings(BaseSettings):
     )
 
     # DCR (Dynamic Client Registration) Configuration
-    dcr_enabled: bool = Field(
-        default=True,
-        description=(
-            "Enable real DCR with Red Hat SSO via the GMA API."
-            " When disabled, uses pre-seeded credentials from the database."
-        ),
-    )
     dcr_client_name_prefix: str = Field(
         default="gemini-order-",
         description="Prefix for OAuth client names created via DCR",
