@@ -456,9 +456,9 @@ google-auth-httplib2==0.3.0 \
     --hash=sha256:177898a0175252480d5ed916aeea183c2df87c1f9c26705d74ae6b951c268b0b \
     --hash=sha256:426167e5df066e3f5a0fc7ea18768c08e7296046594ce4c8c409c2457dd1f776
     # via google-api-python-client
-google-cloud-aiplatform==1.147.0 \
-    --hash=sha256:29f7ae020718d3c45094f0475464e06a97f81b1572bea150ae6a1b22c5f45997 \
-    --hash=sha256:b2e1b669ba37f02426e03eb13187eebf4cbfeaa0a3bfed37b5578abb375ab689
+google-cloud-aiplatform==1.150.0 \
+    --hash=sha256:cdddf054712820048d14e2084fc2a86e58937332f2ac44ce73eb06af1ee8f5b2 \
+    --hash=sha256:ff413e527cb753257957985acdcfebef697faf20a72587b59848d8208aaea0a2
     # via google-adk
 google-cloud-appengine-logging==1.8.0 \
     --hash=sha256:84b705a69e4109fc2f68dfe36ce3df6a34d5c3d989eee6d0ac1b024dda0ba6f5 \
