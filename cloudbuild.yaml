@@ -86,7 +86,6 @@ steps:
       - 'RED_HAT_SSO_CLIENT_ID=redhat-sso-client-id:latest,RED_HAT_SSO_CLIENT_SECRET=redhat-sso-client-secret:latest,DATABASE_URL=database-url:latest,REDIS_URL=redis-url:latest'
       - '--service-account'
       - 'lightspeed-agent@${PROJECT_ID}.iam.gserviceaccount.com'
-      - '--allow-unauthenticated'
     waitFor:
       - 'push'
 
