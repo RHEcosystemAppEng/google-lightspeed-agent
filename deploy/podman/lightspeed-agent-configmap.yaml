@@ -79,15 +79,15 @@ data:
   #   order_id, request_id) or "text" (human-readable, no audit fields)
   # AGENT_LOGGING_DETAIL: "basic" (tool names and lifecycle events only)
   #   or "detailed" (also includes tool arguments and truncated results)
-  LOG_LEVEL: "DEBUG"
+  LOG_LEVEL: "INFO"
   LOG_FORMAT: "json"
-  AGENT_LOGGING_DETAIL: "detailed"
+  AGENT_LOGGING_DETAIL: "basic"
 
   # DCR (Dynamic Client Registration) Configuration
   DCR_CLIENT_NAME_PREFIX: "gemini-order-"
 
   # Development Settings
-  DEBUG: "true"
+  DEBUG: "false"
   SKIP_JWT_VALIDATION: "false"
 
   # OpenTelemetry Configuration
