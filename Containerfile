@@ -8,10 +8,10 @@ FROM registry.access.redhat.com/ubi10/python-312-minimal:latest as builder
 
 WORKDIR /opt/app-root/src
 
-# Install Python dependencies
-COPY pyproject.toml README.md ./
+# Install Python dependencies from lock file
+COPY pyproject.toml README.md requirements.lock ./
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir ".[agent]"
+    pip install --no-cache-dir -r requirements.lock
 
 # =============================================================================
 # Production Stage

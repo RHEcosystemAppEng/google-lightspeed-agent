@@ -1,7 +1,7 @@
 # Red Hat Lightspeed Agent for Google Cloud - Makefile
 # Common development and deployment commands
 
-.PHONY: help build build-agent build-marketplace run stop logs logs-mcp clean test lint dev check-env
+.PHONY: help build build-agent build-marketplace run stop logs logs-mcp clean test lint lock lock-update dev check-env
 
 # Default target
 help:
@@ -11,6 +11,8 @@ help:
 	@echo "  make dev          - Run agent in development mode (no container)"
 	@echo "  make test         - Run tests"
 	@echo "  make lint         - Run linter and type checker"
+	@echo "  make lock         - Generate dependency lock file (requirements.lock)"
+	@echo "  make lock-update  - Update lock file with latest compatible versions"
 	@echo ""
 	@echo "Container (Podman):"
 	@echo "  make build             - Build all container images (agent + marketplace handler)"
@@ -42,6 +44,16 @@ dev:
 test:
 	@echo "Running tests..."
 	source .venv/bin/activate && python -m pytest tests/ -v
+
+lock:
+	@echo "Generating dependency lock file..."
+	source .venv/bin/activate && pip-compile --output-file=requirements.lock pyproject.toml --extra=agent
+	@echo "Lock file generated: requirements.lock"
+
+lock-update:
+	@echo "Updating dependency lock file..."
+	source .venv/bin/activate && pip-compile --upgrade --output-file=requirements.lock pyproject.toml --extra=agent
+	@echo "Lock file updated: requirements.lock"
 
 lint:
 	@echo "Running linter..."
