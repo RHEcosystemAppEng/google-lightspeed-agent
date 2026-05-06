@@ -382,6 +382,17 @@ class Settings(BaseSettings):
         return self
 
     @model_validator(mode="after")
+    def _block_sqlite_in_production(self) -> "Settings":
+        """Prevent SQLite database URLs in Cloud Run production."""
+        if os.getenv("K_SERVICE") and self.database_url.startswith("sqlite"):
+            raise ValueError(
+                "SQLite database is not allowed in Cloud Run "
+                f"(K_SERVICE={os.getenv('K_SERVICE')}). "
+                "Use PostgreSQL for production deployments."
+            )
+        return self
+
+    @model_validator(mode="after")
     def _validate_session_backend(self) -> "Settings":
         """Ensure SESSION_DATABASE_URL is set when SESSION_BACKEND=database."""
         if self.session_backend == "database" and not self.session_database_url:
