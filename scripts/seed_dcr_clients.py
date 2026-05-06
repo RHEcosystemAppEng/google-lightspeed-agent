@@ -11,7 +11,7 @@ any runtime code changes.
 
 Prerequisites:
     export DATABASE_URL="postgresql+asyncpg://user:pass@host/db"
-    export DCR_ENCRYPTION_KEY="<fernet-key>"
+    export DCR_ENCRYPTION_KEY="<base64url-encoded-32-byte-key>"
 
 Usage:
     # Seed from a JSON file
@@ -41,7 +41,7 @@ import sys
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
-from cryptography.fernet import Fernet, InvalidToken
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from sqlalchemy import delete as sa_delete
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -72,31 +72,41 @@ class ClientEntry:
 
 
 # ---------------------------------------------------------------------------
-# Encryption (matches DCRService._encrypt_secret at service.py:77-89)
+# Encryption (matches DCRService._encrypt_secret in service.py)
 # ---------------------------------------------------------------------------
 
 
-def get_fernet() -> Fernet:
-    """Create a Fernet cipher from DCR_ENCRYPTION_KEY env var."""
+def get_aesgcm() -> AESGCM:
+    """Create an AES-256-GCM cipher from DCR_ENCRYPTION_KEY env var."""
     key = os.environ.get("DCR_ENCRYPTION_KEY", "")
     if not key:
         print(
             "ERROR: DCR_ENCRYPTION_KEY is required.\n"
             "Generate one with:\n"
-            "  python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'",
+            '  python -c "import base64, os; '
+            "print(base64.urlsafe_b64encode(os.urandom(32)).decode())\"",
             file=sys.stderr,
         )
         sys.exit(1)
     try:
-        return Fernet(key.encode())
-    except (ValueError, Exception) as e:
+        import base64
+
+        key_bytes = base64.urlsafe_b64decode(key)
+        if len(key_bytes) != 32:
+            raise ValueError(f"Key must be 32 bytes (got {len(key_bytes)})")
+        return AESGCM(key_bytes)
+    except Exception as e:
         print(f"ERROR: Invalid DCR_ENCRYPTION_KEY: {e}", file=sys.stderr)
         sys.exit(1)
 
 
-def encrypt_secret(fernet: Fernet, plaintext: str) -> str:
-    """Encrypt a client secret for database storage."""
-    return fernet.encrypt(plaintext.encode()).decode()
+def encrypt_secret(aesgcm: AESGCM, plaintext: str) -> str:
+    """Encrypt a client secret for database storage using AES-256-GCM."""
+    import base64
+
+    nonce = os.urandom(12)
+    ciphertext = aesgcm.encrypt(nonce, plaintext.encode(), None)
+    return base64.urlsafe_b64encode(nonce + ciphertext).decode()
 
 
 # ---------------------------------------------------------------------------
@@ -211,7 +221,7 @@ async def create_session_factory(database_url: str) -> async_sessionmaker[AsyncS
 
 async def seed_entries(
     entries: list[ClientEntry],
-    fernet: Fernet,
+    aesgcm: AESGCM,
     dry_run: bool = False,
     skip_existing: bool = False,
 ) -> None:
@@ -276,7 +286,7 @@ async def seed_entries(
 
                 model = DCRClientModel(
                     client_id=entry.client_id,
-                    client_secret_encrypted=encrypt_secret(fernet, entry.client_secret),
+                    client_secret_encrypted=encrypt_secret(aesgcm, entry.client_secret),
                     order_id=entry.order_id,
                     account_id=entry.account_id,
                     redirect_uris=entry.redirect_uris or None,
@@ -414,7 +424,7 @@ def build_parser() -> argparse.ArgumentParser:
         epilog=(
             "Environment variables:\n"
             "  DATABASE_URL          Database connection string (required)\n"
-            "  DCR_ENCRYPTION_KEY    Fernet encryption key for client secrets (required for seed)\n"
+            "  DCR_ENCRYPTION_KEY    AES-256-GCM encryption key for client secrets (required for seed)\n"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -496,10 +506,10 @@ def main() -> None:
             entries = [build_entry_from_args(args)]
 
         validate_entries(entries)
-        fernet = get_fernet()
+        aesgcm = get_aesgcm()
         print(f"Seeding {len(entries)} entries...")
         asyncio.run(
-            seed_entries(entries, fernet, dry_run=args.dry_run, skip_existing=args.skip_existing)
+            seed_entries(entries, aesgcm, dry_run=args.dry_run, skip_existing=args.skip_existing)
         )
 
     elif args.command == "list":

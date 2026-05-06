@@ -18,10 +18,10 @@ os.environ["SKIP_JWT_VALIDATION"] = "true"
 os.environ["DCR_ENABLED"] = "false"  # Use pre-seeded credentials for tests
 os.environ["RED_HAT_SSO_CLIENT_ID"] = "test-static-client-id"
 os.environ["RED_HAT_SSO_CLIENT_SECRET"] = "test-static-client-secret"
-# Stable Fernet key for tests — secrets encrypted in one test can be decrypted in another
-from cryptography.fernet import Fernet as _Fernet  # noqa: E402
+# Stable AES-256-GCM key for tests — secrets encrypted in one test can be decrypted in another
+import base64  # noqa: E402
 
-os.environ["DCR_ENCRYPTION_KEY"] = _Fernet.generate_key().decode()
+os.environ["DCR_ENCRYPTION_KEY"] = base64.urlsafe_b64encode(os.urandom(32)).decode()
 
 
 @pytest.fixture

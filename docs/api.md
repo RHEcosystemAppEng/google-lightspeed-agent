@@ -683,8 +683,8 @@ The `software_statement` JWT contains:
 DCR requires an encryption key to securely store client secrets:
 
 ```bash
-# Generate a Fernet encryption key
-python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'
+# Generate an AES-256-GCM encryption key
+python -c "import base64, os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())"
 
 # Set in environment
 export DCR_ENCRYPTION_KEY="your-generated-key"

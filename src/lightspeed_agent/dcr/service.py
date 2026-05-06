@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import base64
 import logging
 import os
 from typing import TYPE_CHECKING
 
 import httpx
-from cryptography.fernet import Fernet, InvalidToken
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 from lightspeed_agent.config import get_settings
 from lightspeed_agent.dcr.gma_client import (
@@ -74,27 +75,33 @@ class DCRService:
         self._client_repository = client_repository or get_dcr_client_repository()
         self._settings = get_settings()
 
-        # Fernet cipher for encrypting client secrets.
+        # AES-256-GCM cipher for encrypting client secrets.
         # In production (Cloud Run), DCR_ENCRYPTION_KEY is required to prevent
         # silent data loss from missing encryption configuration.
-        self._fernet: Fernet | None = None
+        self._aesgcm: AESGCM | None = None
         if self._settings.dcr_encryption_key:
             try:
-                self._fernet = Fernet(self._settings.dcr_encryption_key.encode())
+                key_bytes = base64.urlsafe_b64decode(self._settings.dcr_encryption_key)
+                if len(key_bytes) != 32:
+                    raise ValueError(
+                        f"Key must be 32 bytes (got {len(key_bytes)})"
+                    )
+                self._aesgcm = AESGCM(key_bytes)
             except Exception as e:
                 raise ValueError(
                     f"Invalid DCR_ENCRYPTION_KEY: {e}. "
-                    "Generate a valid key with: "
-                    "python -c 'from cryptography.fernet import Fernet; "
-                    "print(Fernet.generate_key().decode())'"
+                    "Generate a valid 256-bit key with: "
+                    "python -c \"import base64, os; "
+                    "print(base64.urlsafe_b64encode(os.urandom(32)).decode())\""
                 ) from e
         elif os.getenv("K_SERVICE"):
             raise ValueError(
                 "DCR_ENCRYPTION_KEY is required in production "
                 f"(K_SERVICE={os.getenv('K_SERVICE')}). "
                 "Client secrets cannot be stored without an encryption key. "
-                "Generate a key with: python -c 'from cryptography.fernet import Fernet; "
-                "print(Fernet.generate_key().decode())'"
+                "Generate a key with: "
+                "python -c \"import base64, os; "
+                "print(base64.urlsafe_b64encode(os.urandom(32)).decode())\""
             )
 
     def _get_gma_client(self) -> GMAClient:
@@ -104,40 +111,46 @@ class DCRService:
         return self._gma_client
 
     def _encrypt_secret(self, secret: str) -> str:
-        """Encrypt a client secret for storage.
+        """Encrypt a client secret for storage using AES-256-GCM.
 
         Args:
             secret: The plaintext client secret.
 
         Returns:
-            Encrypted secret as base64 string.
+            Encrypted secret as base64url string (nonce + ciphertext + tag).
 
         Raises:
             RuntimeError: If DCR_ENCRYPTION_KEY is not configured.
         """
-        if not self._fernet:
+        if not self._aesgcm:
             raise RuntimeError(
                 "Cannot encrypt client secret: DCR_ENCRYPTION_KEY is not configured. "
-                "Set DCR_ENCRYPTION_KEY to a valid Fernet key before performing DCR operations."
+                "Set DCR_ENCRYPTION_KEY to a valid AES-256 key before performing "
+                "DCR operations."
             )
-        return self._fernet.encrypt(secret.encode()).decode()
+        nonce = os.urandom(12)
+        ciphertext = self._aesgcm.encrypt(nonce, secret.encode(), None)
+        return base64.urlsafe_b64encode(nonce + ciphertext).decode()
 
     def _decrypt_secret(self, encrypted_secret: str) -> str | None:
-        """Decrypt a stored client secret.
+        """Decrypt a stored client secret using AES-256-GCM.
 
         Args:
-            encrypted_secret: The encrypted secret.
+            encrypted_secret: The encrypted secret (base64url-encoded nonce + ciphertext + tag).
 
         Returns:
             Decrypted secret or None if decryption fails.
         """
-        if not self._fernet:
+        if not self._aesgcm:
             logger.error("Cannot decrypt: no encryption key available")
             return None
         try:
-            return self._fernet.decrypt(encrypted_secret.encode()).decode()
-        except InvalidToken:
-            logger.error("Failed to decrypt client secret: invalid token")
+            raw = base64.urlsafe_b64decode(encrypted_secret)
+            nonce = raw[:12]
+            ciphertext = raw[12:]
+            return self._aesgcm.decrypt(nonce, ciphertext, None).decode()
+        except Exception:
+            logger.error("Failed to decrypt client secret: invalid ciphertext or key")
             return None
 
     async def register_client(

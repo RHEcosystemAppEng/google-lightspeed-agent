@@ -296,15 +296,29 @@ class TestDCRServiceEncryptionValidation:
         from lightspeed_agent.config import get_settings
 
         settings = get_settings()
-        monkeypatch.setattr(settings, "dcr_encryption_key", "not-a-valid-fernet-key")
+        monkeypatch.setattr(settings, "dcr_encryption_key", "not-valid-base64!!!")
 
         with pytest.raises(ValueError, match="Invalid DCR_ENCRYPTION_KEY"):
             DCRService()
 
+    def test_dcr_service_wrong_key_length(self, monkeypatch, db_session):
+        """Test that DCRService raises ValueError for wrong key length."""
+        import base64
+
+        from lightspeed_agent.config import get_settings
+
+        settings = get_settings()
+        # 16 bytes instead of 32
+        short_key = base64.urlsafe_b64encode(b"0123456789abcdef").decode()
+        monkeypatch.setattr(settings, "dcr_encryption_key", short_key)
+
+        with pytest.raises(ValueError, match="Key must be 32 bytes"):
+            DCRService()
+
     def test_encrypt_secret_without_key_raises(self, db_session):
-        """Test that _encrypt_secret raises RuntimeError when _fernet is None."""
+        """Test that _encrypt_secret raises RuntimeError when _aesgcm is None."""
         service = DCRService()
-        service._fernet = None
+        service._aesgcm = None
 
         with pytest.raises(RuntimeError, match="Cannot encrypt client secret"):
             service._encrypt_secret("test-secret")

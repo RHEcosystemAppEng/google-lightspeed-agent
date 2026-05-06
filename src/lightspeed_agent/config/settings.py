@@ -244,10 +244,10 @@ class Settings(BaseSettings):
     dcr_encryption_key: str = Field(
         default="",
         description=(
-            "Fernet encryption key for DCR client secrets"
-            " (generate with: python -c"
-            " 'from cryptography.fernet import Fernet;"
-            " print(Fernet.generate_key().decode())')"
+            "AES-256-GCM encryption key for DCR client secrets"
+            " (base64url-encoded 32-byte key; generate with:"
+            ' python -c "import base64, os;'
+            " print(base64.urlsafe_b64encode(os.urandom(32)).decode())\")"
         ),
     )
 

@@ -580,9 +580,9 @@ Both modes require `SKIP_JWT_VALIDATION=true` on the marketplace handler so it a
    gcloud auth application-default login
    ```
 
-3. Generate a Fernet encryption key:
+3. Generate an AES-256-GCM encryption key:
    ```bash
-   python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'
+   python -c "import base64, os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())"
    ```
 
 #### Static Credentials Mode
@@ -597,7 +597,7 @@ This mode skips OAuth client creation via the GMA SSO API. Instead, the caller p
    Edit `deploy/podman/my-secrets.yaml` and set at minimum:
    ```yaml
    stringData:
-     DCR_ENCRYPTION_KEY: "<your-fernet-key>"
+     DCR_ENCRYPTION_KEY: "<your-aes256-key>"
      MARKETPLACE_DATABASE_URL: "postgresql+asyncpg://insights:insights@localhost:5432/lightspeed_agent"
      MARKETPLACE_DB_PASSWORD: "insights"
    ```

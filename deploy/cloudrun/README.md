@@ -417,9 +417,9 @@ echo -n 'your-gma-client-id' | \
 echo -n 'your-gma-client-secret' | \
   gcloud secrets versions add gma-client-secret --data-file=- --project=$GOOGLE_CLOUD_PROJECT
 
-# Fernet encryption key for DCR client secrets
-# Generate with: python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'
-echo -n 'your-fernet-key' | \
+# AES-256-GCM encryption key for DCR client secrets
+# Generate with: python -c "import base64, os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())"
+echo -n 'your-aes256-key' | \
   gcloud secrets versions add dcr-encryption-key --data-file=- --project=$GOOGLE_CLOUD_PROJECT
 
 # Database URLs (use CONNECTION_NAME and passwords from step 3)
