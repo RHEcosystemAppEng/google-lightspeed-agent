@@ -220,7 +220,7 @@ class Settings(BaseSettings):
         "'detailed' also logs tool arguments and truncated results.",
     )
     tool_result_max_chars: int = Field(
-        default=51200,
+        default=204800,
         ge=0,
         description=(
             "Maximum character length for MCP tool results sent to the LLM. "

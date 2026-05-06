@@ -5,7 +5,7 @@ so the LLM can inform the user to narrow down their query or use
 pagination, rather than silently sending huge payloads that exhaust
 Vertex AI token-per-minute quotas.
 
-Controlled by the ``TOOL_RESULT_MAX_CHARS`` setting (default 51200).
+Controlled by the ``TOOL_RESULT_MAX_CHARS`` setting (default 204800).
 Set to 0 to disable the guard entirely.
 """
 
