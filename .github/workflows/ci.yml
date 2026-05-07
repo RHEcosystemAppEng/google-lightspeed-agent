@@ -149,7 +149,7 @@ jobs:
 
       - name: Build image for scanning
         run: |
-          docker build -t lightspeed-agent:scan -f Containerfile .
+          podman build -t lightspeed-agent:scan -f Containerfile .
 
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
