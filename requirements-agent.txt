@@ -533,9 +533,9 @@ google-cloud-spanner==3.63.0 \
     # via
     #   google-adk
     #   sqlalchemy-spanner
-google-cloud-speech==2.37.0 \
-    --hash=sha256:1b2debf721954f1157fb2631d19b29fbeeba5736e58b71aaf10734d6365add59 \
-    --hash=sha256:370abd51244ffc68062d655d3063e083fad525416e0cb31737f4804e3cd8588c
+google-cloud-speech==2.39.0 \
+    --hash=sha256:ad2297b50a6aa10da76b65a9500e7990b7fd0cb295b415aae1f86b9e1ffae7d8 \
+    --hash=sha256:be712b5bd3294211a1a67f73fb4f5e772694eb5605aaafbc5ba838d4359a3161
     # via google-adk
 google-cloud-storage==3.9.0 \
     --hash=sha256:2dce75a9e8b3387078cbbdad44757d410ecdb916101f8ba308abf202b6968066 \
