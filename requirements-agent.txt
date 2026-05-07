@@ -474,9 +474,9 @@ google-cloud-bigquery==3.40.1 \
     # via
     #   google-adk
     #   google-cloud-aiplatform
-google-cloud-bigquery-storage==2.36.2 \
-    --hash=sha256:823a73db0c4564e8ad3eedcfd5049f3d5aa41775267863b5627211ec36be2dbf \
-    --hash=sha256:ad49d8c09ad6cd82da4efe596fcfcdbc1458bf05b93915e3c5c00f1e700ae128
+google-cloud-bigquery-storage==2.38.0 \
+    --hash=sha256:313e605c51e6c36046cbeccff4a98aa0f728add8f757962bab2266838136d538 \
+    --hash=sha256:bc703ab31c8c7dc9d0a281ff5109ba7461b3a6dc517f6acca1a823124085ab0d
     # via google-adk
 google-cloud-bigtable==2.35.0 \
     --hash=sha256:f355bfce1f239453ec2bb3839b0f4f9937cf34ef06ef29e1ca63d58fd38d0c50 \
