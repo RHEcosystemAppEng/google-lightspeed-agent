@@ -18,11 +18,14 @@ class AuditContextFilter(logging.Filter):
     default to empty strings so the JSON format is always consistent.
     """
 
-    def filter(self, record: logging.LogRecord) -> bool:
+    def __init__(self, name: str = "") -> None:
+        super().__init__(name)
         from lightspeed_agent.config import get_settings
 
-        settings = get_settings()
-        if settings.audit_logging_enabled:
+        self._audit_enabled = get_settings().audit_logging_enabled
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if self._audit_enabled:
             record.user_id = get_request_user_id() or ""
             record.org_id = get_request_org_id() or ""
             record.order_id = get_request_order_id() or ""

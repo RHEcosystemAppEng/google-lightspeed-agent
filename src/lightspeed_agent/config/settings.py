@@ -552,6 +552,15 @@ class Settings(BaseSettings):
         return self
 
     @model_validator(mode="after")
+    def _warn_audit_logging_disabled(self) -> "Settings":
+        if not self.audit_logging_enabled:
+            logging.getLogger(__name__).warning(
+                "AUDIT_LOGGING_ENABLED=false: PII fields will not be injected into "
+                "log records. Forensic traceability is reduced."
+            )
+        return self
+
+    @model_validator(mode="after")
     def _validate_session_backend(self) -> "Settings":
         """Ensure SESSION_DATABASE_URL is set when SESSION_BACKEND=database."""
         if self.session_backend == "database" and not self.session_database_url:
