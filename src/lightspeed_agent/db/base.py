@@ -49,7 +49,7 @@ def get_engine() -> AsyncEngine:
             engine_kwargs["pool_size"] = settings.database_pool_size
             engine_kwargs["max_overflow"] = settings.database_pool_max_overflow
             if settings.database_require_ssl:
-                engine_kwargs["connect_args"] = {"ssl": True}
+                engine_kwargs.setdefault("connect_args", {})["ssl"] = True
         _engine = create_async_engine(settings.database_url, **engine_kwargs)
         logger.info("Created database engine for %s", settings.database_url.split("@")[-1])
     return _engine

@@ -9,6 +9,7 @@ marketplace-handler service. See lightspeed_agent.marketplace.
 """
 
 import logging
+import os
 import pathlib
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -51,6 +52,19 @@ async def lifespan(app: A2AFastAPI) -> AsyncIterator[None]:
     except Exception as e:
         logger.error("Rate limiter Redis backend is unavailable: %s", e)
         raise
+
+    # Startup: Warn if database SSL is not enabled in Cloud Run with PostgreSQL
+    if (
+        os.getenv("K_SERVICE")
+        and not settings.database_require_ssl
+        and settings.database_url.startswith("postgresql")
+    ):
+        logger.warning(
+            "DATABASE_REQUIRE_SSL is not enabled in Cloud Run (K_SERVICE=%s). "
+            "If using direct TCP connections (not Cloud SQL Proxy), "
+            "enable DATABASE_REQUIRE_SSL=true to encrypt database traffic.",
+            os.getenv("K_SERVICE"),
+        )
 
     # Startup: Initialize database
     try:
