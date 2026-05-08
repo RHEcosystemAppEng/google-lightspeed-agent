@@ -68,7 +68,8 @@ If either dimension exceeds the configured limit, the request is rejected with `
 
 **Marketplace handler (port 8001):**
 
-- `/dcr` - DCR and Pub/Sub endpoint (unauthenticated — keyed by IP)
+- `/dcr` - DCR endpoint (unauthenticated — keyed by IP)
+- `/pubsub` - Pub/Sub endpoint (Google OIDC authenticated — keyed by IP)
 
 Both services share the same Redis backend and the same per-IP limits.
 

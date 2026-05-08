@@ -620,9 +620,8 @@ The system supports Dynamic Client Registration for Google Marketplace / Gemini 
 
 | Service | Endpoint | Description |
 |---------|----------|-------------|
-| Handler (8001) | `POST /dcr` | Hybrid endpoint for Pub/Sub and DCR requests |
-
-The `/dcr` endpoint on the handler accepts both Pub/Sub procurement events and DCR registration requests, routing based on content.
+| Handler (8001) | `POST /dcr` | DCR requests (OAuth client registration) |
+| Handler (8001) | `POST /pubsub` | Pub/Sub events (Google OIDC authenticated) |
 
 ### POST /dcr
 

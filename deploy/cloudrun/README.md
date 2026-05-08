@@ -1500,7 +1500,8 @@ After deployment, the following endpoints are available:
 |----------|-------------|
 | `GET /health` | Health check |
 | `GET /ready` | Readiness check |
-| `POST /dcr` | Hybrid endpoint (Pub/Sub events + DCR requests) |
+| `POST /dcr` | DCR requests (OAuth client registration) |
+| `POST /pubsub` | Pub/Sub events (Google OIDC authenticated) |
 
 ### Lightspeed Agent Service
 
@@ -2799,8 +2800,9 @@ HANDLER_URL=$(gcloud run services describe ${HANDLER_SERVICE_NAME:-marketplace-h
 
 gcloud pubsub subscriptions create "$PUBSUB_SUBSCRIPTION" \
   --topic="$PUBSUB_TOPIC" \
-  --push-endpoint="${HANDLER_URL}/dcr" \
+  --push-endpoint="${HANDLER_URL}/pubsub" \
   --push-auth-service-account="$PUBSUB_INVOKER_SA" \
+  --push-auth-token-audience="${HANDLER_URL}/pubsub" \
   --ack-deadline=60 \
   --project=$GOOGLE_CLOUD_PROJECT \
   --impersonate-service-account="$PUBSUB_INVOKER_SA"
