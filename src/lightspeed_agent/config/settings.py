@@ -96,16 +96,6 @@ class Settings(BaseSettings):
         default=True,
         description="Enable read-only mode for MCP tools",
     )
-    mcp_token_scopes: str = Field(
-        default="",
-        description=(
-            "Comma-separated list of scopes for MCP token exchange. "
-            "When set, a scoped token will be obtained for MCP communication "
-            "instead of forwarding the user's full-scope token. "
-            "Requires token exchange endpoint support (RFC 8693). "
-            "Currently informational -- full token exchange not yet implemented."
-        ),
-    )
 
     # Agent Configuration
     agent_provider_url: str = Field(
