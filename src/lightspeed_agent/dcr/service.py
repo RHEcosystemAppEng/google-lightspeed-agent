@@ -253,7 +253,7 @@ class DCRService:
             encrypted_secret = self._encrypt_secret(response.client_secret)
 
             # Store client mapping in database
-            await self._client_repository.create(
+            stored_client = await self._client_repository.create(
                 client_id=response.client_id,
                 client_secret_encrypted=encrypted_secret,
                 order_id=claims.order_id,
@@ -266,6 +266,28 @@ class DCRService:
                     "client_name": response.name,
                 },
             )
+
+            # Concurrent race: another request won the DB insert.
+            # Clean up the GMA client we just created (it's now orphaned)
+            # and return the winner's credentials.
+            if stored_client.client_id != response.client_id:
+                logger.info(
+                    "Concurrent DCR race for order %s: cleaning up orphaned GMA client %s, "
+                    "using existing client %s",
+                    claims.order_id,
+                    response.client_id,
+                    stored_client.client_id,
+                )
+                try:
+                    await gma_client.delete_tenant(response.client_id)
+                except Exception:
+                    logger.exception(
+                        "Failed to clean up orphaned GMA client %s for order %s. "
+                        "Manual cleanup may be required.",
+                        response.client_id,
+                        claims.order_id,
+                    )
+                return await self._return_existing_credentials(stored_client)
 
             logger.info(
                 "Successfully created OAuth tenant client for order %s: client_id=%s",

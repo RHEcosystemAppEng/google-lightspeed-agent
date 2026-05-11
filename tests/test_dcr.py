@@ -250,6 +250,132 @@ class TestDCRServiceDelete:
         # No error raised
 
 
+class TestDCRServiceConcurrentRace:
+    """Tests for DCR service concurrent request handling."""
+
+    @pytest_asyncio.fixture
+    async def service(self, db_session):
+        """Create a DCR service with real repository and mock GMA client."""
+        account_repo = AccountRepository()
+        entitlement_repo = EntitlementRepository()
+        client_repo = DCRClientRepository()
+        procurement_service = ProcurementService(
+            entitlement_repo=entitlement_repo,
+        )
+
+        account = Account(
+            id="race-account-123",
+            provider_id="provider-456",
+            state=AccountState.ACTIVE,
+        )
+        await account_repo.create(account)
+
+        entitlement = Entitlement(
+            id="race-order-789",
+            account_id="race-account-123",
+            provider_id="provider-456",
+            state=EntitlementState.ACTIVE,
+        )
+        await entitlement_repo.create(entitlement)
+
+        svc = DCRService(
+            procurement_service=procurement_service,
+            client_repository=client_repo,
+        )
+        return svc
+
+    @pytest.mark.asyncio
+    async def test_concurrent_race_cleans_up_orphaned_gma_client(self, service):
+        """Test that losing a concurrent DB insert cleans up the orphaned GMA client."""
+        from lightspeed_agent.dcr.gma_client import GMAClientResponse
+
+        claims = GoogleJWTClaims(
+            iss="https://accounts.google.com",
+            iat=int(time.time()),
+            exp=int(time.time()) + 3600,
+            aud="https://example.com",
+            sub="race-account-123",
+            google={"order": "race-order-789"},
+            auth_app_redirect_uris=["https://example.com/callback"],
+        )
+
+        # Pre-seed a "winner" client in the DB (simulates request A winning the race)
+        winner_secret = service._encrypt_secret("winner-secret")
+        await service._client_repository.create(
+            client_id="winner-client-id",
+            client_secret_encrypted=winner_secret,
+            order_id="race-order-789",
+            account_id="race-account-123",
+            redirect_uris=["https://example.com/callback"],
+            grant_types=["authorization_code", "refresh_token", "client_credentials"],
+            metadata={},
+        )
+
+        # Mock GMA client: create_tenant returns a DIFFERENT client_id (the loser's)
+        mock_gma = AsyncMock()
+        mock_gma.create_tenant.return_value = GMAClientResponse(
+            client_id="loser-client-id",
+            client_secret="loser-secret",
+            name="lightspeed-race-order-789",
+        )
+        service._gma_client = mock_gma
+
+        # Call _create_real_client — repository.create() will hit IntegrityError
+        # and return the winner's record. The service should detect the mismatch
+        # and delete the orphaned GMA client.
+        result = await service._create_real_client(claims)
+
+        # Should return the winner's credentials
+        assert isinstance(result, DCRResponse)
+        assert result.client_id == "winner-client-id"
+
+        # Should have cleaned up the orphaned GMA client
+        mock_gma.delete_tenant.assert_awaited_once_with("loser-client-id")
+
+    @pytest.mark.asyncio
+    async def test_concurrent_race_cleanup_failure_still_returns_existing(self, service):
+        """Test that GMA cleanup failure doesn't break the response."""
+        from lightspeed_agent.dcr.gma_client import GMAClientResponse
+
+        claims = GoogleJWTClaims(
+            iss="https://accounts.google.com",
+            iat=int(time.time()),
+            exp=int(time.time()) + 3600,
+            aud="https://example.com",
+            sub="race-account-123",
+            google={"order": "race-order-789"},
+            auth_app_redirect_uris=["https://example.com/callback"],
+        )
+
+        winner_secret = service._encrypt_secret("winner-secret")
+        await service._client_repository.create(
+            client_id="winner-client-id",
+            client_secret_encrypted=winner_secret,
+            order_id="race-order-789",
+            account_id="race-account-123",
+            redirect_uris=["https://example.com/callback"],
+            grant_types=["authorization_code", "refresh_token", "client_credentials"],
+            metadata={},
+        )
+
+        mock_gma = AsyncMock()
+        mock_gma.create_tenant.return_value = GMAClientResponse(
+            client_id="loser-client-id",
+            client_secret="loser-secret",
+            name="lightspeed-race-order-789",
+        )
+        # Simulate GMA cleanup failure
+        mock_gma.delete_tenant.side_effect = Exception("GMA API unreachable")
+        service._gma_client = mock_gma
+
+        result = await service._create_real_client(claims)
+
+        # Should still return the winner's credentials despite cleanup failure
+        assert isinstance(result, DCRResponse)
+        assert result.client_id == "winner-client-id"
+        mock_gma.delete_tenant.assert_awaited_once_with("loser-client-id")
+
+
 class TestDCRRepository:
     """Tests for DCR client repository with database."""
 

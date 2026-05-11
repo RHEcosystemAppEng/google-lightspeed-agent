@@ -4,6 +4,7 @@ import logging
 from typing import Any
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from lightspeed_agent.db import DCRClientModel, get_session
 from lightspeed_agent.dcr.models import RegisteredClient
@@ -94,29 +95,40 @@ class DCRClientRepository:
         Returns:
             The created RegisteredClient.
         """
-        async with get_session() as session:
-            model = DCRClientModel(
-                client_id=client_id,
-                client_secret_encrypted=client_secret_encrypted,
-                order_id=order_id,
-                account_id=account_id,
-                redirect_uris=redirect_uris or [],
-                grant_types=grant_types or ["authorization_code", "refresh_token"],
-                registration_access_token_encrypted=registration_access_token_encrypted,
-                keycloak_client_uuid=keycloak_client_uuid,
-                metadata_=metadata or {},
-            )
-            session.add(model)
-            await session.flush()
-            await session.refresh(model)
+        try:
+            async with get_session() as session:
+                model = DCRClientModel(
+                    client_id=client_id,
+                    client_secret_encrypted=client_secret_encrypted,
+                    order_id=order_id,
+                    account_id=account_id,
+                    redirect_uris=redirect_uris or [],
+                    grant_types=grant_types or ["authorization_code", "refresh_token"],
+                    registration_access_token_encrypted=registration_access_token_encrypted,
+                    keycloak_client_uuid=keycloak_client_uuid,
+                    metadata_=metadata or {},
+                )
+                session.add(model)
+                await session.flush()
+                await session.refresh(model)
 
+                logger.info(
+                    "Created DCR client: client_id=%s, order_id=%s",
+                    client_id,
+                    order_id,
+                )
+
+                return self._model_to_entity(model)
+        except IntegrityError:
             logger.info(
-                "Created DCR client: client_id=%s, order_id=%s",
-                client_id,
+                "DCR client already exists for order_id=%s (concurrent request), "
+                "returning existing record",
                 order_id,
             )
-
-            return self._model_to_entity(model)
+            existing = await self.get_by_order_id(order_id)
+            if existing:
+                return existing
+            raise
 
     def _model_to_entity(self, model: DCRClientModel) -> RegisteredClient:
         """Convert ORM model to Pydantic entity.
