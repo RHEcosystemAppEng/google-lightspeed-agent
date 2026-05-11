@@ -1,31 +1,5 @@
 # Manual Secret Rotation
 
-## INTERNAL ATTESTATION
-
-**Finding:** Credential provider APIs for automated secret rotation are not supported.
-
-**Affected Secrets:**
-
-**Tier 1 (OAuth Secrets) - Blocked by missing credential provider APIs:**
-- `RED_HAT_SSO_CLIENT_SECRET` - Red Hat SSO OAuth client secret
-- `GMA_CLIENT_SECRET` - Google Marketplace Agent (GMA) client secret
-
-**Tiers 2 & 3 - Require human intervention (service restart/migration):**
-- `DATABASE_URL` - Cloud SQL database credentials, requires coordinated service restart
-- `DCR_ENCRYPTION_KEY` - Fernet encryption key requiring re-encryption migration
-
-**Current Mitigation:** Manual rotation procedures documented in this file, executed annually by operations team.
-
-**Recommended Action (CIAM team):** Investigate and build API support for:
-1. Red Hat SSO Client API - OAuth client secret regeneration endpoint
-2. Google Marketplace Agent API - Client secret regeneration endpoint
-
-**Compensating Control:** Annual manual rotation procedures (detailed below) provide security equivalent to automated rotation at longer intervals.
-
-**Review Date:** 2026-05-04
-
----
-
 ## Overview
 
 This document provides manual rotation procedures for all secrets in the Red Hat Lightspeed Agent for Google Cloud that cannot be rotated automatically.
@@ -42,7 +16,7 @@ This document provides manual rotation procedures for all secrets in the Red Hat
 
 | Tier | Complexity | Secrets | Downtime |
 |------|-----------|---------|----------|
-| 1 | Low | OAuth client secrets (SSO, GMA) | None (auto-pickup) |
+| 1 | Low | OAuth client secrets (SSO, GMA) | Brief (service restart) |
 | 2 | Medium | Database credentials | 2-5 minutes (restart) |
 | 3 | High | DCR encryption key | Marketplace only (migration required) |
 
@@ -82,10 +56,10 @@ This document provides manual rotation procedures for all secrets in the Red Hat
 ### Coordination Requirements
 
 **Tier 1:**
-- No coordination needed (zero downtime)
+- Brief maintenance window (service restart required)
 
 **Tier 2:**
-- Maintenance window approval (2-5 minute downtime)
+- Maintenance window (2-5 minute downtime)
 - Stakeholder notification (service restart)
 
 **Tier 3:**
@@ -97,7 +71,7 @@ This document provides manual rotation procedures for all secrets in the Red Hat
 ## Tier 1: OAuth Client Secrets
 
 **Characteristics:**
-- Zero service downtime (Cloud Run auto-picks up new secret versions)
+- Brief service downtime (service restart required to pick up new secret versions)
 - CIAM team coordination required (1-2 business days)
 - Low technical complexity (Secret Manager version update)
 
@@ -130,7 +104,7 @@ Follow the CIAM self-service client configuration management process:
 
 #### Step 2: Update Secret Manager
 
-Add a new version of the secret in Google Cloud Secret Manager. Cloud Run services will automatically use the latest ENABLED version.
+Add a new version of the secret in Google Cloud Secret Manager. A service restart is required for Cloud Run to pick up the new version (Step 3).
 
 ```bash
 # Set project
@@ -157,9 +131,45 @@ NAME                      STATE    CREATED              DESTROYED
 
 Version 4 is the new secret (latest).
 
-#### Step 3: Verification
+#### Step 3: Restart Services
 
-Cloud Run services automatically pick up new secret versions within minutes. Verify authentication works with the new secret.
+Restart Cloud Run services to pick up the new secret version.
+
+```bash
+# Restart agent service
+gcloud run services update lightspeed-agent \
+  --region=us-central1 \
+  --project="${GOOGLE_CLOUD_PROJECT}"
+
+# Restart marketplace handler
+gcloud run services update marketplace-handler \
+  --region=us-central1 \
+  --project="${GOOGLE_CLOUD_PROJECT}"
+
+# Monitor service health
+echo "Waiting for services to become ready..."
+sleep 10
+
+# Verify both services are healthy
+gcloud run services describe lightspeed-agent \
+  --region=us-central1 \
+  --format='value(status.conditions[0].status)' \
+  --project="${GOOGLE_CLOUD_PROJECT}"
+
+gcloud run services describe marketplace-handler \
+  --region=us-central1 \
+  --format='value(status.conditions[0].status)' \
+  --project="${GOOGLE_CLOUD_PROJECT}"
+```
+
+**Expected Output (for both services):**
+```
+True
+```
+
+#### Step 4: Verification
+
+Verify authentication works with the new secret.
 
 **Obtain a test JWT token:**
 
@@ -197,11 +207,11 @@ curl -H "Authorization: Bearer $TOKEN" \
 }
 ```
 
-**If authentication fails**, the new secret is invalid. Proceed to rollback (Step 4).
+**If authentication fails**, the new secret is invalid. Proceed to rollback (Step 5).
 
-#### Step 4: Rollback (if needed)
+#### Step 5: Rollback (if needed)
 
-If verification fails, disable the new secret version to restore the previous version.
+If verification fails, disable the new secret version and restart services to restore the previous version.
 
 ```bash
 # List versions to identify the new version number
@@ -226,7 +236,19 @@ NAME                      STATE     CREATED              DESTROYED
 3                         ENABLED   2025-05-04T12:00:00  -
 ```
 
-Cloud Run will automatically use version 3 (previous secret). Re-run verification (Step 3) to confirm rollback succeeded.
+Restart services to pick up the previous secret version:
+
+```bash
+gcloud run services update lightspeed-agent \
+  --region=us-central1 \
+  --project="${GOOGLE_CLOUD_PROJECT}"
+
+gcloud run services update marketplace-handler \
+  --region=us-central1 \
+  --project="${GOOGLE_CLOUD_PROJECT}"
+```
+
+Re-run verification (Step 4) to confirm rollback succeeded.
 
 **Investigate why the new secret failed** before attempting rotation again. Common causes:
 - Wrong secret value copied (typo)
@@ -296,13 +318,38 @@ NAME                      STATE    CREATED              DESTROYED
 1                         ENABLED  2024-05-04T14:00:00  -
 ```
 
-#### Step 3: Verification
+#### Step 3: Restart Services
+
+Restart the Marketplace Handler service to pick up the new secret version.
+
+```bash
+# Restart marketplace handler (only service using GMA secret)
+gcloud run services update marketplace-handler \
+  --region=us-central1 \
+  --project="${GOOGLE_CLOUD_PROJECT}"
+
+# Wait for service to become ready
+sleep 10
+
+# Verify service is healthy
+gcloud run services describe marketplace-handler \
+  --region=us-central1 \
+  --format='value(status.conditions[0].status)' \
+  --project="${GOOGLE_CLOUD_PROJECT}"
+```
+
+**Expected Output:**
+```
+True
+```
+
+#### Step 4: Verification
 
 <TBD>
 
-**If verification fails**, proceed to rollback (Step 4).
+**If verification fails**, proceed to rollback (Step 5).
 
-#### Step 4: Rollback (if needed)
+#### Step 5: Rollback (if needed)
 
 ```bash
 # List versions to identify new version number
@@ -320,7 +367,13 @@ gcloud secrets versions list gma-client-secret \
   --limit=3
 ```
 
-Cloud Run will automatically use the previous ENABLED version.
+Restart the service to pick up the previous secret version:
+
+```bash
+gcloud run services update marketplace-handler \
+  --region=us-central1 \
+  --project="${GOOGLE_CLOUD_PROJECT}"
+```
 
 **Investigate failure** before retrying:
 - Verify secret value is correct (no copy/paste errors)
@@ -804,7 +857,7 @@ gcloud run services update marketplace-handler \
   --project="${GOOGLE_CLOUD_PROJECT}"
 
 # Wait for service to become ready
-sleep 15
+sleep 10
 
 # Check service status
 gcloud run services describe marketplace-handler \
@@ -1228,6 +1281,7 @@ We will provide updates as the situation develops.
 **Hour 0-1: Tier 1 Rotation**
 - 00:30 - New SSO secret received from CIAM
 - 00:35 - Secret Manager updated
+- 00:37 - Services restarted to pick up new secret
 - 00:40 - Verification complete (authentication restored)
 
 **Hour 1-2: Tier 3 Rotation (if needed)**
