@@ -780,9 +780,9 @@ google-cloud-dataplex==2.19.0 \
     --hash=sha256:356204387ea954710519946dbca224a16f36fb81bd651ccb92ef2bcdbb12422e \
     --hash=sha256:81a637f2474bd5391ed102311ac6b90d6c066fae1c29837baa8dd36328db0b05
     # via google-adk
-google-cloud-discoveryengine==0.13.12 \
-    --hash=sha256:295f8c6df3fb26b90fb82c2cd6fbcf4b477661addcb19a94eea16463a5c4e041 \
-    --hash=sha256:d6b9f8fadd8ad0d2f4438231c5eb7772a317e9f59cafbcbadc19b5d54c609419
+google-cloud-discoveryengine==0.19.0 \
+    --hash=sha256:8ddf283b452d58dc5ca9e1644fb03bae1402889fd9690b1f4b53a50957031fa5 \
+    --hash=sha256:f6398d943c0ac2760f1767d1a869d30a9f60ddbc547a9f96935a0428e656a0a2
     # via google-adk
 google-cloud-iam==2.23.0 \
     --hash=sha256:49246f6221026d381cff4f8d804daf1bb6416153f2504bf5ef54d4af2450b828 \
