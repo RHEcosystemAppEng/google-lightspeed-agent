@@ -219,12 +219,15 @@ default: `api.console,api.ocm`).
 
 In addition to checking that required scopes are present, the agent enforces an
 **allowlist** of permitted scopes via `AGENT_ALLOWED_SCOPES` (comma-separated,
-default: `openid,profile,email,api.console,api.ocm`).  Tokens carrying scopes
+default: `openid,profile,email,api.console,api.ocm,metering:admin`).  Tokens carrying scopes
 outside this list are rejected with **403 Forbidden**.
 
 This is a defense-in-depth measure: since the agent forwards the caller's JWT
 to the MCP sidecar and downstream APIs, restricting scopes prevents tokens with
 elevated privileges from being exercised against those services.
+
+The `metering:admin` scope is included in the default allowlist because
+DCR-created clients may carry it for usage metering operations via Red Hat SSO.
 
 All permitted scopes must be explicitly listed in `AGENT_ALLOWED_SCOPES`.
 
@@ -293,9 +296,9 @@ RED_HAT_SSO_CLIENT_SECRET=your-client-secret
 # Required scopes checked during token introspection (comma-separated, default: api.console,api.ocm)
 AGENT_REQUIRED_SCOPE=api.console,api.ocm
 
-# Allowed scopes allowlist (comma-separated, default: openid,profile,email,api.console,api.ocm)
+# Allowed scopes allowlist (comma-separated, default: openid,profile,email,api.console,api.ocm,metering:admin)
 # Tokens carrying scopes outside this list are rejected (HTTP 403).
-AGENT_ALLOWED_SCOPES=openid,profile,email,api.console,api.ocm
+AGENT_ALLOWED_SCOPES=openid,profile,email,api.console,api.ocm,metering:admin
 ```
 
 ### Registering an OAuth Client

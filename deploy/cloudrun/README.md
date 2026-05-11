@@ -918,7 +918,7 @@ Bearer token that is active and carries the `api.console` and `api.ocm` scopes.
 | `MARKETPLACE_HANDLER_URL` | URL of the marketplace-handler service. Used to build the DCR endpoints in the AgentCard. If empty, falls back to `AGENT_PROVIDER_URL`. Set automatically by `deploy.sh`. |
 | `AGENT_PROVIDER_ORGANIZATION_URL` | Provider's organization website URL (default: `https://www.redhat.com`). Used in AgentCard `provider.url` and as the expected JWT audience for Google DCR `software_statement` validation. Set in YAML configs, not changed by `deploy.sh`. |
 | `AGENT_REQUIRED_SCOPE` | Comma-separated OAuth scopes required in tokens (default: `api.console,api.ocm`) |
-| `AGENT_ALLOWED_SCOPES` | Comma-separated allowlist of permitted scopes (default: `openid,profile,email,api.console,api.ocm`). Tokens with scopes outside this list are rejected (403). |
+| `AGENT_ALLOWED_SCOPES` | Comma-separated allowlist of permitted scopes (default: `openid,profile,email,api.console,api.ocm,metering:admin`). Tokens with scopes outside this list are rejected (403). |
 
 ### Development Mode
 
@@ -1240,7 +1240,7 @@ gcloud run services update lightspeed-agent \
   --region=$GOOGLE_CLOUD_LOCATION \
   --project=$GOOGLE_CLOUD_PROJECT \
   --update-env-vars="AGENT_REQUIRED_SCOPE=api.console,api.ocm" \
-  --update-env-vars="AGENT_ALLOWED_SCOPES=openid,profile,email,api.console,api.ocm"
+  --update-env-vars="AGENT_ALLOWED_SCOPES=openid,profile,email,api.console,api.ocm,metering:admin"
 
 # 2. Remove DCR client
 python scripts/seed_dcr_clients.py delete --order-id "$TEST_ORDER_ID" --confirm
@@ -1660,7 +1660,7 @@ gcloud run services update ${SERVICE_NAME:-lightspeed-agent} \
   --region=$GOOGLE_CLOUD_LOCATION \
   --project=$GOOGLE_CLOUD_PROJECT \
   --update-env-vars="AGENT_REQUIRED_SCOPE=api.console,api.ocm" \
-  --update-env-vars="AGENT_ALLOWED_SCOPES=openid,profile,email,api.console,api.ocm"
+  --update-env-vars="AGENT_ALLOWED_SCOPES=openid,profile,email,api.console,api.ocm,metering:admin"
 ```
 
 > **Note:** Both `AGENT_REQUIRED_SCOPE` and `AGENT_ALLOWED_SCOPES` must not be
@@ -1681,7 +1681,7 @@ Add the missing scope(s) to the allowlist:
 gcloud run services update ${SERVICE_NAME:-lightspeed-agent} \
   --region=$GOOGLE_CLOUD_LOCATION \
   --project=$GOOGLE_CLOUD_PROJECT \
-  --update-env-vars="AGENT_ALLOWED_SCOPES=openid,profile,email,api.console,api.ocm,your.extra.scope"
+  --update-env-vars="AGENT_ALLOWED_SCOPES=openid,profile,email,api.console,api.ocm,metering:admin,your.extra.scope"
 ```
 
 This setting is also configurable in `service.yaml` via the

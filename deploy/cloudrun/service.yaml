@@ -105,7 +105,7 @@ spec:
             # Comma-separated allowlist of OAuth scopes permitted in access tokens.
             # Tokens carrying scopes outside this list are rejected (HTTP 403).
             - name: AGENT_ALLOWED_SCOPES
-              value: "openid,profile,email,api.console,api.ocm"
+              value: "openid,profile,email,api.console,api.ocm,metering:admin"
             # Ensure production environment do not skip JWT validation
             - name: SKIP_JWT_VALIDATION
               value: "false"

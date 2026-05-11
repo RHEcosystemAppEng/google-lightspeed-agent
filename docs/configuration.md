@@ -46,7 +46,7 @@ GOOGLE_CLOUD_LOCATION=global
 | `RED_HAT_SSO_CLIENT_ID` | - | Resource Server client ID (used for token introspection) |
 | `RED_HAT_SSO_CLIENT_SECRET` | - | Resource Server client secret |
 | `AGENT_REQUIRED_SCOPE` | `api.console,api.ocm` | Comma-separated OAuth scopes required in access tokens |
-| `AGENT_ALLOWED_SCOPES` | `openid,profile,email,api.console,api.ocm` | Comma-separated allowlist of permitted scopes. Tokens with scopes outside this list are rejected (403). |
+| `AGENT_ALLOWED_SCOPES` | `openid,profile,email,api.console,api.ocm,metering:admin` | Comma-separated allowlist of permitted scopes. Tokens with scopes outside this list are rejected (403). |
 
 **Example:**
 
