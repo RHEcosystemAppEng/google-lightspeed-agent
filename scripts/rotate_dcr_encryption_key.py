@@ -171,25 +171,21 @@ def parse_args() -> argparse.Namespace:
         description="Re-encrypt DCR OAuth client secrets from old Fernet key to new key",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
+SECURITY: Use environment variables instead of CLI arguments for keys and
+database URLs. CLI arguments are visible in process listings (ps aux),
+shell history, and system audit logs.
+
 Examples:
-  # Dry-run mode (test only, no database changes)
-  python rotate-dcr-encryption-key.py \\
-    --old-key="<current-key>" \\
-    --new-key="<new-key>" \\
-    --database-url="postgresql+asyncpg://..." \\
-    --dry-run
-
-  # Production mode (modifies database)
-  python rotate-dcr-encryption-key.py \\
-    --old-key="<current-key>" \\
-    --new-key="<new-key>" \\
-    --database-url="postgresql+asyncpg://..."
-
-  # Using environment variables
+  # Set secrets via environment variables (recommended)
   export DCR_OLD_KEY="..."
   export DCR_NEW_KEY="..."
-  export DATABASE_URL="..."
-  python rotate-dcr-encryption-key.py --dry-run
+  export DATABASE_URL="postgresql+asyncpg://..."
+
+  # Dry-run mode (test only, no database changes)
+  python rotate_dcr_encryption_key.py --dry-run
+
+  # Production mode (modifies database)
+  python rotate_dcr_encryption_key.py
         """
     )
 

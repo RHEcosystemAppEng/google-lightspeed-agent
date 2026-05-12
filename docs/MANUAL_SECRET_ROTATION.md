@@ -680,10 +680,10 @@ If backup fails, consider whether to proceed without this safety net.
 
 ```bash
 # Generate new encryption key (44-character base64-encoded Fernet key)
-NEW_ENCRYPTION_KEY=$(python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")
+DCR_NEW_KEY=$(python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")
 
-echo "New encryption key (save in password manager): ${NEW_ENCRYPTION_KEY}"
-echo "Length: ${#NEW_ENCRYPTION_KEY} characters (should be 44)"
+echo "New encryption key (save in password manager): ${DCR_NEW_KEY}"
+echo "Length: ${#DCR_NEW_KEY} characters (should be 44)"
 ```
 
 **Expected Output:**
@@ -698,19 +698,19 @@ Length: 44 characters
 
 ```bash
 # Get current encryption key
-OLD_ENCRYPTION_KEY=$(gcloud secrets versions access latest \
+DCR_OLD_KEY=$(gcloud secrets versions access latest \
   --secret=dcr-encryption-key \
   --project="${GOOGLE_CLOUD_PROJECT}")
 
 echo "Old key retrieved"
-echo "Length: ${#OLD_ENCRYPTION_KEY} characters (should be 44)"
+echo "Length: ${#DCR_OLD_KEY} characters (should be 44)"
 ```
 
 **Verify both keys are 44 characters** and different:
 
 ```bash
 # Verify keys are different
-if [ "${OLD_ENCRYPTION_KEY}" == "${NEW_ENCRYPTION_KEY}" ]; then
+if [ "${DCR_OLD_KEY}" == "${DCR_NEW_KEY}" ]; then
   echo "ERROR: Keys are identical! Generate a new key."
   exit 1
 else
@@ -718,7 +718,7 @@ else
 fi
 
 # Verify lengths
-if [ ${#OLD_ENCRYPTION_KEY} -ne 44 ] || [ ${#NEW_ENCRYPTION_KEY} -ne 44 ]; then
+if [ ${#DCR_OLD_KEY} -ne 44 ] || [ ${#DCR_NEW_KEY} -ne 44 ]; then
   echo "ERROR: Invalid key length!"
   exit 1
 else
@@ -739,18 +739,15 @@ cd /path/to/google-lightspeed-agent
 # Activate virtual environment
 source .venv/bin/activate
 
-# Get database URL
-DATABASE_URL=$(gcloud secrets versions access latest \
+# Set environment variables (the script reads DCR_OLD_KEY, DCR_NEW_KEY, DATABASE_URL)
+export DCR_OLD_KEY
+export DCR_NEW_KEY
+export DATABASE_URL=$(gcloud secrets versions access latest \
   --secret=database-url \
   --project="${GOOGLE_CLOUD_PROJECT}")
 
 # Run dry-run migration
-python scripts/rotate_dcr_encryption_key.py \
-  --old-key="${OLD_ENCRYPTION_KEY}" \
-  --new-key="${NEW_ENCRYPTION_KEY}" \
-  --database-url="${DATABASE_URL}" \
-  --dry-run \
-  --verbose
+python scripts/rotate_dcr_encryption_key.py --dry-run --verbose
 ```
 
 **Expected Output (successful dry-run):**
@@ -779,7 +776,7 @@ ERROR: Pre-flight check failed: Failed to decrypt secret with old key: ...
 - Database contains secrets encrypted with a different key (previous rotation incomplete)
 - Secret corruption in database
 
-**Resolution:** Verify `OLD_ENCRYPTION_KEY` matches the current production key in Secret Manager. If mismatch, do NOT proceed. Investigate database state.
+**Resolution:** Verify `DCR_OLD_KEY` matches the current production key in Secret Manager. If mismatch, do NOT proceed. Investigate database state.
 
 ---
 
@@ -789,11 +786,8 @@ ERROR: Pre-flight check failed: Failed to decrypt secret with old key: ...
 
 ```bash
 # Production migration (no --dry-run flag)
-python scripts/rotate_dcr_encryption_key.py \
-  --old-key="${OLD_ENCRYPTION_KEY}" \
-  --new-key="${NEW_ENCRYPTION_KEY}" \
-  --database-url="${DATABASE_URL}" \
-  --verbose
+# DCR_OLD_KEY, DCR_NEW_KEY, DATABASE_URL already set in Step 5
+python scripts/rotate_dcr_encryption_key.py --verbose
 ```
 
 **Expected Output (successful rotation):**
@@ -826,7 +820,7 @@ Only update Secret Manager **after migration succeeds** (Step 6).
 
 ```bash
 # Add new encryption key version
-echo -n "${NEW_ENCRYPTION_KEY}" | gcloud secrets versions add dcr-encryption-key \
+echo -n "${DCR_NEW_KEY}" | gcloud secrets versions add dcr-encryption-key \
   --data-file=- \
   --project="${GOOGLE_CLOUD_PROJECT}"
 
@@ -886,12 +880,14 @@ True
 **Option A: Reverse migration (preferred)** — re-run the script with keys swapped:
 
 ```bash
-# Re-run migration with keys swapped to restore old encryption
-python scripts/rotate_dcr_encryption_key.py \
-  --old-key="${NEW_ENCRYPTION_KEY}" \
-  --new-key="${OLD_ENCRYPTION_KEY}" \
-  --database-url="${DATABASE_URL}" \
-  --verbose
+# Swap keys to reverse the migration
+_TMP="${DCR_OLD_KEY}"
+export DCR_OLD_KEY="${DCR_NEW_KEY}"
+export DCR_NEW_KEY="${_TMP}"
+unset _TMP
+
+# Re-run migration to restore old encryption
+python scripts/rotate_dcr_encryption_key.py --verbose
 ```
 
 Then disable the new key in Secret Manager and restart the marketplace handler:
@@ -943,8 +939,8 @@ gcloud run services update marketplace-handler \
 Zero encryption keys from environment and shell history after confirming rotation succeeded (or rollback completed):
 
 ```bash
-unset OLD_ENCRYPTION_KEY
-unset NEW_ENCRYPTION_KEY
+unset DCR_OLD_KEY
+unset DCR_NEW_KEY
 unset DATABASE_URL
 
 history -c
@@ -962,29 +958,30 @@ history -c
 
 ### Usage
 
+**Set secrets via environment variables** (CLI arguments expose keys in process listings):
+
+```bash
+export DCR_OLD_KEY="<current-key>"
+export DCR_NEW_KEY="<new-key>"
+export DATABASE_URL="postgresql+asyncpg://user:pass@host/db"
+```
+
 **Dry-Run Mode (recommended first):**
 
 ```bash
-python scripts/rotate_dcr_encryption_key.py \
-  --old-key="<current-key>" \
-  --new-key="<new-key>" \
-  --database-url="postgresql+asyncpg://user:pass@host/db" \
-  --dry-run
+python scripts/rotate_dcr_encryption_key.py --dry-run
 ```
 
 **Production Mode:**
 
 ```bash
-python scripts/rotate_dcr_encryption_key.py \
-  --old-key="<current-key>" \
-  --new-key="<new-key>" \
-  --database-url="postgresql+asyncpg://user:pass@host/db"
+python scripts/rotate_dcr_encryption_key.py
 ```
 
 **Verbose Output:**
 
 ```bash
-python scripts/rotate_dcr_encryption_key.py ... --verbose
+python scripts/rotate_dcr_encryption_key.py --verbose
 ```
 
 **Environment Variables (alternative to CLI args):**
