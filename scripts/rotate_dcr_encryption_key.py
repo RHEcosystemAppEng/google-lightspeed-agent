@@ -139,6 +139,8 @@ class EncryptionKeyRotator:
             for i, client in enumerate(clients, 1):
                 try:
                     self.reencrypt_secret(client.client_secret_encrypted)
+                    if client.registration_access_token_encrypted:
+                        self.reencrypt_secret(client.registration_access_token_encrypted)
                     logger.debug("Testing client %s (%d/%d)", client.client_id, i, len(clients))
                 except RotationError as e:
                     errors.append(f"{client.client_id}: {e}")
@@ -152,8 +154,13 @@ class EncryptionKeyRotator:
         else:
             async with self.async_session() as session, session.begin():
                 for client in clients:
-                    reencrypted = self.reencrypt_secret(client.client_secret_encrypted)
-                    client.client_secret_encrypted = reencrypted
+                    client.client_secret_encrypted = self.reencrypt_secret(
+                        client.client_secret_encrypted
+                    )
+                    if client.registration_access_token_encrypted:
+                        client.registration_access_token_encrypted = self.reencrypt_secret(
+                            client.registration_access_token_encrypted
+                        )
                     session.add(client)
 
             return RotationResult(
