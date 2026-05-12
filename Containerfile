@@ -18,6 +18,9 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # =============================================================================
 FROM registry.access.redhat.com/ubi10/python-312-minimal:latest as production
 
+# Apply latest security patches
+RUN microdnf upgrade -y && microdnf clean all
+
 # Labels for container metadata
 LABEL org.opencontainers.image.title="Red Hat Lightspeed Agent for Google Cloud"
 LABEL org.opencontainers.image.description="A2A-ready agent for Red Hat Insights using Google ADK"
