@@ -87,17 +87,6 @@ class EncryptionKeyRotator:
         """Dispose database engine."""
         await self.engine.dispose()
 
-    async def fetch_dcr_clients(self) -> list[DCRClientModel]:
-        """Fetch all DCR clients from database.
-
-        Returns:
-            List of DCRClientModel instances
-        """
-        async with self.async_session() as session:
-            result = await session.execute(select(DCRClientModel))
-            clients = result.scalars().all()
-            return list(clients)
-
     def reencrypt_secret(self, encrypted_secret: str) -> str:
         """Re-encrypt a secret from old key to new key.
 
@@ -122,37 +111,43 @@ class EncryptionKeyRotator:
         except InvalidToken as e:
             raise RotationError(f"Failed to decrypt secret with old key: {e}") from e
 
-    async def rotate(
-        self, clients: list[DCRClientModel], dry_run: bool = False
-    ) -> RotationResult:
-        """Execute rotation with optional dry-run mode.
+    async def rotate(self, dry_run: bool = False) -> RotationResult:
+        """Fetch all DCR clients and re-encrypt their secrets.
 
         Args:
-            clients: DCR clients to rotate (from fetch_dcr_clients)
             dry_run: If True, test decrypt/re-encrypt without database writes
 
         Returns:
             RotationResult with success status and counts
         """
-        if dry_run:
-            errors = []
-            for i, client in enumerate(clients, 1):
-                try:
-                    self.reencrypt_secret(client.client_secret_encrypted)
-                    if client.registration_access_token_encrypted:
-                        self.reencrypt_secret(client.registration_access_token_encrypted)
-                    logger.debug("Testing client %s (%d/%d)", client.client_id, i, len(clients))
-                except RotationError as e:
-                    errors.append(f"{client.client_id}: {e}")
+        async with self.async_session() as session:
+            result = await session.execute(select(DCRClientModel))
+            clients = result.scalars().all()
 
-            return RotationResult(
-                success=len(errors) == 0,
-                clients_rotated=len(clients),
-                dry_run=True,
-                errors=errors
-            )
-        else:
-            async with self.async_session() as session, session.begin():
+            if len(clients) == 0:
+                logger.warning("No DCR clients found - nothing to rotate")
+                return RotationResult(success=True, clients_rotated=0, dry_run=dry_run)
+
+            if dry_run:
+                logger.info("Dry-run: testing decrypt/re-encrypt on %d clients", len(clients))
+                errors = []
+                for i, client in enumerate(clients, 1):
+                    try:
+                        self.reencrypt_secret(client.client_secret_encrypted)
+                        if client.registration_access_token_encrypted:
+                            self.reencrypt_secret(client.registration_access_token_encrypted)
+                        logger.debug("Testing client %s (%d/%d)", client.client_id, i, len(clients))
+                    except RotationError as e:
+                        errors.append(f"{client.client_id}: {e}")
+
+                return RotationResult(
+                    success=len(errors) == 0,
+                    clients_rotated=len(clients),
+                    dry_run=True,
+                    errors=errors
+                )
+            else:
+                logger.info("Production mode: rotating %d clients", len(clients))
                 for client in clients:
                     client.client_secret_encrypted = self.reencrypt_secret(
                         client.client_secret_encrypted
@@ -161,13 +156,13 @@ class EncryptionKeyRotator:
                         client.registration_access_token_encrypted = self.reencrypt_secret(
                             client.registration_access_token_encrypted
                         )
-                    session.add(client)
+                await session.commit()
 
-            return RotationResult(
-                success=True,
-                clients_rotated=len(clients),
-                dry_run=False
-            )
+                return RotationResult(
+                    success=True,
+                    clients_rotated=len(clients),
+                    dry_run=False
+                )
 
 
 def parse_args() -> argparse.Namespace:
@@ -270,19 +265,7 @@ async def main() -> int:
             logger.info("Pre-flight checks: validating database connection")
             await rotator.validate_database()
 
-            clients = await rotator.fetch_dcr_clients()
-            logger.info(f"Pre-flight checks: found {len(clients)} DCR clients")
-
-            if len(clients) == 0:
-                logger.warning("No DCR clients found - nothing to rotate")
-                return 0
-
-            if args.dry_run:
-                logger.info(f"Dry-run mode: testing decrypt/re-encrypt on {len(clients)} clients")
-            else:
-                logger.info(f"Production mode: rotating {len(clients)} clients")
-
-            result = await rotator.rotate(clients, dry_run=args.dry_run)
+            result = await rotator.rotate(dry_run=args.dry_run)
 
             if result.success:
                 if args.dry_run:
