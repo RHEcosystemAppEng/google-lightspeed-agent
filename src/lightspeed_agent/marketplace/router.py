@@ -15,6 +15,8 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
+from google.auth.transport import requests as google_requests
+from google.oauth2 import id_token
 
 from lightspeed_agent.config import get_settings
 from lightspeed_agent.dcr import DCRError, DCRRequest, get_dcr_service
@@ -57,6 +59,8 @@ async def hybrid_dcr_handler(request: Request) -> JSONResponse:
         return await _handle_dcr_request(body)
     elif "message" in body:
         # Path B: Pub/Sub event from Marketplace
+        if not await _verify_pubsub_token(request):
+            raise HTTPException(status_code=403, detail="Invalid Pub/Sub token")
         return await _handle_pubsub_event(body)
     else:
         # Unknown request format
@@ -104,6 +108,31 @@ async def _handle_dcr_request(body: dict[str, Any]) -> JSONResponse:
             "client_secret_expires_at": result.client_secret_expires_at,
         },
     )
+
+
+async def _verify_pubsub_token(request: Request) -> bool:
+    """Verify the Google Pub/Sub push OIDC token.
+
+    Returns True if verification succeeds or is disabled (no PUBSUB_AUDIENCE set).
+    """
+    settings = get_settings()
+    audience = settings.pubsub_verification_audience
+    if not audience:
+        logger.debug("Pub/Sub token verification disabled (no PUBSUB_VERIFICATION_AUDIENCE)")
+        return True
+
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        logger.warning("Missing or invalid Authorization header for Pub/Sub push")
+        return False
+
+    token = auth_header.removeprefix("Bearer ")
+    try:
+        id_token.verify_oauth2_token(token, google_requests.Request(), audience)
+        return True
+    except Exception as e:
+        logger.warning("Pub/Sub token verification failed: %s", e)
+        return False
 
 
 async def _handle_pubsub_event(body: dict[str, Any]) -> JSONResponse:
