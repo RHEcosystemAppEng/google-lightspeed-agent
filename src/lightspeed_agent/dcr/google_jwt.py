@@ -177,7 +177,7 @@ class GoogleJWTValidator:
         Returns:
             GoogleJWTClaims on success, DCRError on failure.
         """
-        if self._settings.skip_jwt_validation:
+        if self._settings.skip_jwt_validation or self._settings.skip_dcr_jwt_validation:
             return await self._decode_without_verification(software_statement)
 
         try:

@@ -1,0 +1,48 @@
+Thank you for installing {{ .Chart.Name }}!
+
+Deployment mode: {{ .Values.deploymentMode }}
+
+== Agent ==
+
+Get the agent Route URL:
+
+  export AGENT_HOST=$(oc get route {{ include "lightspeed-agent.fullname" . }} -n {{ .Release.Namespace }} -o jsonpath='{.spec.host}')
+  echo "Agent URL: https://${AGENT_HOST}"
+
+Verify the agent is healthy:
+
+  curl -s https://${AGENT_HOST}/health
+  curl -s https://${AGENT_HOST}/.well-known/agent.json | python -m json.tool
+
+{{- if eq .Values.deploymentMode "standalone" }}
+
+== Standalone UI ==
+
+The standalone UI is a ClusterIP service (not publicly exposed).
+Use port-forward to access it from your local machine:
+
+  oc port-forward svc/{{ include "lightspeed-agent.uiServiceName" . }} 8080:{{ .Values.standaloneUI.port }} -n {{ .Release.Namespace }}
+
+Then open http://localhost:8080 in your browser.
+
+== Handler ==
+
+The marketplace handler is a ClusterIP service (not publicly exposed).
+It is accessible within the cluster at:
+
+  http://{{ include "lightspeed-agent.handlerServiceName" . }}:{{ .Values.handler.port }}
+
+{{- end }}
+
+== Next Steps ==
+
+1. Update the agent provider URL in your values file:
+
+   agent:
+     providerUrl: "https://<AGENT_HOST>"
+
+2. Apply the update:
+
+   helm upgrade {{ .Release.Name }} deploy/openshift/ \
+     -f deploy/openshift/my-values.yaml \
+     -n {{ .Release.Namespace }}
