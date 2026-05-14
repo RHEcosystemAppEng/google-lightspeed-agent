@@ -17,6 +17,7 @@ This agent provides AI-powered access to Red Hat Insights services, enabling nat
 
 - Built with Google ADK and Gemini 2.5 Flash
 - A2A protocol support with SSE streaming for multi-agent ecosystems
+- A2UI protocol support for rich interactive UI rendering in Gemini Enterprise
 - OAuth 2.0 authentication via Red Hat SSO
 - Dynamic Client Registration (DCR) with Red Hat SSO via GMA SSO API
 - Google Cloud Marketplace integration (Gemini Enterprise)
@@ -251,6 +252,7 @@ lightspeed_agent/
 │       └── lightspeed-agent-secret.yaml
 └── src/
     └── lightspeed_agent/
+        ├── a2ui/               # A2UI integration (rich UI for Gemini Enterprise)
         ├── api/                # A2A endpoints and AgentCard
         │   └── a2a/            # A2A protocol setup
         ├── auth/               # OAuth 2.0 authentication
@@ -274,6 +276,7 @@ lightspeed_agent/
 Comprehensive documentation is available in the [docs/](docs/) directory:
 
 - [Architecture Overview](docs/architecture.md) - Two-service architecture and data flows
+- [A2UI Integration](docs/a2ui.md) - Rich UI rendering for Gemini Enterprise
 - [Authentication](docs/authentication.md) - OAuth 2.0, DCR, JWT validation, MCP authentication
 - [MCP Server Integration](docs/mcp-integration.md) - Red Hat Lightspeed MCP server setup
 - [Authentication Guide](docs/authentication.md) - OAuth 2.0 and JWT validation

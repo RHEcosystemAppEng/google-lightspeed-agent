@@ -356,11 +356,21 @@ def create_agent() -> LlmAgent:
         logger.warning(f"Failed to create MCP toolset: {e}", exc_info=True)
         logger.info("Agent created without MCP tools")
 
+    instruction = AGENT_INSTRUCTION
+    if settings.a2ui_enabled:
+        try:
+            from lightspeed_agent.a2ui.prompt import generate_a2ui_instruction
+
+            instruction = generate_a2ui_instruction(AGENT_INSTRUCTION)
+            logger.info("A2UI enabled: agent instruction augmented with A2UI schema")
+        except Exception as e:
+            logger.warning(f"Failed to initialize A2UI, using plain instruction: {e}")
+
     return LlmAgent(
         name=settings.agent_name,
         model=gemini_model,
         description=settings.agent_description,
-        instruction=AGENT_INSTRUCTION,
+        instruction=instruction,
         tools=tools,
         planner=PlanReActPlanner(),
     )
