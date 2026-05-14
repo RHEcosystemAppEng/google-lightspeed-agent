@@ -739,12 +739,11 @@ export GOOGLE_CLOUD_LOCATION="us-central1"
 # Run setup script
 ./deploy/cloudrun/setup.sh
 
-# Deploy both services
+# Option A: Manual deployment with deploy.sh
 ./deploy/cloudrun/deploy.sh --service all --build --allow-unauthenticated
 
-# Or deploy individually:
-./deploy/cloudrun/deploy.sh --service handler --allow-unauthenticated
-./deploy/cloudrun/deploy.sh --service agent --allow-unauthenticated
+# Option B: CI/CD pipeline with Cloud Build (pulls pre-built images from Quay.io, pushes to GCR, and deploys)
+gcloud builds submit --config=cloudbuild.yaml --substitutions=_ALLOW_UNAUTHENTICATED=true
 ```
 
 ## License

@@ -581,6 +581,90 @@ sed -e "s|\${PROJECT_ID}|$GOOGLE_CLOUD_PROJECT|g" \
     gcloud run services replace - --region=$GOOGLE_CLOUD_LOCATION --project=$GOOGLE_CLOUD_PROJECT
 ```
 
+### Alternative: Deploy with Cloud Build
+
+Instead of running `deploy.sh` manually (step 7), you can use Google Cloud Build
+to pull pre-built images from Quay.io (built by Konflux), push them to GCR, and
+deploy both services in a single command. Cloud Build also handles step 6 (Copy
+MCP Image to GCR) automatically.
+
+**Prerequisites** (in addition to steps 1-5 above):
+
+Grant the Cloud Build service account the required roles:
+
+```bash
+PROJECT_NUMBER=$(gcloud projects describe $GOOGLE_CLOUD_PROJECT --format='value(projectNumber)')
+CB_SA="${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com"
+
+gcloud projects add-iam-policy-binding $GOOGLE_CLOUD_PROJECT \
+  --member="serviceAccount:$CB_SA" --role="roles/run.admin"
+gcloud projects add-iam-policy-binding $GOOGLE_CLOUD_PROJECT \
+  --member="serviceAccount:$CB_SA" --role="roles/iam.serviceAccountUser"
+gcloud projects add-iam-policy-binding $GOOGLE_CLOUD_PROJECT \
+  --member="serviceAccount:$CB_SA" --role="roles/pubsub.editor"
+```
+
+**Deploy:**
+
+```bash
+# Pull images from Quay.io and deploy everything (uses defaults from steps 1-2)
+gcloud builds submit --config=cloudbuild.yaml
+
+# Deploy with public access
+gcloud builds submit --config=cloudbuild.yaml \
+  --substitutions=_ALLOW_UNAUTHENTICATED=true
+
+# Override region or image tag
+gcloud builds submit --config=cloudbuild.yaml \
+  --substitutions=_REGION=europe-west1,_IMAGE_TAG=v1.0
+
+# Deploy specific image tags from Quay.io
+gcloud builds submit --config=cloudbuild.yaml \
+  --substitutions=_AGENT_SOURCE_IMAGE=quay.io/ecosystem-appeng/google-lightspeed-agent:v1.0,_HANDLER_SOURCE_IMAGE=quay.io/ecosystem-appeng/google-marketplace-handler:v1.0
+```
+
+**What the pipeline does:**
+
+| Phase | Steps | Description |
+|-------|-------|-------------|
+| Copy | `copy-agent`, `copy-handler`, `copy-mcp` | Pulls pre-built images from Quay.io and pushes to GCR (parallel) |
+| Deploy | `deploy-handler`, `deploy-agent` | Deploys handler first, then agent (using YAML configs with sed substitution, same as `deploy.sh`) |
+| Post-deploy | `allow-unauthenticated`, `configure-pubsub`, `update-agent-urls` | Configures IAM, Pub/Sub push subscription, and sets `AGENT_PROVIDER_URL`/`MARKETPLACE_HANDLER_URL` |
+
+**Substitution variables:**
+
+All variables have defaults matching `deploy.sh`. Override any with `--substitutions`:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `_SERVICE_NAME` | `lightspeed-agent` | Cloud Run agent service name |
+| `_HANDLER_SERVICE_NAME` | `marketplace-handler` | Cloud Run handler service name |
+| `_REGION` | `us-central1` | GCP region |
+| `_VERTEXAI_LOCATION` | `global` | Vertex AI location |
+| `_IMAGE_TAG` | `latest` | Container image tag |
+| `_SERVICE_ACCOUNT_NAME` | `lightspeed-agent` | GCP service account name |
+| `_DB_INSTANCE_NAME` | `lightspeed-agent-db` | Cloud SQL instance name |
+| `_VPC_CONNECTOR_NAME` | `lightspeed-redis-conn` | VPC connector for Redis |
+| `_MCP_SOURCE_IMAGE` | `quay.io/.../red-hat-lightspeed-mcp:latest` | MCP image to mirror to GCR |
+| `_ALLOW_UNAUTHENTICATED` | `false` | Allow public access to both services |
+| `_PUBSUB_INVOKER_NAME` | `pubsub-invoker` | Pub/Sub invoker SA name |
+| `_PUBSUB_TOPIC` | `marketplace-entitlements` | Pub/Sub topic for marketplace events |
+| `_PUBSUB_SUBSCRIPTION` | *(derived from topic)* | Pub/Sub subscription name (defaults to `{topic}-sub`) |
+| `_AGENT_SOURCE_IMAGE` | `quay.io/ecosystem-appeng/google-lightspeed-agent:latest` | Agent image to pull from Quay.io |
+| `_HANDLER_SOURCE_IMAGE` | `quay.io/ecosystem-appeng/google-marketplace-handler:latest` | Handler image to pull from Quay.io |
+| `_SERVICE_CONTROL_SERVICE_NAME` | *(empty)* | Google Cloud Service Control service name for usage metering |
+
+**Cloud Build vs deploy.sh:**
+
+| | `deploy.sh` | `cloudbuild.yaml` |
+|-|-------------|-------------------|
+| Image source | Optional local build (`--build` flag) | Pulls pre-built images from Quay.io (built by Konflux) |
+| MCP image copy | Manual (step 6) | Automatic |
+| Deployment | Manual, one service at a time | Full pipeline, both services |
+| Pub/Sub setup | Automatic | Automatic |
+| URL update | Automatic | Automatic |
+| Use case | Manual/iterative deployment | CI/CD pipeline |
+
 ## Service Configuration
 
 ### Agent Container
