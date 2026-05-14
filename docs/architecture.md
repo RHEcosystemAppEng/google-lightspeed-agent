@@ -67,7 +67,7 @@ The system consists of **two separate services**:
 │  │                              ▼                                            │  │
 │  │  ┌─────────────────────────────────────────────────────────────────┐      │  │
 │  │  │                        Agent Core                               │      │  │
-│  │  │                  (Google ADK + Gemini)                          │      │  │
+│  │  │              (Google ADK + Configurable LLM)                    │      │  │
 │  │  └─────────────────────────────────────────────────────────────────┘      │  │
 │  │                              │                                            │  │
 │  │                              ▼                                            │  │
@@ -80,9 +80,9 @@ The system consists of **two separate services**:
          │                    │
          ▼                    ▼
 ┌─────────────┐      ┌─────────────────────────┐
-│   Gemini    │      │  Red Hat Insights APIs  │
-│     API     │      │  (via MCP Server)       │
-│  (Vertex)   │      │  - Advisor              │
+│     LLM     │      │  Red Hat Insights APIs  │
+│  Provider   │      │  (via MCP Server)       │
+│(configurable│      │  - Advisor              │
 └─────────────┘      │  - Vulnerability        │
                      │  - Patch                │
                      │  - Content              │
@@ -137,7 +137,7 @@ Handles all authentication and authorization:
 
 The AI agent built with Google ADK:
 
-- **Gemini Model**: Uses Gemini 2.5 Flash for natural language understanding
+- **LLM Model**: Uses a configurable LLM (Gemini 2.5 Flash by default) for natural language understanding. Supports alternative providers via LiteLLM.
 - **Tool Orchestration**: Manages tool calls to MCP server
 - **Session Management**: Maintains conversation context
 
@@ -293,7 +293,7 @@ src/lightspeed_agent/
 
 | Service | Used By | Purpose | Required |
 |---------|---------|---------|----------|
-| Google Gemini | Agent | AI model for queries | Yes |
+| LLM Provider | Agent | AI model for queries (Gemini by default, configurable via LiteLLM) | Yes |
 | Red Hat SSO | Both | User authentication, DCR | Yes |
 | Red Hat Lightspeed MCP | Agent | Data access | Yes |
 | PostgreSQL | Both | Data persistence | Yes (Production) |

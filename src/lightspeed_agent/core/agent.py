@@ -1,4 +1,4 @@
-"""Core agent definition using Google ADK with Gemini 2.5 Flash."""
+"""Core agent definition using Google ADK with configurable LLM backend."""
 
 import logging
 import os
@@ -6,9 +6,11 @@ from typing import Any
 
 from google.adk.agents import LlmAgent
 from google.adk.models import Gemini
+from google.adk.models.base_llm import BaseLlm
 from google.adk.planners import PlanReActPlanner
 
 from lightspeed_agent.config import get_settings
+from lightspeed_agent.config.settings import Settings
 from lightspeed_agent.core.gemini_retry import http_retry_options_from_settings
 
 logger = logging.getLogger(__name__)
@@ -306,6 +308,62 @@ def _setup_environment() -> None:
         os.environ["GOOGLE_API_KEY"] = settings.google_api_key
 
 
+def _create_model(settings: Settings) -> BaseLlm:
+    """Create the LLM model instance based on provider configuration.
+
+    Args:
+        settings: Application settings.
+
+    Returns:
+        Configured BaseLlm instance (Gemini or LiteLlm).
+
+    Raises:
+        ValueError: If litellm provider is selected but LLM_MODEL is not set.
+        RuntimeError: If litellm provider is selected but the package is not installed.
+    """
+    if settings.llm_provider == "litellm":
+        if not settings.llm_model:
+            raise ValueError(
+                "LLM_PROVIDER=litellm requires LLM_MODEL to be set "
+                "(e.g., 'openai/gpt-4o', 'anthropic/claude-sonnet-4-20250514')"
+            )
+        try:
+            from google.adk.models.lite_llm import LiteLlm
+        except ImportError:
+            raise RuntimeError(
+                "LLM_PROVIDER=litellm requires the 'litellm' package. "
+                "Install with: pip install litellm"
+            ) from None
+
+        kwargs: dict[str, Any] = {"model": settings.llm_model}
+        if settings.llm_api_key:
+            kwargs["api_key"] = settings.llm_api_key
+        if settings.llm_api_base:
+            kwargs["api_base"] = settings.llm_api_base
+
+        logger.info(
+            "LiteLLM model: model=%s api_key=%s api_base=%s",
+            settings.llm_model,
+            "***" if settings.llm_api_key else "not set",
+            settings.llm_api_base or "not set",
+        )
+        return LiteLlm(**kwargs)
+
+    model_name = settings.llm_model or settings.gemini_model
+    retry_opts = http_retry_options_from_settings(settings)
+    logger.info(
+        "Gemini model: model=%s retry_attempts=%s initial_delay=%ss "
+        "max_delay=%ss exp_base=%s jitter=%s",
+        model_name,
+        settings.gemini_http_retry_attempts,
+        settings.gemini_http_retry_initial_delay,
+        settings.gemini_http_retry_max_delay,
+        settings.gemini_http_retry_exp_base,
+        settings.gemini_http_retry_jitter,
+    )
+    return Gemini(model=model_name, retry_options=retry_opts)
+
+
 def create_agent() -> LlmAgent:
     """Create the Lightspeed Agent with MCP tools.
 
@@ -319,20 +377,7 @@ def create_agent() -> LlmAgent:
     _setup_environment()
     settings = get_settings()
 
-    retry_opts = http_retry_options_from_settings(settings)
-    gemini_model = Gemini(
-        model=settings.gemini_model,
-        retry_options=retry_opts,
-    )
-    logger.info(
-        "Gemini HTTP retry: attempts=%s initial_delay=%ss max_delay=%ss "
-        "exp_base=%s jitter=%s",
-        settings.gemini_http_retry_attempts,
-        settings.gemini_http_retry_initial_delay,
-        settings.gemini_http_retry_max_delay,
-        settings.gemini_http_retry_exp_base,
-        settings.gemini_http_retry_jitter,
-    )
+    model = _create_model(settings)
 
     tools: list[Any] = []
 
@@ -349,8 +394,9 @@ def create_agent() -> LlmAgent:
         )
         tools = [mcp_toolset]
         logger.info(
-            f"Created agent with MCP tools (read_only={settings.mcp_read_only}, "
-            f"model={settings.gemini_model})"
+            "Created agent with MCP tools (read_only=%s, provider=%s)",
+            settings.mcp_read_only,
+            settings.llm_provider,
         )
     except Exception as e:
         logger.warning(f"Failed to create MCP toolset: {e}", exc_info=True)
@@ -358,7 +404,7 @@ def create_agent() -> LlmAgent:
 
     return LlmAgent(
         name=settings.agent_name,
-        model=gemini_model,
+        model=model,
         description=settings.agent_description,
         instruction=AGENT_INSTRUCTION,
         tools=tools,

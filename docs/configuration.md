@@ -6,7 +6,73 @@ This document describes all configuration options for the Lightspeed Agent.
 
 Configuration is managed through environment variables. Copy `.env.example` to `.env` and customize for your environment.
 
-### Google AI / Gemini
+### LLM Provider
+
+The agent supports multiple LLM backends via Google ADK. By default it uses Gemini, but you can switch to any provider supported by [LiteLLM](https://docs.litellm.ai/docs/providers) (OpenAI, Anthropic, Azure, self-hosted models, etc.).
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `LLM_PROVIDER` | `gemini` | LLM provider backend: `gemini` (Google AI Studio or Vertex AI) or `litellm` (100+ providers via LiteLLM) |
+| `LLM_MODEL` | - | Model name override. For `gemini`: overrides `GEMINI_MODEL` if set. For `litellm`: required, uses `provider/model` format (e.g., `openai/gpt-4o`) |
+| `LLM_API_KEY` | - | API key for non-Google LLM providers (`litellm` only). Some providers also accept their own env vars (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, etc.) |
+| `LLM_API_BASE` | - | Custom API endpoint URL (`litellm` only). For self-hosted models or proxy endpoints |
+
+**Default (Gemini — no changes needed):**
+
+```bash
+# These are the defaults; no LLM_* variables required
+LLM_PROVIDER=gemini
+GEMINI_MODEL=gemini-2.5-flash
+```
+
+**Different Gemini model:**
+
+```bash
+LLM_MODEL=gemini-2.0-flash
+```
+
+**OpenAI:**
+
+```bash
+LLM_PROVIDER=litellm
+LLM_MODEL=openai/gpt-4o
+LLM_API_KEY=sk-your-openai-key    # or set OPENAI_API_KEY env var
+```
+
+**Anthropic:**
+
+```bash
+LLM_PROVIDER=litellm
+LLM_MODEL=anthropic/claude-sonnet-4-20250514
+LLM_API_KEY=sk-ant-your-key       # or set ANTHROPIC_API_KEY env var
+```
+
+**Claude on Vertex AI:**
+
+```bash
+LLM_PROVIDER=litellm
+LLM_MODEL=vertex_ai/claude-3-5-sonnet-v2@20241022
+GOOGLE_CLOUD_PROJECT=your-project-id
+GOOGLE_CLOUD_LOCATION=us-east5
+```
+
+**Custom / self-hosted endpoint (e.g., vLLM, Ollama, OpenRouter):**
+
+```bash
+LLM_PROVIDER=litellm
+LLM_MODEL=openai/my-model
+LLM_API_BASE=http://localhost:8080/v1
+LLM_API_KEY=sk-xxx
+```
+
+> **Notes:**
+> - Gemini HTTP retry settings (`GEMINI_HTTP_RETRY_*`) only apply when `LLM_PROVIDER=gemini`.
+> - Google's built-in ADK tools (e.g., `SearchTool`) only work with Gemini models. MCP tools work with all providers.
+> - For available LiteLLM model strings, see [LiteLLM providers](https://docs.litellm.ai/docs/providers).
+
+### Google AI / Gemini (provider-specific)
+
+These settings apply when `LLM_PROVIDER=gemini` (the default).
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -14,7 +80,7 @@ Configuration is managed through environment variables. Copy `.env.example` to `
 | `GOOGLE_API_KEY` | - | Google AI Studio API key (required if not using Vertex AI) |
 | `GOOGLE_CLOUD_PROJECT` | - | GCP project ID (required for Vertex AI) |
 | `GOOGLE_CLOUD_LOCATION` | `global` | Vertex AI model location (use `global` for pay-as-you-go) |
-| `GEMINI_MODEL` | `gemini-2.5-flash` | Gemini model to use |
+| `GEMINI_MODEL` | `gemini-2.5-flash` | Gemini model to use (overridden by `LLM_MODEL` if set) |
 | `GEMINI_HTTP_RETRY_ATTEMPTS` | `5` | Max HTTP attempts per model call (including the first). Use `1` to disable SDK retries. Aligns with [google-genai defaults](https://cloud.google.com/vertex-ai/generative-ai/docs/retry-strategy). |
 | `GEMINI_HTTP_RETRY_INITIAL_DELAY` | `1.0` | Initial backoff delay in seconds (exponential backoff with jitter). |
 | `GEMINI_HTTP_RETRY_MAX_DELAY` | `60.0` | Maximum delay in seconds between retries. |

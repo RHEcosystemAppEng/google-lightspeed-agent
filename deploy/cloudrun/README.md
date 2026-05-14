@@ -17,6 +17,7 @@ Deploy the Red Hat Lightspeed Agent for Google Cloud to Google Cloud Run for pro
   - [7. Deploy](#7-deploy)
 - [Service Configuration](#service-configuration)
   - [Agent Container](#agent-container)
+  - [Using a Different LLM](#using-a-different-llm)
   - [Rate Limiting (Redis)](#rate-limiting-redis)
   - [MCP Output Size Guard](#mcp-output-size-guard)
   - [MCP Server Sidecar](#mcp-server-sidecar)
@@ -77,7 +78,7 @@ The deployment consists of **two separate Cloud Run services** plus **Cloud Memo
 │  ┌──────────────────┐   ┌──────────────────┐ │    │                      │
 │  │ Lightspeed Agent │   │ Lightspeed MCP   │ │    │  Production:         │
 │  │                  │   │ Server (8081)    │ │    │   sso.redhat.com     │
-│  │  - Gemini 2.5    │   │                  │ │    │                      │
+│  │  - LLM (config.) │   │                  │ │    │                      │
 │  │  - A2A protocol  │◄-►│ - Advisor tools  │ │    │                      │
 │  │  - OAuth 2.0     │   │ - Inventory tools│ │    │                      │
 │  │                  │   │ - Vuln. tools    │ │    │                      │
@@ -591,6 +592,92 @@ sed -e "s|\${PROJECT_ID}|$GOOGLE_CLOUD_PROJECT|g" \
 | Memory | 2Gi | Memory limit |
 | Port | 8000 | Container port |
 
+### Using a Different LLM
+
+By default the agent uses **Gemini 2.5 Flash** via Vertex AI. You can switch to a different model on Vertex AI or point the agent at an external model endpoint (e.g., a model served on OpenShift).
+
+#### Different model on Vertex AI
+
+To use a different model available through Vertex AI (e.g., a partner model like GTP-OSS 120B), set `LLM_PROVIDER=litellm` and use the `vertex_ai/` model prefix:
+
+```bash
+gcloud run services update ${SERVICE_NAME:-lightspeed-agent} \
+  --region=$GOOGLE_CLOUD_LOCATION \
+  --project=$GOOGLE_CLOUD_PROJECT \
+  --update-env-vars="\
+LLM_PROVIDER=litellm,\
+LLM_MODEL=vertex_ai/gtp-oss-120b"
+```
+
+The agent uses the existing `GOOGLE_CLOUD_PROJECT` and Vertex AI credentials — no additional API keys are needed. For Claude models on Vertex AI:
+
+```bash
+gcloud run services update ${SERVICE_NAME:-lightspeed-agent} \
+  --region=$GOOGLE_CLOUD_LOCATION \
+  --project=$GOOGLE_CLOUD_PROJECT \
+  --update-env-vars="\
+LLM_PROVIDER=litellm,\
+LLM_MODEL=vertex_ai/claude-3-5-sonnet-v2@20241022"
+```
+
+To switch back to the default Gemini model:
+
+```bash
+gcloud run services update ${SERVICE_NAME:-lightspeed-agent} \
+  --region=$GOOGLE_CLOUD_LOCATION \
+  --project=$GOOGLE_CLOUD_PROJECT \
+  --remove-env-vars="LLM_PROVIDER,LLM_MODEL"
+```
+
+#### External model endpoint (e.g., OpenShift)
+
+To use a model hosted outside Google Cloud — for example, a model served via vLLM or text-generation-inference on OpenShift AI — point the agent at the model's OpenAI-compatible endpoint:
+
+**1. Store the API key in Secret Manager:**
+
+```bash
+echo -n 'your-model-api-key' | \
+  gcloud secrets versions add llm-api-key --data-file=- --project=$GOOGLE_CLOUD_PROJECT
+
+# Grant the runtime SA access to the new secret
+gcloud secrets add-iam-policy-binding llm-api-key \
+  --member="serviceAccount:${SERVICE_ACCOUNT_NAME:-lightspeed-agent}@${GOOGLE_CLOUD_PROJECT}.iam.gserviceaccount.com" \
+  --role="roles/secretmanager.secretAccessor" \
+  --project=$GOOGLE_CLOUD_PROJECT
+```
+
+**2. Add the secret to `service.yaml`:**
+
+In the agent container's `env` section, add:
+
+```yaml
+- name: LLM_API_KEY
+  valueFrom:
+    secretKeyRef:
+      key: latest
+      name: llm-api-key
+```
+
+**3. Deploy with the external model settings:**
+
+```bash
+gcloud run services update ${SERVICE_NAME:-lightspeed-agent} \
+  --region=$GOOGLE_CLOUD_LOCATION \
+  --project=$GOOGLE_CLOUD_PROJECT \
+  --update-env-vars="\
+LLM_PROVIDER=litellm,\
+LLM_MODEL=openai/your-model-name,\
+LLM_API_BASE=https://your-model.apps.ocp.example.com/v1"
+```
+
+The `openai/` prefix tells LiteLLM to use the OpenAI-compatible chat completions protocol, which is the standard API exposed by vLLM, text-generation-inference, and most model serving frameworks.
+
+> **Notes:**
+> - The external endpoint must be reachable from Cloud Run. For private endpoints, configure a [VPC connector](https://cloud.google.com/run/docs/configuring/vpc-connectors) or [Private Google Access](https://cloud.google.com/run/docs/configuring/private-networking).
+> - Gemini HTTP retry settings (`GEMINI_HTTP_RETRY_*`) do not apply to `litellm` providers. LiteLLM has its own retry logic.
+> - MCP tools work with all model providers. Google's built-in ADK tools (e.g., `SearchTool`) only work with Gemini.
+> - See [Configuration — LLM Provider](../../docs/configuration.md#llm-provider) for all available settings.
+
 ### Rate Limiting (Redis)
 
 Both the agent and the marketplace handler use Cloud Memorystore for Redis for distributed rate limiting. The same Redis instance and configuration are shared by both services. Required configuration:
@@ -824,7 +911,7 @@ docker push docker.io/YOUR_USERNAME/red-hat-lightspeed-mcp:latest
 
 The MCP server runs as a sidecar container alongside the agent:
 
-1. **Agent Container** (port 8000): Handles A2A requests, uses Gemini for AI
+1. **Agent Container** (port 8000): Handles A2A requests, uses configurable LLM (Gemini by default)
 2. **MCP Server Container** (port 8080): Provides tools for Red Hat Insights APIs
 
 When the agent needs to access Insights data (e.g., system vulnerabilities, recommendations):

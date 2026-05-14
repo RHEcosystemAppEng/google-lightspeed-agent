@@ -46,6 +46,7 @@ dependencies = [
 agent = [
     # AI/Agent frameworks
     "google-adk>=0.5.0",
+    "litellm>=1.30.0",
     "a2a-sdk[http-server]>=0.3.0,<1.0.0",
     "mcp>=1.0.0",
     # Configuration
