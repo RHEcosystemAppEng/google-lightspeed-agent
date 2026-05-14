@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 from google.adk.tools.mcp_tool.mcp_session_manager import (
     SseConnectionParams,
     StdioConnectionParams,
-    StreamableHTTPServerParams,
+    StreamableHTTPConnectionParams,
 )
 from mcp import StdioServerParameters
 
@@ -109,7 +109,7 @@ def _create_http_toolset(
         tool_filter: Optional list of tool names to expose.
         header_provider: Optional callable for dynamic header injection.
     """
-    connection_params = StreamableHTTPServerParams(
+    connection_params = StreamableHTTPConnectionParams(
         url=config.get_http_url(),
     )
 

@@ -360,7 +360,7 @@ def create_agent() -> LlmAgent:
         name=settings.agent_name,
         model=gemini_model,
         description=settings.agent_description,
-        instruction=AGENT_INSTRUCTION,
+        static_instruction=AGENT_INSTRUCTION,
         tools=tools,
         planner=PlanReActPlanner(),
     )

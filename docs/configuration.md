@@ -380,7 +380,7 @@ Project metadata and dependencies. Modify to add/update dependencies:
 ```toml
 [project]
 dependencies = [
-    "google-adk>=0.5.0",
+    "google-adk>=1.0.0,<2.0.0",
     # Add more dependencies here
 ]
 ```
