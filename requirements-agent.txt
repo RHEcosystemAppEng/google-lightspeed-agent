@@ -2107,7 +2107,9 @@ python-dotenv==1.2.2 \
 python-multipart==0.0.28 \
     --hash=sha256:10faac07eb966c3f48dc415f9dee46c04cb10d58d30a35677db8027c825ed9b6 \
     --hash=sha256:8550da197eac0f7ab748961fc9509b999fa2662ea25cef857f05249f6893c0f8
-    # via mcp
+    # via
+    #   lightspeed-agent (pyproject.toml)
+    #   mcp
 pyyaml==6.0.3 \
     --hash=sha256:00c4bdeba853cc34e7dd471f16b4114f4162dc03e6b7afcc2128711f0eca823c \
     --hash=sha256:0150219816b6a1fa26fb4699fb7daa9caf09eb1999f3b70fb6e786805e80375a \
@@ -2193,9 +2195,9 @@ referencing==0.37.0 \
     # via
     #   jsonschema
     #   jsonschema-specifications
-requests==2.34.0 \
-    --hash=sha256:7d62fe92f50eb82c529b0916bb445afa1531a566fc8f35ffdc64446e771b856a \
-    --hash=sha256:917520a21b767485ce7c588f4ebb917c436b24a31231b44228715eaeb5a52c60
+requests==2.34.1 \
+    --hash=sha256:0fc5669f2b69704449fe1552360bd2a73a54512dfd03e65529157f1513322beb \
+    --hash=sha256:bf38a3ff993960d3dd819c08862c40b3c703306eb7c744fcd9f4ddbb95b548f0
     # via
     #   lightspeed-agent (pyproject.toml)
     #   google-adk
