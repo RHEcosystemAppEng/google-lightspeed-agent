@@ -20,6 +20,8 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      securityContext:
+        runAsNonRoot: true
       containers:
         - name: standalone-ui
           image: {{ printf "%s:%s" .Values.standaloneUI.image.repository .Values.standaloneUI.image.tag }}

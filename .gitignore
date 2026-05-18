@@ -104,6 +104,7 @@ vertex-credentials.json
 my-secrets.yaml
 *-secrets.yaml
 !deploy/podman/lightspeed-agent-secret.yaml
+deploy/openshift/secrets.yaml
 
 # Config directory (keep .gitkeep only)
 config/*

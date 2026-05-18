@@ -23,6 +23,8 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      securityContext:
+        runAsNonRoot: true
       containers:
         - name: marketplace-handler
           image: {{ printf "%s:%s" .Values.handler.image.repository .Values.handler.image.tag }}

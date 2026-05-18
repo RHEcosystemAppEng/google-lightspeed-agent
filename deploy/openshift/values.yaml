@@ -40,7 +40,7 @@ agent:
   host: "0.0.0.0"
   port: 8000
   probePort: 8002
-  displayName: "Red Hat Lightspeed Agent for Google Cloud"
+  displayName: "Red Hat Lightspeed Agent for Google Cloud (OpenShift)"
   providerOrganizationUrl: "https://www.redhat.com"
   loggingDetail: basic
   toolResultMaxChars: 204800
@@ -286,6 +286,9 @@ standaloneUI:
 # Secrets — these are references only.
 # Create the Secret separately from the template (see secret.yaml)
 # or supply values here for the template to generate it.
+# Recommended: copy secrets.yaml.example to secrets.yaml, fill in real
+# values, and install with: helm install -f values.yaml -f secrets.yaml ...
+# secrets.yaml is git-ignored to prevent accidental credential commits.
 # ---------------------------------------------------------------------------
 secrets:
   # Set to true to have the chart create the Secret from the values below.
