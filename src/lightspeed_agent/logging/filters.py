@@ -19,8 +19,17 @@ class AuditContextFilter(logging.Filter):
     """
 
     def filter(self, record: logging.LogRecord) -> bool:
-        record.user_id = get_request_user_id() or ""
-        record.org_id = get_request_org_id() or ""
-        record.order_id = get_request_order_id() or ""
-        record.request_id = get_request_id() or ""
+        from lightspeed_agent.config import get_settings
+
+        settings = get_settings()
+        if settings.audit_logging_enabled:
+            record.user_id = get_request_user_id() or ""
+            record.org_id = get_request_org_id() or ""
+            record.order_id = get_request_order_id() or ""
+            record.request_id = get_request_id() or ""
+        else:
+            record.user_id = ""
+            record.org_id = ""
+            record.order_id = ""
+            record.request_id = ""
         return True

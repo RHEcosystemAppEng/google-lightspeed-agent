@@ -213,6 +213,14 @@ class Settings(BaseSettings):
         default="json",
         description="Log format",
     )
+    audit_logging_enabled: bool = Field(
+        default=True,
+        description=(
+            "Enable audit context injection (user_id, org_id, order_id, request_id) "
+            "into log records. Disabling removes PII from logs but reduces "
+            "forensic traceability."
+        ),
+    )
     agent_logging_detail: Literal["basic", "detailed"] = Field(
         default="basic",
         description="Agent execution logging detail level. "
