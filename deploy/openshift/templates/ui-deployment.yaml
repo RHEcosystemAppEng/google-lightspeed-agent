@@ -1,0 +1,59 @@
+{{- if eq (include "lightspeed-agent.uiEnabled" .) "true" }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "lightspeed-agent.uiServiceName" . }}
+  labels:
+    {{- include "lightspeed-agent.labels" . | nindent 4 }}
+    app.kubernetes.io/component: ui
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "lightspeed-agent.uiSelectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "lightspeed-agent.uiSelectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+      containers:
+        - name: standalone-ui
+          image: {{ printf "%s:%s" .Values.standaloneUI.image.repository .Values.standaloneUI.image.tag }}
+          imagePullPolicy: {{ .Values.standaloneUI.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.standaloneUI.port }}
+              protocol: TCP
+              name: http
+          env:
+            - name: AGENT_URL
+              value: {{ .Values.agent.providerUrl | quote }}
+            - name: SSO_ISSUER_URL
+              value: {{ .Values.sso.issuer | quote }}
+            - name: REDIRECT_URIS
+              value: {{ .Values.standaloneUI.redirectUris | quote }}
+            - name: AGENT_INTERNAL_URL
+              value: {{ printf "http://%s:%d" (include "lightspeed-agent.fullname" .) (int .Values.agent.port) | quote }}
+            - name: HANDLER_INTERNAL_URL
+              value: {{ printf "http://%s:%d" (include "lightspeed-agent.handlerServiceName" .) (int .Values.handler.port) | quote }}
+          resources:
+            {{- toYaml .Values.standaloneUI.resources | nindent 12 }}
+          readinessProbe:
+            httpGet:
+              path: /
+              port: {{ .Values.standaloneUI.port }}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /
+              port: {{ .Values.standaloneUI.port }}
+            periodSeconds: 30
+            failureThreshold: 3
+{{- end }}

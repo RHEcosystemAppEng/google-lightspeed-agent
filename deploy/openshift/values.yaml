@@ -1,0 +1,317 @@
+# =============================================================================
+# Red Hat Lightspeed Agent - Helm Values
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# Deployment mode
+# ---------------------------------------------------------------------------
+# hybrid     — Agent on OCP, marketplace handler stays on GCP (Cloud Run)
+# standalone — Everything on OCP (agent + handler + UI)
+deploymentMode: hybrid
+
+# ---------------------------------------------------------------------------
+# Image pull secrets — list of pre-created Secret names for private registries.
+# Create the secrets with: oc create secret docker-registry <name> ...
+# ---------------------------------------------------------------------------
+imagePullSecrets: []
+# - name: quay-pull-secret
+# - name: redhat-pull-secret
+
+# ---------------------------------------------------------------------------
+# Agent configuration
+# ---------------------------------------------------------------------------
+agent:
+  image:
+    repository: quay.io/ecosystem-appeng/google-lightspeed-agent
+    tag: latest
+    pullPolicy: Always
+  replicas: 1
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: "2"
+      memory: 2Gi
+  # Agent provider URL — override after the Route is created, or set a known hostname
+  providerUrl: "https://lightspeed-agent.apps.example.com"
+  name: lightspeed_agent
+  description: "Red Hat Lightspeed Agent"
+  host: "0.0.0.0"
+  port: 8000
+  probePort: 8002
+  displayName: "Red Hat Lightspeed Agent for Google Cloud (OpenShift)"
+  providerOrganizationUrl: "https://www.redhat.com"
+  loggingDetail: basic
+  toolResultMaxChars: 204800
+
+# ---------------------------------------------------------------------------
+# Red Hat Lightspeed MCP server (runs as sidecar in the agent pod)
+# ---------------------------------------------------------------------------
+mcp:
+  image:
+    repository: quay.io/redhat-services-prod/insights-management-tenant/insights-mcp/red-hat-lightspeed-mcp
+    tag: latest
+    pullPolicy: Always
+  transport: http
+  port: 8081
+  host: "0.0.0.0"
+  readOnly: true
+  # MCP toolset filter — comma-separated list of toolsets to load.
+  # Matches CloudRun: excludes image_builder (requires network access to OpenAPI spec).
+  # Available: advisor, inventory, vulnerability, planning, remediations, image_builder, rhsm, content_sources, rbac
+  toolset: "advisor,inventory,vulnerability,planning,rhsm,content_sources,rbac"
+  # Red Hat console base URL — override for staging (https://console.stage.redhat.com)
+  baseUrl: ""
+  # Red Hat SSO base URL for MCP — override for staging (https://sso.stage.redhat.com)
+  ssoBaseUrl: ""
+  # HTTP proxy for MCP — required for staging (behind Akamai edge lockdown)
+  proxyUrl: ""
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 512Mi
+
+# ---------------------------------------------------------------------------
+# Google AI / Gemini
+# ---------------------------------------------------------------------------
+google:
+  # Set to true to use Vertex AI instead of Google AI Studio
+  useVertexAI: false
+  cloudLocation: us-central1
+  geminiModel: gemini-2.5-flash
+  httpRetry:
+    attempts: 5
+    initialDelay: 1.0
+    maxDelay: 60.0
+    expBase: 2.0
+    jitter: 1.0
+
+# ---------------------------------------------------------------------------
+# Red Hat SSO / OAuth 2.0
+# ---------------------------------------------------------------------------
+sso:
+  issuer: "https://sso.redhat.com/auth/realms/redhat-external"
+  requiredScope: "api.console,api.ocm"
+  allowedScopes: "openid,profile,email,api.console,api.ocm,metering:admin"
+
+# ---------------------------------------------------------------------------
+# Authentication
+# ---------------------------------------------------------------------------
+auth:
+  # Skip JWT validation entirely (development only — do NOT enable in production)
+  skipJwtValidation: false
+  # Skip marketplace order-id validation while keeping JWT introspection.
+  # In hybrid mode this must be true (no local marketplace database).
+  # In standalone mode set to false to enable order validation.
+  skipOrderValidation: true
+  # Skip DCR software_statement JWT signature verification.
+  # Enable for standalone deployments where DCR requests are signed with
+  # a self-signed key (not Google's production service account).
+  # Does not affect the agent's Bearer token authentication.
+  skipDcrJwtValidation: false
+  # CORS allowed origins (comma-separated, empty = disabled in production)
+  corsAllowedOrigins: ""
+
+# ---------------------------------------------------------------------------
+# Rate limiting (Redis-backed)
+# ---------------------------------------------------------------------------
+rateLimit:
+  requestsPerMinute: 60
+  requestsPerHour: 1000
+  redisTimeoutMs: 200
+  keyPrefix: "lightspeed:ratelimit"
+  redisCaCert: ""
+
+# ---------------------------------------------------------------------------
+# Logging
+# ---------------------------------------------------------------------------
+logging:
+  level: INFO
+  format: json
+
+# ---------------------------------------------------------------------------
+# OpenTelemetry
+# ---------------------------------------------------------------------------
+otel:
+  enabled: false
+  serviceName: lightspeed_agent
+  exporterType: otlp
+  otlpEndpoint: "http://localhost:4317"
+  otlpHttpEndpoint: "http://localhost:4318"
+  tracesSampler: always_on
+  tracesSamplerArg: "1.0"
+
+# ---------------------------------------------------------------------------
+# Session PostgreSQL database
+# ---------------------------------------------------------------------------
+postgresql:
+  image:
+    repository: registry.redhat.io/rhel9/postgresql-16
+    tag: latest
+    pullPolicy: IfNotPresent
+  # Session storage backend: "database" persists sessions in PostgreSQL,
+  # "memory" uses in-memory sessions (lost on pod restart).
+  sessionBackend: memory
+  poolSize: 5
+  poolMaxOverflow: 10
+  user: sessions
+  database: agent_sessions
+  storage:
+    size: 1Gi
+    # storageClassName: ""   # uncomment to use a specific storage class
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+# ---------------------------------------------------------------------------
+# Marketplace PostgreSQL database (standalone mode only)
+# ---------------------------------------------------------------------------
+marketplacePostgresql:
+  image:
+    repository: registry.redhat.io/rhel9/postgresql-16
+    tag: latest
+    pullPolicy: IfNotPresent
+  user: marketplace
+  database: marketplace
+  storage:
+    size: 1Gi
+    # storageClassName: ""   # uncomment to use a specific storage class
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+# ---------------------------------------------------------------------------
+# Redis (rate limiting backend)
+# ---------------------------------------------------------------------------
+redis:
+  image:
+    repository: quay.io/fedora/redis-7
+    tag: latest
+    pullPolicy: IfNotPresent
+  storage:
+    size: 1Gi
+    # storageClassName: ""   # uncomment to use a specific storage class
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+# ---------------------------------------------------------------------------
+# Marketplace Handler (optional — enable for GCP deployments with
+# Google Cloud Marketplace integration)
+# ---------------------------------------------------------------------------
+handler:
+  image:
+    repository: quay.io/ecosystem-appeng/google-marketplace-handler
+    tag: latest
+    pullPolicy: Always
+  replicas: 1
+  host: "0.0.0.0"
+  port: 8001
+  # Marketplace product identifier (managed service name from Producer Portal).
+  # Required for entitlement approval and product-level Pub/Sub event filtering.
+  probePort: 8003
+  serviceControlServiceName: ""
+  metering:
+    staleClaimMinutes: 15
+    backfillMaxAgeHours: 168
+    backfillLimitPerRun: 20
+  gma:
+    apiBaseUrl: "https://sso.redhat.com/auth/realms/redhat-external/apis/beta/acs/v1/"
+    apiTimeout: 30
+  dcr:
+    clientNamePrefix: "gemini-order-"
+  route:
+    enabled: false
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 512Mi
+
+# ---------------------------------------------------------------------------
+# Google Cloud Service Control (usage reporting)
+# ---------------------------------------------------------------------------
+serviceControl:
+  enabled: false
+
+# ---------------------------------------------------------------------------
+# Route
+# ---------------------------------------------------------------------------
+route:
+  enabled: true
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+
+# ---------------------------------------------------------------------------
+# Standalone UI (deployed only in standalone mode)
+# ---------------------------------------------------------------------------
+standaloneUI:
+  image:
+    repository: quay.io/ecosystem-appeng/google-lightspeed-agent-ui
+    tag: latest
+    pullPolicy: Always
+  port: 8080
+  # OAuth redirect URIs for DCR software_statement JWT
+  redirectUris: "https://vertexaisearch.cloud.google.com/oauth-redirect"
+  route:
+    enabled: false
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+# ---------------------------------------------------------------------------
+# Secrets — these are references only.
+# Create the Secret separately from the template (see secret.yaml)
+# or supply values here for the template to generate it.
+# Recommended: copy secrets.yaml.example to secrets.yaml, fill in real
+# values, and install with: helm install -f values.yaml -f secrets.yaml ...
+# secrets.yaml is git-ignored to prevent accidental credential commits.
+# ---------------------------------------------------------------------------
+secrets:
+  # Set to true to have the chart create the Secret from the values below.
+  # Set to false if you manage the Secret externally.
+  create: true
+  googleApiKey: ""
+  googleCloudProject: ""
+  redHatSsoClientId: ""
+  redHatSsoClientSecret: ""
+  sessionDbPassword: "CHANGE_ME_sessions_password"
+  # Full connection URL (contains credentials, stored in the Secret).
+  # Only needed when postgresql.sessionBackend=database.
+  sessionDatabaseUrl: "postgresql+asyncpg://sessions:CHANGE_ME_sessions_password@lightspeed-agent-postgresql:5432/agent_sessions"
+  # --- Marketplace database (only needed in standalone mode) ---
+  marketplaceDbPassword: "CHANGE_ME_marketplace_password"
+  # Marketplace database URL — separate PostgreSQL instance with its own credentials.
+  databaseUrl: "postgresql+asyncpg://marketplace:CHANGE_ME_marketplace_password@lightspeed-agent-marketplace-postgresql:5432/marketplace"
+  # Redis password for rate limiting backend
+  redisPassword: "CHANGE_ME_redis_password"
+  # Fernet key for encrypting stored client secrets
+  dcrEncryptionKey: ""
+  # GMA SSO API credentials for DCR tenant creation (handler only)
+  gmaClientId: ""
+  gmaClientSecret: ""
+  # Base64-encoded GCP service account key JSON (for ADC outside Cloud Run)
+  gcpServiceAccountKey: ""

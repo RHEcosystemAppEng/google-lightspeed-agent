@@ -1,0 +1,113 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "lightspeed-agent.fullname" . }}-config
+  labels:
+    {{- include "lightspeed-agent.labels" . | nindent 4 }}
+data:
+  # Google AI Configuration
+  GOOGLE_GENAI_USE_VERTEXAI: {{ .Values.google.useVertexAI | ternary "TRUE" "FALSE" | quote }}
+  GOOGLE_CLOUD_LOCATION: {{ .Values.google.cloudLocation | quote }}
+  GEMINI_MODEL: {{ .Values.google.geminiModel | quote }}
+  GEMINI_HTTP_RETRY_ATTEMPTS: {{ .Values.google.httpRetry.attempts | quote }}
+  GEMINI_HTTP_RETRY_INITIAL_DELAY: {{ .Values.google.httpRetry.initialDelay | quote }}
+  GEMINI_HTTP_RETRY_MAX_DELAY: {{ .Values.google.httpRetry.maxDelay | quote }}
+  GEMINI_HTTP_RETRY_EXP_BASE: {{ .Values.google.httpRetry.expBase | quote }}
+  GEMINI_HTTP_RETRY_JITTER: {{ .Values.google.httpRetry.jitter | quote }}
+
+  # Red Hat SSO Configuration
+  RED_HAT_SSO_ISSUER: {{ .Values.sso.issuer | quote }}
+  AGENT_REQUIRED_SCOPE: {{ .Values.sso.requiredScope | quote }}
+  AGENT_ALLOWED_SCOPES: {{ .Values.sso.allowedScopes | quote }}
+
+  # MCP Server Configuration (agent -> MCP sidecar)
+  MCP_TRANSPORT_MODE: {{ .Values.mcp.transport | quote }}
+  MCP_SERVER_URL: {{ printf "http://localhost:%d" (int .Values.mcp.port) | quote }}
+  MCP_READ_ONLY: {{ .Values.mcp.readOnly | quote }}
+
+  # MCP Server Configuration (container startup args)
+  MCP_SERVER_MODE: {{ .Values.mcp.transport | quote }}
+  MCP_SERVER_PORT: {{ .Values.mcp.port | quote }}
+  MCP_SERVER_HOST: {{ .Values.mcp.host | quote }}
+  {{- if .Values.mcp.baseUrl }}
+  LIGHTSPEED_BASE_URL: {{ .Values.mcp.baseUrl | quote }}
+  {{- end }}
+  {{- if .Values.mcp.ssoBaseUrl }}
+  LIGHTSPEED_SSO_BASE_URL: {{ .Values.mcp.ssoBaseUrl | quote }}
+  {{- end }}
+  {{- if .Values.mcp.proxyUrl }}
+  LIGHTSPEED_PROXY_URL: {{ .Values.mcp.proxyUrl | quote }}
+  {{- end }}
+
+  # Agent Configuration
+  AGENT_PROVIDER_URL: {{ .Values.agent.providerUrl | quote }}
+  AGENT_NAME: {{ .Values.agent.name | quote }}
+  AGENT_DISPLAY_NAME: {{ .Values.agent.displayName | quote }}
+  AGENT_DESCRIPTION: {{ .Values.agent.description | quote }}
+  AGENT_HOST: {{ .Values.agent.host | quote }}
+  AGENT_PORT: {{ .Values.agent.port | quote }}
+  AGENT_PROBE_PORT: {{ .Values.agent.probePort | quote }}
+  AGENT_PROVIDER_ORGANIZATION_URL: {{ .Values.agent.providerOrganizationUrl | quote }}
+  AGENT_LOGGING_DETAIL: {{ .Values.agent.loggingDetail | quote }}
+  TOOL_RESULT_MAX_CHARS: {{ .Values.agent.toolResultMaxChars | quote }}
+
+  # Session PostgreSQL Configuration
+  SESSION_BACKEND: {{ .Values.postgresql.sessionBackend | quote }}
+  SESSION_DB_USER: {{ .Values.postgresql.user | quote }}
+  SESSION_DB_NAME: {{ .Values.postgresql.database | quote }}
+
+  # Marketplace PostgreSQL Configuration (standalone mode)
+  MARKETPLACE_DB_USER: {{ .Values.marketplacePostgresql.user | quote }}
+  MARKETPLACE_DB_NAME: {{ .Values.marketplacePostgresql.database | quote }}
+
+  # Database Pool Configuration (applies to both session and marketplace databases)
+  DATABASE_POOL_SIZE: {{ .Values.postgresql.poolSize | quote }}
+  DATABASE_POOL_MAX_OVERFLOW: {{ .Values.postgresql.poolMaxOverflow | quote }}
+
+  # Rate Limiting Configuration
+  REDIS_SERVICE_HOST: {{ printf "%s-redis" (include "lightspeed-agent.fullname" .) | quote }}
+  RATE_LIMIT_REDIS_TIMEOUT_MS: {{ .Values.rateLimit.redisTimeoutMs | quote }}
+  RATE_LIMIT_KEY_PREFIX: {{ .Values.rateLimit.keyPrefix | quote }}
+  RATE_LIMIT_REQUESTS_PER_MINUTE: {{ .Values.rateLimit.requestsPerMinute | quote }}
+  RATE_LIMIT_REQUESTS_PER_HOUR: {{ .Values.rateLimit.requestsPerHour | quote }}
+  {{- if .Values.rateLimit.redisCaCert }}
+  RATE_LIMIT_REDIS_CA_CERT: {{ .Values.rateLimit.redisCaCert | quote }}
+  {{- end }}
+
+  # Google Cloud Service Control
+  SERVICE_CONTROL_ENABLED: {{ .Values.serviceControl.enabled | quote }}
+
+  # Marketplace Handler
+  HANDLER_HOST: {{ .Values.handler.host | quote }}
+  HANDLER_PORT: {{ .Values.handler.port | quote }}
+  HANDLER_PROBE_PORT: {{ .Values.handler.probePort | quote }}
+  DCR_CLIENT_NAME_PREFIX: {{ .Values.handler.dcr.clientNamePrefix | quote }}
+  SERVICE_CONTROL_SERVICE_NAME: {{ .Values.handler.serviceControlServiceName | quote }}
+  GMA_API_BASE_URL: {{ .Values.handler.gma.apiBaseUrl | quote }}
+  GMA_API_TIMEOUT: {{ .Values.handler.gma.apiTimeout | quote }}
+  METERING_STALE_CLAIM_MINUTES: {{ .Values.handler.metering.staleClaimMinutes | quote }}
+  METERING_BACKFILL_MAX_AGE_HOURS: {{ .Values.handler.metering.backfillMaxAgeHours | quote }}
+  METERING_BACKFILL_LIMIT_PER_RUN: {{ .Values.handler.metering.backfillLimitPerRun | quote }}
+
+  # Authentication
+  SKIP_JWT_VALIDATION: {{ .Values.auth.skipJwtValidation | quote }}
+  SKIP_ORDER_VALIDATION: {{ .Values.auth.skipOrderValidation | quote }}
+  SKIP_DCR_JWT_VALIDATION: {{ .Values.auth.skipDcrJwtValidation | quote }}
+
+  # CORS
+  {{- if .Values.auth.corsAllowedOrigins }}
+  CORS_ALLOWED_ORIGINS: {{ .Values.auth.corsAllowedOrigins | quote }}
+  {{- end }}
+
+  # Logging
+  LOG_LEVEL: {{ .Values.logging.level | quote }}
+  LOG_FORMAT: {{ .Values.logging.format | quote }}
+
+  # OpenTelemetry
+  OTEL_ENABLED: {{ .Values.otel.enabled | quote }}
+  OTEL_SERVICE_NAME: {{ .Values.otel.serviceName | quote }}
+  OTEL_EXPORTER_TYPE: {{ .Values.otel.exporterType | quote }}
+  OTEL_EXPORTER_OTLP_ENDPOINT: {{ .Values.otel.otlpEndpoint | quote }}
+  OTEL_EXPORTER_OTLP_HTTP_ENDPOINT: {{ .Values.otel.otlpHttpEndpoint | quote }}
+  OTEL_TRACES_SAMPLER: {{ .Values.otel.tracesSampler | quote }}
+  OTEL_TRACES_SAMPLER_ARG: {{ .Values.otel.tracesSamplerArg | quote }}

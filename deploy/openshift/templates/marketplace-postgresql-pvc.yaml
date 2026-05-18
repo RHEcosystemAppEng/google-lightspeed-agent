@@ -1,0 +1,18 @@
+{{- if eq (include "lightspeed-agent.handlerEnabled" .) "true" }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "lightspeed-agent.fullname" . }}-marketplace-postgresql-data
+  labels:
+    {{- include "lightspeed-agent.labels" . | nindent 4 }}
+    app.kubernetes.io/component: marketplace-database
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.marketplacePostgresql.storage.size }}
+  {{- if .Values.marketplacePostgresql.storage.storageClassName }}
+  storageClassName: {{ .Values.marketplacePostgresql.storage.storageClassName | quote }}
+  {{- end }}
+{{- end }}

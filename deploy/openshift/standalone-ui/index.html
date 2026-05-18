@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Red Hat Lightspeed Agent - Standalone Client</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <div class="header-content">
+      <svg class="logo" viewBox="0 0 32 32" width="32" height="32" aria-hidden="true">
+        <path fill="#fff" d="M16 0C7.2 0 0 7.2 0 16s7.2 16 16 16 16-7.2 16-16S24.8 0 16 0zm7.5 22.3c-.8 1.4-3.7 3-7.1 3-5.4 0-9.8-3.5-9.8-8.8 0-4.7 3.6-8.5 9-8.5 3.1 0 5.6 1.2 6.8 2.8l-3.2 2.4c-.8-1-2.1-1.6-3.6-1.6-2.9 0-4.9 2.1-4.9 4.9 0 3 2.1 5.1 5.1 5.1 1.6 0 3-.7 3.8-1.7l3.1 2.1-.2.3z"/>
+      </svg>
+      <h1>Lightspeed Agent Client</h1>
+    </div>
+  </header>
+
+  <main>
+    <!-- Step 1: Agent Discovery & DCR -->
+    <section id="step1" class="step active">
+      <div class="step-header">
+        <span class="step-number">1</span>
+        <h2>Agent Discovery & Client Registration</h2>
+        <span class="step-status" id="step1-status"></span>
+      </div>
+      <div class="step-body">
+        <div class="sub-section">
+          <h3>Agent Card</h3>
+          <div id="agent-card-loading" class="loading-placeholder">
+            Fetching agent card...
+          </div>
+          <div id="agent-card-error" class="error-box" hidden></div>
+          <div id="agent-card-info" hidden>
+            <dl class="info-grid">
+              <dt>Name</dt><dd id="agent-name"></dd>
+              <dt>Description</dt><dd id="agent-description"></dd>
+              <dt>Version</dt><dd id="agent-version"></dd>
+              <dt>Capabilities</dt><dd id="agent-capabilities"></dd>
+            </dl>
+          </div>
+        </div>
+
+        <div class="sub-section">
+          <h3>Order &amp; Credentials</h3>
+          <div class="order-mode-toggle">
+            <button id="btn-mode-create" class="btn-toggle active">Create New</button>
+            <button id="btn-mode-existing" class="btn-toggle">Use Existing</button>
+          </div>
+
+          <div id="order-create-mode">
+            <p class="description">Create a marketplace order and register an OAuth client.</p>
+            <button id="btn-create-order" class="btn btn-primary">Create Order</button>
+            <div id="order-error" class="error-box" hidden></div>
+            <div id="order-result" hidden>
+              <div class="credential-row">
+                <label>Order ID</label>
+                <div class="credential-value">
+                  <code id="order-id"></code>
+                  <button class="btn btn-copy" data-copy="order-id" title="Copy to clipboard">Copy</button>
+                </div>
+              </div>
+            </div>
+            <div id="dcr-section">
+              <button id="btn-register" class="btn btn-primary" disabled>Register Client</button>
+              <div id="dcr-error" class="error-box" hidden></div>
+            </div>
+          </div>
+
+          <div id="order-existing-mode" hidden>
+            <p class="description">Enter credentials from a previous session to skip provisioning.</p>
+            <div class="form-group">
+              <label for="input-existing-order-id">Order ID</label>
+              <input type="text" id="input-existing-order-id" placeholder="Paste the order ID">
+            </div>
+            <div class="form-group">
+              <label for="input-existing-client-id">Client ID</label>
+              <input type="text" id="input-existing-client-id" placeholder="Paste the client ID">
+            </div>
+            <div class="form-group">
+              <label for="input-existing-client-secret">Client Secret</label>
+              <input type="text" id="input-existing-client-secret" placeholder="Paste the client secret">
+            </div>
+            <button id="btn-use-existing" class="btn btn-primary">Use Credentials</button>
+            <div id="existing-error" class="error-box" hidden></div>
+          </div>
+
+          <div id="dcr-result" hidden>
+            <div class="credential-row">
+              <label>Client ID</label>
+              <div class="credential-value">
+                <code id="client-id"></code>
+                <button class="btn btn-copy" data-copy="client-id" title="Copy to clipboard">Copy</button>
+              </div>
+            </div>
+            <div class="credential-row">
+              <label>Client Secret</label>
+              <div class="credential-value">
+                <code id="client-secret"></code>
+                <button class="btn btn-copy" data-copy="client-secret" title="Copy to clipboard">Copy</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="sub-section reset-section" id="reset-section" hidden>
+          <button id="btn-reset" class="btn btn-danger">Reset Registration</button>
+          <p class="description">Cancel the order and clear all credentials.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Step 2: Get Access Token -->
+    <section id="step2" class="step disabled">
+      <div class="step-header">
+        <span class="step-number">2</span>
+        <h2>Get Access Token</h2>
+        <span class="step-status" id="step2-status"></span>
+      </div>
+      <div class="step-body">
+        <p class="description">Log in with your Red Hat account to obtain an access token via the authorization code flow.</p>
+
+        <div class="sub-section">
+          <h3>Step A: Log In</h3>
+          <p class="description">Open the URL below in your browser and log in with your Red Hat account. After login you will be redirected &mdash; copy the <code>code</code> parameter from the URL bar before the page closes.</p>
+          <div class="curl-box">
+            <pre id="auth-url"></pre>
+            <button class="btn btn-copy" data-copy="auth-url" title="Copy URL">Copy</button>
+          </div>
+        </div>
+
+        <div class="sub-section">
+          <h3>Step B: Exchange Code for Token</h3>
+          <div class="form-group">
+            <label for="input-auth-code">Authorization Code</label>
+            <input type="text" id="input-auth-code" placeholder="Paste the code from the redirect URL">
+          </div>
+          <button id="btn-exchange-code" class="btn btn-primary">Generate Token Exchange Command</button>
+        </div>
+
+        <div id="token-error" class="error-box" hidden></div>
+
+        <!-- CORS fallback: show curl command -->
+        <div id="token-cors-fallback" hidden>
+          <p class="description">The SSO server does not allow direct browser requests. Run this command in your terminal:</p>
+          <div class="curl-box">
+            <pre id="curl-command"></pre>
+            <button class="btn btn-copy" data-copy="curl-command" title="Copy command">Copy</button>
+          </div>
+          <div class="form-group">
+            <label for="input-manual-token">Paste the access_token from the response:</label>
+            <textarea id="input-manual-token" rows="3" placeholder='Paste the access_token value here'></textarea>
+          </div>
+          <button id="btn-use-manual-token" class="btn btn-primary">Use Token</button>
+        </div>
+
+        <div id="token-result" hidden>
+          <div class="credential-row">
+            <label>Access Token</label>
+            <div class="credential-value">
+              <code id="access-token" class="token-display"></code>
+              <button class="btn btn-copy" data-copy="access-token" title="Copy to clipboard">Copy</button>
+            </div>
+          </div>
+          <div id="token-expiry" class="token-meta"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Step 3: A2A Client -->
+    <section id="step3" class="step disabled">
+      <div class="step-header">
+        <span class="step-number">3</span>
+        <h2>A2A Client</h2>
+        <span class="step-status" id="step3-status"></span>
+      </div>
+      <div class="step-body">
+        <div id="conversation" class="conversation"></div>
+        <div class="message-input-area">
+          <textarea id="input-message" rows="3" placeholder="Type your message to the agent..."></textarea>
+          <button id="btn-send" class="btn btn-primary">Send Message</button>
+        </div>
+        <div id="a2a-error" class="error-box" hidden></div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p>Red Hat Lightspeed Agent &mdash; Standalone Client</p>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/marked@15.0.7/marked.min.js"></script>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

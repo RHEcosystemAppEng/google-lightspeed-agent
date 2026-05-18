@@ -1,0 +1,88 @@
+{{- if eq (include "lightspeed-agent.handlerEnabled" .) "true" }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "lightspeed-agent.marketplacePostgresqlServiceName" . }}
+  labels:
+    {{- include "lightspeed-agent.labels" . | nindent 4 }}
+    app.kubernetes.io/component: marketplace-database
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "lightspeed-agent.marketplacePostgresqlSelectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "lightspeed-agent.marketplacePostgresqlSelectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+      containers:
+        - name: postgresql
+          image: {{ printf "%s:%s" .Values.marketplacePostgresql.image.repository .Values.marketplacePostgresql.image.tag }}
+          imagePullPolicy: {{ .Values.marketplacePostgresql.image.pullPolicy }}
+          ports:
+            - containerPort: 5432
+              protocol: TCP
+          env:
+            - name: POSTGRESQL_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "lightspeed-agent.fullname" . }}-config
+                  key: MARKETPLACE_DB_USER
+            - name: POSTGRESQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "lightspeed-agent.fullname" . }}-secrets
+                  key: MARKETPLACE_DB_PASSWORD
+            - name: POSTGRESQL_DATABASE
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "lightspeed-agent.fullname" . }}-config
+                  key: MARKETPLACE_DB_NAME
+          volumeMounts:
+            - name: postgresql-data
+              mountPath: /var/lib/pgsql/data
+          resources:
+            {{- toYaml .Values.marketplacePostgresql.resources | nindent 12 }}
+          readinessProbe:
+            exec:
+              command:
+                - /usr/libexec/check-container
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command:
+                - /usr/libexec/check-container
+                - --live
+            initialDelaySeconds: 120
+            periodSeconds: 10
+      volumes:
+        - name: postgresql-data
+          persistentVolumeClaim:
+            claimName: {{ include "lightspeed-agent.fullname" . }}-marketplace-postgresql-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "lightspeed-agent.marketplacePostgresqlServiceName" . }}
+  labels:
+    {{- include "lightspeed-agent.labels" . | nindent 4 }}
+    app.kubernetes.io/component: marketplace-database
+spec:
+  selector:
+    {{- include "lightspeed-agent.marketplacePostgresqlSelectorLabels" . | nindent 4 }}
+  ports:
+    - port: 5432
+      targetPort: 5432
+      protocol: TCP
+  type: ClusterIP
+{{- end }}
