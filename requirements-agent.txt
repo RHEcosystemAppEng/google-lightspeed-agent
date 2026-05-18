@@ -876,9 +876,9 @@ google-crc32c==1.8.0 \
     #   google-cloud-bigtable
     #   google-cloud-storage
     #   google-resumable-media
-google-genai==1.75.0 \
-    --hash=sha256:56bac3991b311c93f980c0a2abcd287b672146905df1fbd71c92ed633d5a07cf \
-    --hash=sha256:8dc4c096e7d6288c3087f6893f582fe52468932464781edb8193bd92b9fefb2c
+google-genai==2.4.0 \
+    --hash=sha256:3f8d4bd618be2801e805dc698726731a70f34b438ea25a6c92800eef5b1f513e \
+    --hash=sha256:48df1c44190b05b834fee9cffd360af6d6fd7f68164588e7ebd670fa34f71ee1
     # via
     #   google-adk
     #   google-cloud-aiplatform
