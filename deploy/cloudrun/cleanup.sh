@@ -10,10 +10,11 @@
 # - Service accounts (runtime + Pub/Sub invoker) and IAM bindings
 #
 # Usage:
-#   ./deploy/cloudrun/cleanup.sh [--force]
+#   ./deploy/cloudrun/cleanup.sh [--force] [--purge-data]
 #
 # Options:
-#   --force    Skip confirmation prompt
+#   --force       Skip confirmation prompt
+#   --purge-data  Also delete CloudSQL instances and Redis data
 #
 # Prerequisites:
 #   - gcloud CLI installed and authenticated
@@ -55,6 +56,7 @@ PUBSUB_SUBSCRIPTION="${PUBSUB_SUBSCRIPTION:-${PUBSUB_TOPIC}-sub}"
 
 # Parse arguments
 FORCE=false
+PURGE_DATA=false
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -62,9 +64,13 @@ while [[ $# -gt 0 ]]; do
             FORCE=true
             shift
             ;;
+        --purge-data)
+            PURGE_DATA=true
+            shift
+            ;;
         *)
             log_error "Unknown option: $1"
-            echo "Usage: $0 [--force]"
+            echo "Usage: $0 [--force] [--purge-data]"
             exit 1
             ;;
     esac
@@ -269,9 +275,26 @@ echo "  - Pub/Sub topic and subscription"
 echo "  - Secret Manager secrets"
 echo "  - Service accounts (runtime + Pub/Sub invoker) and IAM bindings"
 echo ""
+if [ "$PURGE_DATA" = true ]; then
+    echo ""
+    log_info "Purging data resources..."
+    # Delete CloudSQL instances
+    for instance in $(gcloud sql instances list --project="$PROJECT_ID" --filter="name~lightspeed" --format="value(name)" 2>/dev/null); do
+        echo "Deleting CloudSQL instance: $instance"
+        gcloud sql instances delete "$instance" --project="$PROJECT_ID" --quiet || true
+    done
+    # Flush Redis data
+    for instance in $(gcloud redis instances list --region="$REGION" --project="$PROJECT_ID" --format="value(name)" 2>/dev/null); do
+        echo "Note: Redis instance $instance must be deleted manually or via console"
+    done
+    log_info "Data purge complete."
+fi
+
 echo "Note: The following resources were NOT deleted (delete manually if needed):"
-echo "  - Cloud SQL instances"
-echo "  - Cloud Memorystore Redis instances"
+if [ "$PURGE_DATA" != true ]; then
+echo "  - Cloud SQL instances (use --purge-data to delete)"
+echo "  - Cloud Memorystore Redis instances (use --purge-data to delete)"
+fi
 echo "  - Container images in GCR/Artifact Registry"
 echo "  - VPC connectors"
 echo "  - Cloud Build triggers"
