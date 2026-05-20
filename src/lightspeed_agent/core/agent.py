@@ -31,22 +31,49 @@ Sections are labeled by priority:
 """
 
 
+def _load_skills_from_dir(directory: pathlib.Path) -> dict[str, Any]:
+    """Load skills from a directory, returning a dict keyed by skill name."""
+    if not directory.is_dir():
+        return {}
+    skills = {}
+    for d in sorted(directory.iterdir()):
+        if d.is_dir() and (d / "SKILL.md").exists():
+            skill = load_skill_from_dir(d)
+            skills[skill.name] = skill
+    return skills
+
+
 def _load_skills(skills_dir: str | None) -> SkillToolset | None:
-    """Load ADK AI Skills from a directory of SKILL.md files."""
-    base = pathlib.Path(skills_dir) if skills_dir else pathlib.Path(__file__).parent / "skills"
-    if not base.is_dir():
-        logger.warning("Skills directory not found: %s", base)
-        return None
-    skills = [
-        load_skill_from_dir(d)
-        for d in sorted(base.iterdir())
-        if d.is_dir() and (d / "SKILL.md").exists()
-    ]
+    """Load ADK AI Skills: bundled defaults + optional external overlay.
+
+    Always loads bundled skills from core/skills/. When skills_dir is set,
+    also loads from that directory — external skills with the same name
+    override the bundled version.
+    """
+    bundled_dir = pathlib.Path(__file__).parent / "skills"
+    skills = _load_skills_from_dir(bundled_dir)
+    if skills:
+        logger.info("Loaded %d bundled skills from %s", len(skills), bundled_dir)
+
+    if skills_dir:
+        external_dir = pathlib.Path(skills_dir)
+        external = _load_skills_from_dir(external_dir)
+        if external:
+            overridden = set(skills.keys()) & set(external.keys())
+            if overridden:
+                logger.info("External skills overriding bundled: %s", ", ".join(sorted(overridden)))
+            skills.update(external)
+            logger.info(
+                "Loaded %d external skills from %s (%d total)",
+                len(external),
+                external_dir,
+                len(skills),
+            )
+
     if not skills:
-        logger.info("No skills found in %s", base)
+        logger.info("No skills found")
         return None
-    logger.info("Loaded %d skills from %s", len(skills), base)
-    return SkillToolset(skills=skills)
+    return SkillToolset(skills=list(skills.values()))
 
 
 def _setup_environment() -> None:
