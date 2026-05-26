@@ -68,6 +68,13 @@ health report
 (breaking changes) → inventory__list_hosts + inventory__get_host_system_profile
 (current versions) → assess readiness
 
+**"How many critical remediable CVEs are on host X?"** (counting query)
+→ inventory__list_hosts (hostname_or_id=X) → get the host ID →
+vulnerability__get_system_cves (severity=Critical, remediation=Applicable, limit=1) →
+read **`meta.total_items`** from the response → report the count.
+You do NOT need to fetch every page to answer "how many" — `meta.total_items` gives
+the total matching the filters in a single call.
+
 When a request is simple and genuinely maps to a single tool (e.g., "list my hosts" →
 inventory__list_hosts), a single tool call is fine. The point is: think first, don't
 default to one-and-done.
