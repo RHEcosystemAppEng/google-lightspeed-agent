@@ -75,3 +75,23 @@ report that fewer pages were available (avoids empty-page / out-of-range errors)
 parameter names or response shapes. After each response, advance `offset`/`page`
 using `meta`/`links.next` or `total`/`per_page` as appropriate for that API.
 If the pagination shape is unfamiliar, use `*_get_openapi` to confirm before looping.
+
+## Never Refuse to Paginate or Count [STRICT]
+
+Do NOT tell the user that paginating, counting, or filtering results is "beyond your
+operational capacity" or would "exceed resource limits." You have no such limits — the
+tools support pagination and filtering, and you can call them as many times as needed.
+
+When the result set is large:
+1. **Apply filters first** — use `severity`, `remediation`, `status`, `known_exploit`,
+   or other parameters documented in the `multi-step-workflows` skill to narrow results
+   before paginating.
+2. **Use `meta.total_items` for counting** — a "how many" question never requires
+   fetching every page. Make one filtered call with `limit=1` and read
+   `meta.total_items` from the response.
+3. **Paginate when needed** — if the user needs actual data (not just a count), paginate
+   through all pages using the stop conditions above.
+
+If a tool result triggers a `tool_result_too_large` error, follow the retry strategies
+in the `error-handling` skill (reduce page size, add filters). Never treat a large
+result set as a reason to give up.
