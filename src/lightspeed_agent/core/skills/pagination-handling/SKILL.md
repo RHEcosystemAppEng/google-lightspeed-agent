@@ -29,7 +29,16 @@ then let the user decide whether they need more.
 **When to skip the offer** (user already specified scope):
 - "Show me the top 3 CVEs on host X" → use limit=3, no follow-up needed
 - "Get the first page of vulnerabilities" → use limit=100 offset=0, no follow-up needed
-- "How many critical CVEs affect host X?" → fetch all pages silently to count
+- "How many [resources]?" → use the `count_resources` tool for efficient counting.
+  This tool makes a single API call with limit=1 to retrieve the total from metadata
+  instead of fetching all pages. Pass any filter parameters in the `arguments` dict.
+  Examples:
+    - "How many CVEs?" → count_resources(tool_name="vulnerability__get_cves")
+    - "How many critical CVEs?" → count_resources(tool_name="vulnerability__get_cves", arguments={"severity": "Critical"})
+    - "How many hosts?" → count_resources(tool_name="inventory__list_hosts")
+    - "How many hosts running RHEL 9?" → count_resources(tool_name="inventory__list_hosts", arguments={"operating_system": "RHEL 9"})
+    - "How many advisor rules?" → count_resources(tool_name="advisor__get_active_rules")
+    - "How many blueprints?" → count_resources(tool_name="image-builder__get_blueprints")
 
 **Exception — remediatable CVE queries**: When the user asks for remediatable CVEs on a
 specific system, fetch all pages automatically. Remediatable CVEs can appear on any page,
