@@ -6,6 +6,7 @@ from lightspeed_agent.tools.a2a_skills import (
     Skill,
     get_skills_for_agent_card,
 )
+from lightspeed_agent.tools.aggregation import create_aggregation_tool
 from lightspeed_agent.tools.insights_tools import (
     ALL_INSIGHTS_TOOLS,
     READ_ONLY_TOOLS,
@@ -21,6 +22,7 @@ __all__ = [
     # MCP Headers
     "create_mcp_header_provider",
     # Toolset creation
+    "create_aggregation_tool",
     "create_insights_toolset",
     "get_insights_tools_for_cloud_run",
     # Tool lists

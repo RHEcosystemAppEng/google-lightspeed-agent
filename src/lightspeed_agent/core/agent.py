@@ -236,6 +236,10 @@ def create_agent() -> LlmAgent:
         logger.warning(f"Failed to create MCP toolset: {e}", exc_info=True)
         logger.info("Agent created without MCP tools")
 
+    from lightspeed_agent.tools.aggregation import create_aggregation_tool
+
+    tools.append(create_aggregation_tool())
+
     skill_toolset = _load_skills(settings.skills_dir)
     if skill_toolset:
         tools.append(skill_toolset)
