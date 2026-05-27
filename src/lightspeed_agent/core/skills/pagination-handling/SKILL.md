@@ -29,7 +29,31 @@ then let the user decide whether they need more.
 **When to skip the offer** (user already specified scope):
 - "Show me the top 3 CVEs on host X" → use limit=3, no follow-up needed
 - "Get the first page of vulnerabilities" → use limit=100 offset=0, no follow-up needed
-- "How many critical CVEs affect host X?" → fetch all pages silently to count
+- "How many [resources]?" → use the efficient counting technique below
+
+### Efficient Counting [PREFERRED]
+
+When the user asks "how many [resources]?" (total count questions), do NOT fetch all
+pages to count. Instead, call the relevant MCP tool with `limit=1` and `offset=0` and
+read the total from the response metadata — one API call, no data transfer:
+
+- **Vulnerability tools** (JSON:API responses): total is at `meta.total_items`
+- **Inventory tools**: total is at `total`
+- **Advisor, Content Sources, Image Builder, RHSM tools**: total is at `meta.count`
+
+Pass the user's filters as normal tool arguments alongside `limit=1`.
+
+**Examples:**
+- "How many CVEs?" → call `vulnerability__get_cves` with `limit=1`, report `meta.total_items`
+- "How many critical CVEs?" → call `vulnerability__get_cves` with `limit=1, severity=Critical`,
+  report `meta.total_items`
+- "How many hosts?" → call `inventory__list_hosts` with `limit=1`, report `total`
+- "How many hosts running RHEL 9?" → call `inventory__list_hosts` with
+  `limit=1, operating_system=RHEL 9`, report `total`
+- "How many advisor rules?" → call `advisor__get_active_rules` with `limit=1`,
+  report `meta.count`
+- "How many blueprints?" → call `image-builder__get_blueprints` with `limit=1`,
+  report `meta.count`
 
 **Exception — remediatable CVE queries**: When the user asks for remediatable CVEs on a
 specific system, fetch all pages automatically. Remediatable CVEs can appear on any page,
