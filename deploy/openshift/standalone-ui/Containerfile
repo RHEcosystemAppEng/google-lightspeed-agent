@@ -1,0 +1,15 @@
+FROM registry.access.redhat.com/ubi9/nginx-122:latest
+
+COPY nginx.conf "${NGINX_CONF_PATH}"
+COPY *.html *.js *.css /usr/share/nginx/html/
+COPY entrypoint.sh /usr/local/bin/
+
+USER 0
+RUN chmod +x /usr/local/bin/entrypoint.sh && \
+    chmod -R g+w /usr/share/nginx/html/ && \
+    chmod g+w "${NGINX_CONF_PATH}"
+USER 1001
+
+EXPOSE 8080
+
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
