@@ -1772,9 +1772,9 @@ openai==2.38.0 \
     --hash=sha256:798694c6cf74145541fda94325b6f8f72d8e1fd0262cc137c8d728177a6a4ce3 \
     --hash=sha256:ec6661c57b2dcc47414a767e6e3335c7ed3d19c9696999283a3c82e95c756a3c
     # via litellm
-opentelemetry-api==1.41.1 \
-    --hash=sha256:0ad1814d73b875f84494387dae86ce0b12c68556331ce6ce8fe789197c949621 \
-    --hash=sha256:a22df900e75c76dc08440710e51f52f1aa6b451b429298896023e60db5b3139f
+opentelemetry-api==1.42.1 \
+    --hash=sha256:51a69edacadbc03a8950ace1c4c21099cacc538820ac2c9e36277e78cebba714 \
+    --hash=sha256:56c63bea9f77b62856be8c47600474acad853b2924b99b1687c4cb6297166716
     # via
     #   lightspeed-agent (pyproject.toml)
     #   google-adk
@@ -1810,23 +1810,23 @@ opentelemetry-exporter-gcp-trace==1.12.0 \
     # via
     #   google-adk
     #   google-cloud-aiplatform
-opentelemetry-exporter-otlp==1.41.1 \
-    --hash=sha256:299a2f0541ca175df186f5ac58fd5db177ba1e9b72b0826049062f750d55b47f \
-    --hash=sha256:db276c5a80c02b063994e80950d00ca1bfddcf6520f608335b7dc2db0c0eb9c6
+opentelemetry-exporter-otlp==1.42.1 \
+    --hash=sha256:2d9ebaed714377a67d224d46795ddcc11d2c877fa5de35fda70b6f3b010729a9 \
+    --hash=sha256:aedd54545bb0587cd45210abdc8be545af9c01413f3307786e276df1e3c83bee
     # via lightspeed-agent (pyproject.toml)
-opentelemetry-exporter-otlp-proto-common==1.41.1 \
-    --hash=sha256:0e253156ea9c36b0bd3d2440c5c9ba7dd1f3fb64ba7a08fc85fbac536b56e1fb \
-    --hash=sha256:10da74dad6a49344b9b7b21b6182e3060373a235fde1528616d5f01f92e66aa9
+opentelemetry-exporter-otlp-proto-common==1.42.1 \
+    --hash=sha256:04f1f01fb597c4249dfcd7f8b861c902c2102369d376d9d346ff38de4469a2ee \
+    --hash=sha256:f48d395ab815b444da118868977e9798ea354c25737d5cf39578ae894011c140
     # via
     #   opentelemetry-exporter-otlp-proto-grpc
     #   opentelemetry-exporter-otlp-proto-http
-opentelemetry-exporter-otlp-proto-grpc==1.41.1 \
-    --hash=sha256:537926dcef951136992479af1d9cd88f25e33d56c530e9f020ed57774dca2f94 \
-    --hash=sha256:b05df8fa1333dc9a3fda36b676b96b5095ab6016d3f0c3296d430d629ba1443b
+opentelemetry-exporter-otlp-proto-grpc==1.42.1 \
+    --hash=sha256:0ae1177e2038b18a929b3098215243631ef91136cba26b7e2b12790ceb7e87cc \
+    --hash=sha256:975c4461f167dd8ed8857d68d3b6b25f3d272eab896f6a9470d0f5b90e2faf15
     # via opentelemetry-exporter-otlp
-opentelemetry-exporter-otlp-proto-http==1.41.1 \
-    --hash=sha256:1a21e8f49c7a946d935551e90947d6c3eb39236723c6624401da0f33d68edcb4 \
-    --hash=sha256:4747a9604c8550ab38c6fd6180e2fcb80de3267060bef2c306bad3cb443302bc
+opentelemetry-exporter-otlp-proto-http==1.42.1 \
+    --hash=sha256:00a16da1b312a1d6c7233d600d557c91df71125af73020f3b9a7765bd699d59d \
+    --hash=sha256:bf142a21035d7571ac3a09cb2e5639f49886f243972883cfe777ed3bf02b734d
     # via
     #   google-adk
     #   google-cloud-aiplatform
@@ -1855,9 +1855,9 @@ opentelemetry-instrumentation-logging==0.62b1 \
     --hash=sha256:969330216d1ae02f4e10f1a030566ae758114caead020817192e6a02c6d1a0e1 \
     --hash=sha256:997359d29ce06cb3768677387469431d0484b2450b5c35d7f02361431d3de338
     # via lightspeed-agent (pyproject.toml)
-opentelemetry-proto==1.41.1 \
-    --hash=sha256:0496713b804d127a4147e32849fbaf5683fac8ee98550e8e7679cd706c289720 \
-    --hash=sha256:4b9d2eb631237ea43b80e16c073af438554e32bc7e9e3f8ca4a9582f900020e5
+opentelemetry-proto==1.42.1 \
+    --hash=sha256:c6a51e6b4f05ae63565f3a113217f3d2bfaec68f78c02d7a6c85f9010d1cfca6 \
+    --hash=sha256:dedb74cba2886c59c7789b227a7a670613025a07489040050aedff6e5c0fb43c
     # via
     #   opentelemetry-exporter-otlp-proto-common
     #   opentelemetry-exporter-otlp-proto-grpc
@@ -1871,9 +1871,9 @@ opentelemetry-resourcedetector-gcp==1.12.0a0 \
     #   opentelemetry-exporter-gcp-logging
     #   opentelemetry-exporter-gcp-monitoring
     #   opentelemetry-exporter-gcp-trace
-opentelemetry-sdk==1.41.1 \
-    --hash=sha256:724b615e1215b5aeacda0abb8a6a8922c9a1853068948bd0bd225a56d0c792e6 \
-    --hash=sha256:edee379c126c1bce952b0c812b48fe8ff35b30df0eecf17e98afa4d598b7d85d
+opentelemetry-sdk==1.42.1 \
+    --hash=sha256:083cd4bbfaa5aa7b5a9e552430d9951219967cfb27aa61feb13a77aba1fc839d \
+    --hash=sha256:8c834e8f8c9ba4171d4ec843d0cb8a67e4c7394d3f9e9297e582cbd9456ddbf7
     # via
     #   lightspeed-agent (pyproject.toml)
     #   google-adk
