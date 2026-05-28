@@ -1,4 +1,4 @@
-"""OpenTelemetry integration for distributed tracing."""
+"""OpenTelemetry integration for distributed tracing and metrics."""
 
 from lightspeed_agent.telemetry.setup import setup_telemetry, shutdown_telemetry
 

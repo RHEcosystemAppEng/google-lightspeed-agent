@@ -12,6 +12,7 @@ from google.adk.tools.tool_context import ToolContext
 
 from lightspeed_agent.auth.middleware import get_request_client_id, get_request_order_id
 from lightspeed_agent.metering import get_usage_repository
+from lightspeed_agent.telemetry.metrics import increment_tool_call
 
 logger = logging.getLogger(__name__)
 
@@ -93,6 +94,7 @@ class UsageTrackingPlugin(BasePlugin):
         client_id = _resolve_client_id()
         await self._persist_increment(order_id=order_id, client_id=client_id, tool_calls=1)
         tool_name = getattr(tool, "name", type(tool).__name__)
+        increment_tool_call(tool_name=tool_name, order_id=order_id, client_id=client_id)
         logger.debug(
             "Tool metering increment persisted for order %s (tool=%s)",
             order_id,

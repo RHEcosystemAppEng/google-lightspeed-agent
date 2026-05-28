@@ -65,6 +65,7 @@ agent = [
 telemetry = [
     "opentelemetry-exporter-jaeger>=1.20.0",
     "opentelemetry-exporter-zipkin>=1.20.0",
+    "opentelemetry-exporter-prometheus>=0.62b1",
 ]
 dev = [
     "pytest>=8.0.0",

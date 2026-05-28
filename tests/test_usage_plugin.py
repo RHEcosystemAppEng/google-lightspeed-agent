@@ -1,6 +1,6 @@
 """Tests for usage tracking plugin persistence behavior."""
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -153,4 +153,38 @@ class TestUsageTrackingPlugin:
             output_tokens=0,
             tool_calls=1,
         )
+
+    @pytest.mark.asyncio
+    async def test_after_tool_callback_increments_tool_counter(self):
+        """Verify after_tool_callback calls increment_tool_call."""
+        repo = MagicMock()
+        repo.increment_usage = AsyncMock()
+        original_get_repo = usage_plugin.get_usage_repository
+        original_get_order = usage_plugin.get_request_order_id
+        original_get_client = usage_plugin.get_request_client_id
+        usage_plugin.get_usage_repository = lambda: repo
+        usage_plugin.get_request_order_id = lambda: "order-001"
+        usage_plugin.get_request_client_id = lambda: "client-aaa"
+        tool = MagicMock()
+        tool.name = "advisor_list_recommendations"
+        try:
+            plugin = usage_plugin.UsageTrackingPlugin()
+            with patch(
+                "lightspeed_agent.api.a2a.usage_plugin.increment_tool_call"
+            ) as mock_increment:
+                await plugin.after_tool_callback(
+                    tool=tool,
+                    tool_args={},
+                    tool_context=None,
+                    result={},
+                )
+                mock_increment.assert_called_once_with(
+                    tool_name="advisor_list_recommendations",
+                    order_id="order-001",
+                    client_id="client-aaa",
+                )
+        finally:
+            usage_plugin.get_usage_repository = original_get_repo
+            usage_plugin.get_request_order_id = original_get_order
+            usage_plugin.get_request_client_id = original_get_client
 
