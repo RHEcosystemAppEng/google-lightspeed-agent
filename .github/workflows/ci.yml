@@ -101,29 +101,30 @@ jobs:
 
       - name: Install Python and uv
         run: |
-          dnf install -y python3.12 python3.12-pip python3.12-devel diffutils
+          dnf install -y python3.12 python3.12-pip python3.12-devel diffutils make
           python3.12 -m pip install uv
 
-      - name: Verify agent lock file
-        run: |
-          python3.12 -m uv pip compile --generate-hashes --python-version=3.12 --python-platform=linux \
-            --extra agent --output-file=/tmp/requirements-agent-check.txt pyproject.toml
-          diff <(tail -n +3 requirements-agent.txt) <(tail -n +3 /tmp/requirements-agent-check.txt) || \
-            (echo "ERROR: requirements-agent.txt is out of sync. Run 'make lock' to update." && exit 1)
+      - name: Verify lock files
+        run: make lock-check
 
-      - name: Verify handler lock file
-        run: |
-          python3.12 -m uv pip compile --generate-hashes --python-version=3.12 --python-platform=linux \
-            --output-file=/tmp/requirements-handler-check.txt pyproject.toml
-          diff <(tail -n +3 requirements-handler.txt) <(tail -n +3 /tmp/requirements-handler-check.txt) || \
-            (echo "ERROR: requirements-handler.txt is out of sync. Run 'make lock' to update." && exit 1)
+  vulnerability-scan:
+    name: Vulnerability scan (pip-audit)
+    needs: [lock-file-check]
+    if: needs.lock-file-check.result == 'success'
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    container:
+      image: quay.io/centos/centos:stream9
+    steps:
+      - uses: actions/checkout@v4
 
-      - name: Verify dev lock file
+      - name: Install Python and pip-audit
         run: |
-          python3.12 -m uv pip compile --generate-hashes --python-version=3.12 --python-platform=linux \
-            --extra dev --output-file=/tmp/requirements-dev-check.txt pyproject.toml
-          diff <(tail -n +3 requirements-dev.txt) <(tail -n +3 /tmp/requirements-dev-check.txt) || \
-            (echo "ERROR: requirements-dev.txt is out of sync. Run 'make lock' to update." && exit 1)
+          dnf install -y python3.12 python3.12-pip make
+          python3.12 -m pip install pip-audit
+
+      - name: Scan dependencies
+        run: make audit
 
   lint:
     name: Lint

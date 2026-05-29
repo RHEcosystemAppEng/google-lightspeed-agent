@@ -47,6 +47,7 @@ make lock                              # Regenerate all lock files (always run b
 make lock-agent                        # Regenerate agent lock file only
 make lock-handler                      # Regenerate marketplace handler lock file only
 make lock-dev                          # Regenerate dev lock file only
+make audit                             # Scan dependencies for known vulnerabilities (pip-audit)
 ```
 
 **Workflow:**
