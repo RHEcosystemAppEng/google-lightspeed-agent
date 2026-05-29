@@ -1,7 +1,7 @@
 # Red Hat Lightspeed Agent for Google Cloud - Makefile
 # Common development and deployment commands
 
-.PHONY: help build build-agent build-marketplace run stop logs logs-mcp clean test lint dev check-env lock lock-agent lock-handler lock-dev lock-check
+.PHONY: help build build-agent build-marketplace run stop logs logs-mcp clean test lint dev check-env lock lock-agent lock-handler lock-dev lock-check audit
 
 # Default target
 help:
@@ -18,6 +18,7 @@ help:
 	@echo "  make lock-handler - Regenerate marketplace handler lock file only"
 	@echo "  make lock-dev     - Regenerate dev lock file only"
 	@echo "  make lock-check   - Verify lock files are in sync (used by CI)"
+	@echo "  make audit        - Scan dependencies for known vulnerabilities (pip-audit)"
 	@echo ""
 	@echo "Container (Podman):"
 	@echo "  make build             - Build all container images (agent + marketplace handler)"
@@ -104,6 +105,13 @@ lock-check:
 		(echo "ERROR: requirements-dev.txt is out of sync. Run 'make lock' to update." && rm -f /tmp/requirements-dev-check.txt && exit 1)
 	@rm -f /tmp/requirements-dev-check.txt
 	@echo "✓ Lock files are in sync"
+
+audit:
+	@echo "Scanning dependencies for known vulnerabilities..."
+	pip-audit -r requirements-agent.txt
+	pip-audit -r requirements-handler.txt
+	pip-audit -r requirements-dev.txt
+	@echo "✓ Vulnerability scan complete"
 
 # =============================================================================
 # Container Commands (Podman)

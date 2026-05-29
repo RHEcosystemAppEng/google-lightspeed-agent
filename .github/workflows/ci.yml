@@ -107,6 +107,25 @@ jobs:
       - name: Verify lock files
         run: make lock-check
 
+  vulnerability-scan:
+    name: Vulnerability scan (pip-audit)
+    needs: [lock-file-check]
+    if: needs.lock-file-check.result == 'success'
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    container:
+      image: quay.io/centos/centos:stream9
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Python and pip-audit
+        run: |
+          dnf install -y python3.12 python3.12-pip make
+          python3.12 -m pip install pip-audit
+
+      - name: Scan dependencies
+        run: make audit
+
   lint:
     name: Lint
     needs: [konflux-verify, lock-file-check, detect-changes]
