@@ -15,6 +15,28 @@ class TestA2uiPrompt:
         manager = get_a2ui_schema_manager()
         assert manager is not None
 
+    def test_schema_manager_is_cached(self):
+        """Test get_a2ui_schema_manager returns the same cached instance."""
+        manager1 = get_a2ui_schema_manager()
+        manager2 = get_a2ui_schema_manager()
+        assert manager1 is manager2
+
+    def test_get_a2ui_catalog_returns_catalog(self):
+        """Test get_a2ui_catalog returns an A2uiCatalog instance."""
+        from lightspeed_agent.a2ui.prompt import get_a2ui_catalog
+
+        catalog = get_a2ui_catalog()
+        assert catalog is not None
+        assert "a2ui.org" in catalog.catalog_id
+
+    def test_insights_examples_non_empty(self):
+        """Test Insights A2UI examples string is non-empty."""
+        from lightspeed_agent.a2ui.prompt import get_insights_a2ui_examples
+
+        examples = get_insights_a2ui_examples()
+        assert isinstance(examples, str)
+        assert len(examples) > 0
+
     def test_generate_a2ui_instruction_contains_base(self):
         """Test augmented instruction preserves the original agent instruction."""
         result = generate_a2ui_instruction(AGENT_INSTRUCTION)
@@ -107,6 +129,37 @@ class TestAgentCardA2ui:
             settings.a2ui_enabled = original
             self._clear_card_cache()
 
+    def test_agent_card_input_modes_include_a2ui_when_enabled(self):
+        """Test input modes include A2UI MIME type when enabled."""
+        from lightspeed_agent.config import get_settings
+
+        settings = get_settings()
+        original = settings.a2ui_enabled
+        settings.a2ui_enabled = True
+        self._clear_card_cache()
+        try:
+            card = build_agent_card()
+            assert "application/json+a2ui" in card.default_input_modes
+            assert "text/plain" in card.default_input_modes
+        finally:
+            settings.a2ui_enabled = original
+            self._clear_card_cache()
+
+    def test_agent_card_input_modes_text_only_when_disabled(self):
+        """Test input modes are text-only when A2UI is disabled."""
+        from lightspeed_agent.config import get_settings
+
+        settings = get_settings()
+        original = settings.a2ui_enabled
+        settings.a2ui_enabled = False
+        self._clear_card_cache()
+        try:
+            card = build_agent_card()
+            assert card.default_input_modes == ["text/plain"]
+        finally:
+            settings.a2ui_enabled = original
+            self._clear_card_cache()
+
     def test_agent_card_a2ui_extension_params(self):
         """Test A2UI extension declares standard catalog."""
         from lightspeed_agent.config import get_settings
@@ -150,10 +203,12 @@ class TestAgentCreationA2ui:
 
     @patch("lightspeed_agent.core.agent.LlmAgent")
     @patch("lightspeed_agent.tools.create_insights_toolset", side_effect=ImportError)
-    def test_create_agent_uses_a2ui_instruction_when_enabled(
+    def test_create_agent_uses_a2ui_toolset_when_enabled(
         self, _mock_tools, mock_llm_agent
     ):
-        """Test agent is created with A2UI-augmented instruction when enabled."""
+        """Test agent includes SendA2uiToClientToolset when A2UI is enabled."""
+        from a2ui.adk.send_a2ui_to_client_toolset import SendA2uiToClientToolset
+
         from lightspeed_agent.config import get_settings
         from lightspeed_agent.core.agent import create_agent
 
@@ -163,8 +218,12 @@ class TestAgentCreationA2ui:
         try:
             create_agent()
             call_kwargs = mock_llm_agent.call_args[1]
-            instruction = call_kwargs["instruction"]
-            assert len(instruction) > len(AGENT_INSTRUCTION)
+            # Instruction should be the plain AGENT_INSTRUCTION (not augmented)
+            assert call_kwargs["static_instruction"] == AGENT_INSTRUCTION
+            # Tools should include a SendA2uiToClientToolset instance
+            tools = call_kwargs["tools"]
+            a2ui_tools = [t for t in tools if isinstance(t, SendA2uiToClientToolset)]
+            assert len(a2ui_tools) == 1
         finally:
             settings.a2ui_enabled = original
 
@@ -183,6 +242,6 @@ class TestAgentCreationA2ui:
         try:
             create_agent()
             call_kwargs = mock_llm_agent.call_args[1]
-            assert call_kwargs["instruction"] == AGENT_INSTRUCTION
+            assert call_kwargs["static_instruction"] == AGENT_INSTRUCTION
         finally:
             settings.a2ui_enabled = original
