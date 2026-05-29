@@ -407,8 +407,8 @@ The `TOOL_RESULT_MAX_CHARS` setting controls a size guard that detects oversized
 # Default: 200K characters
 TOOL_RESULT_MAX_CHARS=204800
 
-# Allow larger results if you have higher TPM quotas
-TOOL_RESULT_MAX_CHARS=100000
+# Lower limit if you have tight TPM quotas
+TOOL_RESULT_MAX_CHARS=51200
 
 # Disable the guard entirely (not recommended — may cause 429 errors)
 TOOL_RESULT_MAX_CHARS=0

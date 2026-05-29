@@ -139,7 +139,7 @@ The AI agent built with Google ADK:
 - **LLM Model**: Uses a configurable LLM (Gemini 2.5 Flash by default) for natural language understanding. Supports alternative providers via LiteLLM.
 - **Tool Orchestration**: Manages tool calls to MCP server
 - **Session Management**: Maintains conversation context
-- **A2UI Rendering**: When enabled (`A2UI_ENABLED=true`), the agent's system prompt is augmented with A2UI component schema, enabling the LLM to generate rich UI components (tables, cards, buttons) alongside text responses. See [A2UI Integration](a2ui.md) for details.
+- **A2UI Rendering**: When enabled (`A2UI_ENABLED=true`), the agent adds the `SendA2uiToClientToolset` with the A2UI Basic Catalog v0.8 schema and domain-specific Insights examples, enabling the LLM to generate rich UI components (tables, cards, buttons) alongside text responses. The Agent Card declares the A2UI extension and adds `application/json+a2ui` to input and output modes. See [A2UI Integration](a2ui.md) for details.
 
 ### MCP Sidecar
 

@@ -198,11 +198,12 @@ python -m pytest tests/test_a2ui.py -v
 ```
 
 Tests cover:
-- Schema manager initialization
+- Schema manager initialization and caching
 - System prompt augmentation (contains both base instruction and A2UI schema)
 - Agent Card extension presence/absence based on `A2UI_ENABLED`
 - Agent Card output modes based on `A2UI_ENABLED`
-- Agent creation with augmented vs. plain instruction
+- Agent Card input modes based on `A2UI_ENABLED`
+- Agent creation with/without A2UI toolset
 
 ### Agent Card Verification
 
@@ -219,8 +220,10 @@ In another terminal:
 ```bash
 # Verify A2UI extension is declared
 curl -s http://localhost:8000/.well-known/agent.json | jq '.capabilities.extensions[].uri'
-# Should show both:
+# Should include (among others):
 #   "https://cloud.google.com/marketplace/docs/partners/ai-agents/setup-dcr"
+#   "urn:redhat:lightspeed:access-mode"
+#   "urn:redhat:lightspeed:rate-limiting"
 #   "https://a2ui.org/a2a-extension/a2ui/v0.8"
 
 # Verify output modes include A2UI
@@ -239,7 +242,7 @@ curl -s http://localhost:8000/.well-known/agent.json | jq '.defaultOutputModes'
 # Should be: ["text/plain"]
 
 curl -s http://localhost:8000/.well-known/agent.json | jq '.capabilities.extensions[].uri'
-# Should only show DCR extension
+# Should show DCR, access-mode, and rate-limiting extensions — but NOT the A2UI extension
 ```
 
 ### Interactive Testing with ADK Web UI (Recommended)
@@ -302,9 +305,12 @@ The response will contain A2A parts — text parts with plain text and data part
 
 **3. (Optional) Provide a fake order_id for usage tracking:**
 
+A Bearer token must be present for `X-Order-Id` to be picked up (the middleware only reads the header inside the token extraction path):
+
 ```bash
 curl -X POST http://localhost:8000/ \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer fake-dev-token" \
   -H "X-Order-Id: test-order-123" \
   -d '{
     "jsonrpc": "2.0",
@@ -320,7 +326,7 @@ curl -X POST http://localhost:8000/ \
   }'
 ```
 
-The `X-Order-Id` header is picked up in dev mode so usage tracking also persists metrics.
+The `X-Order-Id` header is picked up in dev mode (when a Bearer token is also present) so usage tracking persists metrics. The token itself is not validated when `SKIP_JWT_VALIDATION=true`, but it is forwarded to the MCP server.
 
 ### Testing with Podman
 
