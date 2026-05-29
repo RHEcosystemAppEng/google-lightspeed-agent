@@ -37,12 +37,12 @@ The Google Cloud AI Agent Marketplace / Gemini Enterprise expects registered age
 │  ┌─────────────────────────────────────────────────────┐    │
 │  │                    LlmAgent                          │    │
 │  │                                                     │    │
-│  │  System Prompt = AGENT_INSTRUCTION + A2UI Schema    │    │
+│  │  Tools: SendA2uiToClientToolset                     │    │
 │  │                                                     │    │
-│  │  The A2UI schema (from BasicCatalog v0.8) is        │    │
-│  │  appended to the agent instruction, teaching the    │    │
-│  │  LLM how to output A2UI JSON components alongside   │    │
-│  │  text responses.                                    │    │
+│  │  The toolset injects A2UI schema + Insights         │    │
+│  │  examples into LLM requests. The LLM calls          │    │
+│  │  send_a2ui_json_to_client which validates JSON      │    │
+│  │  against the catalog before delivery.               │    │
 │  └──────────────────────┬──────────────────────────────┘    │
 │                         │                                    │
 │                         ▼                                    │
@@ -50,8 +50,8 @@ The Google Cloud AI Agent Marketplace / Gemini Enterprise expects registered age
 │  │              LLM Response                            │    │
 │  │                                                     │    │
 │  │  Text: "Here are your vulnerabilities..."            │    │
-│  │  ---a2ui_JSON---                                     │    │
-│  │  { "components": [ Table, Card, ... ] }              │    │
+│  │  Tool call: send_a2ui_json_to_client(json=...)       │    │
+│  │  → validated A2UI components (Table, Card, ...)      │    │
 │  └──────────────────────┬──────────────────────────────┘    │
 │                         │                                    │
 │                         ▼                                    │
@@ -78,7 +78,7 @@ The Google Cloud AI Agent Marketplace / Gemini Enterprise expects registered age
 
 **Component Catalog** — A JSON Schema file defining the set of available UI component types. The agent uses the A2UI **Basic Catalog** (v0.8), which includes standard components like Text, Card, Button, Table, TextField, DateTimeInput, Image, Row, and Column. Agents can only generate components present in the catalog.
 
-**System Prompt Augmentation** — The `a2ui-agent-sdk` generates a system prompt that includes the catalog schema and few-shot examples. This is appended to the existing `AGENT_INSTRUCTION`, so the LLM understands both its role (Red Hat Insights agent) and how to format responses with A2UI components.
+**SendA2uiToClientToolset** — The agent uses the SDK's `SendA2uiToClientToolset` which automatically injects the A2UI schema and domain-specific examples into LLM requests. The LLM calls the `send_a2ui_json_to_client` tool, which validates JSON against the catalog schema before delivering it to the client. This replaces manual system prompt augmentation with server-side validation.
 
 **Data Model Separation** — A2UI separates UI structure from application data. Components bind to a data model via references. The agent can update data without resending the entire component tree.
 
@@ -100,9 +100,10 @@ When `A2UI_ENABLED=false` (the default), the agent behaves exactly as before —
 
 When `A2UI_ENABLED=true`:
 
-1. The agent's system prompt is augmented with the A2UI catalog schema and examples
+1. The `SendA2uiToClientToolset` is added to the agent's tools, injecting the A2UI catalog schema and domain-specific Insights examples into LLM requests (the LLM validates JSON via the `send_a2ui_json_to_client` tool)
 2. The Agent Card declares the A2UI extension (`https://a2ui.org/a2a-extension/a2ui/v0.8`)
 3. The Agent Card's `defaultOutputModes` includes `application/json+a2ui`
+4. The Agent Card's `defaultInputModes` includes `application/json+a2ui` (for receiving A2UI action payloads like button clicks)
 
 ### Enabling A2UI
 
@@ -148,7 +149,7 @@ This tells A2A clients (like Gemini Enterprise) that the agent supports A2UI ren
 
 ### Output Modes
 
-Updated from `["text"]` to `["text", "application/json+a2ui"]`, indicating the agent can produce both plain text and A2UI component responses.
+Updated from `["text/plain"]` to `["text/plain", "application/json+a2ui"]`, indicating the agent can produce both plain text and A2UI component responses.
 
 ## Code Structure
 
@@ -156,19 +157,21 @@ Updated from `["text"]` to `["text", "application/json+a2ui"]`, indicating the a
 src/lightspeed_agent/
 ├── a2ui/                       # A2UI integration
 │   ├── __init__.py
-│   └── prompt.py              # Schema manager + system prompt generation
+│   ├── examples.py            # Domain-specific A2UI examples for Insights data
+│   └── prompt.py              # Schema manager + catalog access
 ├── core/
-│   └── agent.py               # create_agent() conditionally augments instruction
+│   └── agent.py               # create_agent() adds SendA2uiToClientToolset
 └── api/a2a/
-    └── agent_card.py          # A2UI extension + output modes in AgentCard
+    └── agent_card.py          # A2UI extension + input/output modes in AgentCard
 ```
 
 ### Key Functions
 
 | Function | File | Purpose |
 |----------|------|---------|
-| `get_a2ui_schema_manager()` | `a2ui/prompt.py` | Creates the A2UI schema manager with Basic Catalog v0.8 |
-| `generate_a2ui_instruction()` | `a2ui/prompt.py` | Augments the base agent instruction with A2UI schema |
+| `get_a2ui_schema_manager()` | `a2ui/prompt.py` | Creates and caches the A2UI schema manager with Basic Catalog v0.8 |
+| `get_a2ui_catalog()` | `a2ui/prompt.py` | Returns the A2uiCatalog for the Basic Catalog v0.8 |
+| `get_insights_a2ui_examples()` | `a2ui/prompt.py` | Returns domain-specific A2UI examples for Insights data |
 | `_build_a2ui_extension()` | `api/a2a/agent_card.py` | Builds the A2UI AgentCard extension |
 
 ## Use Cases for Red Hat Insights
@@ -222,7 +225,7 @@ curl -s http://localhost:8000/.well-known/agent.json | jq '.capabilities.extensi
 
 # Verify output modes include A2UI
 curl -s http://localhost:8000/.well-known/agent.json | jq '.defaultOutputModes'
-# Should be: ["text", "application/json+a2ui"]
+# Should be: ["text/plain", "application/json+a2ui"]
 ```
 
 **With A2UI disabled (default):**
@@ -233,7 +236,7 @@ A2UI_ENABLED=false SKIP_JWT_VALIDATION=true python -m lightspeed_agent.main
 
 ```bash
 curl -s http://localhost:8000/.well-known/agent.json | jq '.defaultOutputModes'
-# Should be: ["text"]
+# Should be: ["text/plain"]
 
 curl -s http://localhost:8000/.well-known/agent.json | jq '.capabilities.extensions[].uri'
 # Should only show DCR extension

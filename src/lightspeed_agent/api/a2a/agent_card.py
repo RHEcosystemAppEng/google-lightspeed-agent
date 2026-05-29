@@ -182,8 +182,10 @@ def build_agent_card() -> AgentCard:
     capabilities = _build_capabilities()
     skills = _build_skills()
 
+    input_modes = ["text/plain"]
     output_modes = ["text/plain"]
     if settings.a2ui_enabled:
+        input_modes.append("application/json+a2ui")
         output_modes.append("application/json+a2ui")
 
     agent_card = AgentCard(
@@ -201,7 +203,7 @@ def build_agent_card() -> AgentCard:
         security=[
             {"redhat_sso": ["openid", "api.console", "api.ocm"]},
         ],
-        default_input_modes=["text/plain"],
+        default_input_modes=input_modes,
         default_output_modes=output_modes,
     )
 
