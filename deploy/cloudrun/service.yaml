@@ -39,6 +39,8 @@ spec:
         # VPC connector for Cloud Memorystore Redis (rate limiting)
         run.googleapis.com/vpc-access-connector: projects/${PROJECT_ID}/locations/${REGION}/connectors/${VPC_CONNECTOR_NAME}
         run.googleapis.com/vpc-access-egress: private-ranges-only
+        # Managed OpenTelemetry collector sidecar for Cloud Monitoring
+        run.googleapis.com/otel-collector: '{"enabled": true}'
     spec:
       containerConcurrency: 80
       timeoutSeconds: 300
@@ -172,6 +174,12 @@ spec:
               value: "60"
             - name: RATE_LIMIT_REQUESTS_PER_HOUR
               value: "1000"
+            # OpenTelemetry Metrics
+            # The managed OTel collector sidecar receives OTLP on localhost:4317
+            # and forwards metrics to Cloud Monitoring automatically.
+            # Defaults (otlp exporter on localhost:4317) match the collector sidecar.
+            - name: OTEL_METRICS_ENABLED
+              value: "true"
             # Probe server port (health/readiness checks on separate port)
             - name: AGENT_PROBE_PORT
               value: "8002"
