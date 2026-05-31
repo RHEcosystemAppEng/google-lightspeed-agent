@@ -107,9 +107,7 @@ def _create_meter_provider(resource: Resource, settings: Any) -> MeterProvider:
         if settings.otel_exporter_type == "console":
             metric_exporter = ConsoleMetricExporter()
         elif settings.otel_exporter_type == "otlp":
-            from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import (
-                OTLPMetricExporter,
-            )
+            from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter
 
             metric_exporter = OTLPMetricExporter(
                 endpoint=settings.otel_exporter_otlp_endpoint
@@ -124,6 +122,12 @@ def _create_meter_provider(resource: Resource, settings: Any) -> MeterProvider:
             )
 
         readers.append(PeriodicExportingMetricReader(metric_exporter))
+        logger.info("Metric reader created for exporter '%s'", settings.otel_exporter_type)
+    else:
+        logger.debug(
+            "Exporter '%s' does not support metrics, skipping metric reader",
+            settings.otel_exporter_type,
+        )
 
     try:
         from opentelemetry.exporter.prometheus import PrometheusMetricReader
