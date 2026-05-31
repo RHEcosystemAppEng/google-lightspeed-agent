@@ -159,7 +159,7 @@ class TestMeterProviderSetup:
 
         monkeypatch.setenv("OTEL_ENABLED", "false")
         monkeypatch.setenv("OTEL_METRICS_ENABLED", "true")
-        monkeypatch.setenv("OTEL_METRICS_PROMETHEUS_PORT", "0")
+        monkeypatch.setenv("OTEL_EXPORTER_PROMETHEUS_PORT", "0")
 
         from lightspeed_agent.config import get_settings
 

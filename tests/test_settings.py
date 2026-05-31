@@ -365,5 +365,4 @@ class TestOtelMetricsSettings:
             red_hat_sso_client_secret="test",
         )
         assert settings.otel_metrics_enabled is False
-        assert settings.otel_metrics_prometheus_port == 9464
         assert settings.otel_metrics_collection_interval == 60
