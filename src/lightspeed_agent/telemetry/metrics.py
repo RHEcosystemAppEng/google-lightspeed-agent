@@ -3,7 +3,6 @@
 import asyncio
 import contextlib
 import logging
-import threading
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
@@ -66,14 +65,12 @@ class MetricsCollector:
     def __init__(self, collection_interval: int = 60) -> None:
         self._interval = collection_interval
         self._cache = MetricsCache()
-        self._lock = threading.Lock()
         self._task: asyncio.Task[None] | None = None
         self._running = False
 
     @property
     def cache(self) -> MetricsCache:
-        with self._lock:
-            return self._cache
+        return self._cache
 
     async def _collect_once(self) -> None:
         """Run one collection cycle."""
@@ -82,13 +79,12 @@ class MetricsCollector:
             dcr_clients = await self._query_dcr_clients()
             usage = await self._query_usage()
 
-            with self._lock:
-                self._cache = MetricsCache(
-                    subscriptions=subscriptions,
-                    dcr_clients=dcr_clients,
-                    usage_by_order=usage,
-                    last_updated=datetime.now(UTC),
-                )
+            self._cache = MetricsCache(
+                subscriptions=subscriptions,
+                dcr_clients=dcr_clients,
+                usage_by_order=usage,
+                last_updated=datetime.now(UTC),
+            )
             logger.debug("Metrics cache updated")
         except Exception:
             logger.warning(
