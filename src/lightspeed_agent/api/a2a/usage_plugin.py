@@ -94,7 +94,7 @@ class UsageTrackingPlugin(BasePlugin):
         client_id = _resolve_client_id()
         await self._persist_increment(order_id=order_id, client_id=client_id, tool_calls=1)
         tool_name = getattr(tool, "name", type(tool).__name__)
-        increment_tool_call(tool_name=tool_name, order_id=order_id, client_id=client_id)
+        increment_tool_call(tool_name=tool_name)
         logger.debug(
             "Tool metering increment persisted for order %s (tool=%s)",
             order_id,

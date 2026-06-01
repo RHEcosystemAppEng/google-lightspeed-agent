@@ -99,12 +99,11 @@ class TestMetricsCollector:
 
         assert len(cache.dcr_clients) == 1
         assert cache.dcr_clients[0].account_id == "account-A"
-        assert cache.dcr_clients[0].order_id == "order-001"
-        assert cache.dcr_clients[0].client_id == "client-aaa"
+        assert cache.dcr_clients[0].count == 1
 
         assert len(cache.usage_by_order) == 1
         u = cache.usage_by_order[0]
-        assert u.order_id == "order-001"
+        assert u.account_id == "account-A"
         assert u.input_tokens == 100
         assert u.output_tokens == 50
         assert u.request_count == 5
@@ -216,16 +215,14 @@ class TestGaugeCallbacks:
         collector = MetricsCollector(collection_interval=60)
         collector._cache = MetricsCache(
             dcr_clients=[
-                DCRClientSnapshot(
-                    account_id="acct-A", order_id="order-001", client_id="cl-1"
-                ),
+                DCRClientSnapshot(account_id="acct-A", count=1),
             ],
         )
 
         observations = list(_observe_dcr_clients(collector))
         assert len(observations) == 1
         assert observations[0].value == 1
-        assert observations[0].attributes["order_id"] == "order-001"
+        assert observations[0].attributes["account_id"] == "acct-A"
 
     def test_usage_gauge_reads_cache(self):
         from lightspeed_agent.telemetry.metrics import (
@@ -239,8 +236,7 @@ class TestGaugeCallbacks:
         collector._cache = MetricsCache(
             usage_by_order=[
                 UsageSnapshot(
-                    order_id="order-001",
-                    client_id="cl-1",
+                    account_id="acct-A",
                     input_tokens=5000,
                     output_tokens=1000,
                     request_count=10,
@@ -269,11 +265,7 @@ class TestToolCallCounter:
     def test_increment_tool_call(self):
         from lightspeed_agent.telemetry.metrics import increment_tool_call
 
-        increment_tool_call(
-            tool_name="advisor_list_recommendations",
-            order_id="order-001",
-            client_id="client-aaa",
-        )
+        increment_tool_call(tool_name="advisor_list_recommendations")
 
 
 class TestEndToEnd:
@@ -348,7 +340,7 @@ class TestEndToEnd:
             name="tool_calls_by_name",
             description="Tool invocations by tool name and order",
         )
-        tool_counter.add(1, attributes={"tool_name": "test", "order_id": "o", "client_id": ""})
+        tool_counter.add(1, attributes={"tool_name": "test"})
 
         await collector._collect_once()
 

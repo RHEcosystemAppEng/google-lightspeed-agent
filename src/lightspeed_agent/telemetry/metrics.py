@@ -33,14 +33,12 @@ class SubscriptionSnapshot:
 @dataclass
 class DCRClientSnapshot:
     account_id: str
-    order_id: str
-    client_id: str
+    count: int
 
 
 @dataclass
 class UsageSnapshot:
-    order_id: str
-    client_id: str | None
+    account_id: str
     input_tokens: int
     output_tokens: int
     request_count: int
@@ -115,15 +113,15 @@ class MetricsCollector:
         async with get_session() as session:
             stmt = select(
                 DCRClientModel.account_id,
-                DCRClientModel.order_id,
-                DCRClientModel.client_id,
+                func.count().label("client_count"),
+            ).group_by(
+                DCRClientModel.account_id,
             )
             result = await session.execute(stmt)
             return [
                 DCRClientSnapshot(
                     account_id=r.account_id,
-                    order_id=r.order_id,
-                    client_id=r.client_id,
+                    count=int(r.client_count),
                 )
                 for r in result.all()
             ]
@@ -132,22 +130,23 @@ class MetricsCollector:
         async with get_session() as session:
             stmt = (
                 select(
-                    UsageRecordModel.order_id,
-                    UsageRecordModel.client_id,
+                    MarketplaceEntitlementModel.account_id,
                     func.sum(UsageRecordModel.input_tokens).label("input_tokens"),
                     func.sum(UsageRecordModel.output_tokens).label("output_tokens"),
                     func.sum(UsageRecordModel.request_count).label("request_count"),
                 )
+                .join(
+                    MarketplaceEntitlementModel,
+                    UsageRecordModel.order_id == MarketplaceEntitlementModel.id,
+                )
                 .group_by(
-                    UsageRecordModel.order_id,
-                    UsageRecordModel.client_id,
+                    MarketplaceEntitlementModel.account_id,
                 )
             )
             result = await session.execute(stmt)
             return [
                 UsageSnapshot(
-                    order_id=r.order_id,
-                    client_id=r.client_id,
+                    account_id=r.account_id,
                     input_tokens=int(r.input_tokens or 0),
                     output_tokens=int(r.output_tokens or 0),
                     request_count=int(r.request_count or 0),
@@ -212,12 +211,8 @@ def _observe_dcr_clients(collector: MetricsCollector) -> list[Observation]:
     cache = collector.cache
     return [
         Observation(
-            value=1,
-            attributes={
-                "account_id": c.account_id,
-                "order_id": c.order_id,
-                "client_id": c.client_id,
-            },
+            value=c.count,
+            attributes={"account_id": c.account_id},
         )
         for c in cache.dcr_clients
     ]
@@ -228,10 +223,7 @@ def _observe_tokens_input(collector: MetricsCollector) -> list[Observation]:
     return [
         Observation(
             value=u.input_tokens,
-            attributes={
-                "order_id": u.order_id,
-                "client_id": u.client_id or "",
-            },
+            attributes={"account_id": u.account_id},
         )
         for u in cache.usage_by_order
     ]
@@ -242,10 +234,7 @@ def _observe_tokens_output(collector: MetricsCollector) -> list[Observation]:
     return [
         Observation(
             value=u.output_tokens,
-            attributes={
-                "order_id": u.order_id,
-                "client_id": u.client_id or "",
-            },
+            attributes={"account_id": u.account_id},
         )
         for u in cache.usage_by_order
     ]
@@ -256,10 +245,7 @@ def _observe_requests(collector: MetricsCollector) -> list[Observation]:
     return [
         Observation(
             value=u.request_count,
-            attributes={
-                "order_id": u.order_id,
-                "client_id": u.client_id or "",
-            },
+            attributes={"account_id": u.account_id},
         )
         for u in cache.usage_by_order
     ]
@@ -272,21 +258,13 @@ def _observe_requests(collector: MetricsCollector) -> list[Observation]:
 _tool_call_counter = None
 
 
-def increment_tool_call(
-    tool_name: str,
-    order_id: str,
-    client_id: str | None = None,
-) -> None:
+def increment_tool_call(tool_name: str) -> None:
     """Increment the tool_calls_by_name counter. No-op if metrics are disabled."""
     if _tool_call_counter is None:
         return
     _tool_call_counter.add(
         1,
-        attributes={
-            "tool_name": tool_name,
-            "order_id": order_id,
-            "client_id": client_id or "",
-        },
+        attributes={"tool_name": tool_name},
     )
 
 
@@ -324,7 +302,7 @@ def _register_instruments(collector: MetricsCollector) -> None:
     )
     meter.create_observable_gauge(
         name="tokens_input_total",
-        description="Total input tokens by order",
+        description="Total input tokens by account",
         callbacks=[
             lambda _options: [
                 otel_metrics.Observation(o.value, o.attributes)
@@ -334,7 +312,7 @@ def _register_instruments(collector: MetricsCollector) -> None:
     )
     meter.create_observable_gauge(
         name="tokens_output_total",
-        description="Total output tokens by order",
+        description="Total output tokens by account",
         callbacks=[
             lambda _options: [
                 otel_metrics.Observation(o.value, o.attributes)
@@ -344,7 +322,7 @@ def _register_instruments(collector: MetricsCollector) -> None:
     )
     meter.create_observable_gauge(
         name="requests_total",
-        description="Total requests by order",
+        description="Total requests by account",
         callbacks=[
             lambda _options: [
                 otel_metrics.Observation(o.value, o.attributes)
@@ -354,7 +332,7 @@ def _register_instruments(collector: MetricsCollector) -> None:
     )
     _tool_call_counter = meter.create_counter(
         name="tool_calls_by_name",
-        description="Tool invocations by tool name and order",
+        description="Tool invocations by tool name",
     )
     logger.info("OTel metrics instruments registered")
 

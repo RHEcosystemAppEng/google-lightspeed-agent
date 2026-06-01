@@ -144,6 +144,4 @@ class TestUsageTrackingPlugin:
 
         mock_increment.assert_called_once_with(
             tool_name="advisor_list_recommendations",
-            order_id="order-001",
-            client_id="client-aaa",
         )
