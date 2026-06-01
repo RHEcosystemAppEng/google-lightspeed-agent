@@ -1,0 +1,37 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended"
+  ],
+  "pip-compile": {
+    "enabled": true,
+    "managerFilePatterns": [
+      "/(^|/)pyproject\\.toml$/"
+    ]
+  },
+  "lockFileMaintenance": {
+    "enabled": true,
+    "automerge": false,
+    "schedule": [
+      "before 5am on monday"
+    ]
+  },
+  "osvVulnerabilityAlerts": true,
+  "packageRules": [
+    {
+      "matchManagers": [
+        "pip-compile"
+      ],
+      "postUpgradeTasks": {
+        "commands": [
+          "uv pip compile --generate-hashes --python-version=3.12 --python-platform=linux --extra=agent --output-file=requirements-agent.txt pyproject.toml",
+          "uv pip compile --generate-hashes --python-version=3.12 --python-platform=linux --extra=dev --output-file=requirements-dev.txt pyproject.toml",
+          "uv pip compile --generate-hashes --python-version=3.12 --python-platform=linux --output-file=requirements-handler.txt pyproject.toml"
+        ],
+        "fileFilters": [
+          "requirements-*.txt"
+        ]
+      }
+    }
+  ]
+}

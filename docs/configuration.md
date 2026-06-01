@@ -176,6 +176,7 @@ SKILLS_DIR=/opt/agent-skills  # Optional: load custom skills from this directory
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `DATABASE_URL` | `sqlite+aiosqlite:///./lightspeed_agent.db` | Marketplace database connection URL (orders, DCR clients, auth) |
+| `DATABASE_REQUIRE_SSL` | `false` | Require SSL/TLS for PostgreSQL connections. Applies to both `DATABASE_URL` and `SESSION_DATABASE_URL`. Not needed for Cloud SQL Proxy (encryption at infrastructure layer). |
 | `SESSION_BACKEND` | `memory` | Session storage backend: `memory` (in-memory, no persistence) or `database` (PostgreSQL, persistent) |
 | `SESSION_DATABASE_URL` | *(empty)* | Session database URL for ADK sessions. Required when `SESSION_BACKEND=database`. |
 
@@ -220,6 +221,22 @@ This separation ensures:
 - Agents only access session data, not marketplace/auth data
 - Compromised agents can't access DCR credentials or order information
 - Different retention policies can be applied to sessions vs. marketplace data
+
+**SSL/TLS Encryption (Direct TCP Connections):**
+
+When connecting to PostgreSQL over direct TCP (not Cloud SQL Proxy), enable SSL to encrypt
+database traffic in transit:
+
+```bash
+DATABASE_REQUIRE_SSL=true
+```
+
+This adds `ssl=True` to the `asyncpg` connection arguments for both `DATABASE_URL` and
+`SESSION_DATABASE_URL`. The agent logs a warning at startup if this setting is disabled
+on Cloud Run with a PostgreSQL URL.
+
+> **Cloud SQL Proxy:** If using Cloud SQL Proxy, SSL is provided at the infrastructure layer
+> by the proxy itself. `DATABASE_REQUIRE_SSL` is not needed and can remain `false`.
 
 **Switching to In-Memory Sessions:**
 
@@ -286,6 +303,22 @@ RATE_LIMIT_REQUESTS_PER_HOUR=2000
 ```
 
 See [Rate Limiting](rate-limiting.md) for details on the sliding window algorithm.
+
+### Load Balancer (Cloud Run)
+
+Optional per-service Google Cloud Load Balancers (GCLB) provide SSL termination, DDoS protection, and Cloud Armor WAF. See [Cloud Run deployment](../deploy/cloudrun/README.md#load-balancer-optional) for full details.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ENABLE_LB_AGENT` | `false` | Enable GCLB for the agent service |
+| `AGENT_DOMAIN_NAME` | - | Domain for the agent SSL certificate. Required when `ENABLE_LB_AGENT=true` |
+| `ENABLE_LB_HANDLER` | `false` | Enable GCLB for the marketplace handler |
+| `HANDLER_DOMAIN_NAME` | - | Domain for the handler SSL certificate. Required when `ENABLE_LB_HANDLER=true` |
+| `ENABLE_CLOUD_ARMOR_AGENT` | `false` | Enable Cloud Armor WAF for the agent LB. Requires `ENABLE_LB_AGENT=true` |
+| `ENABLE_CLOUD_ARMOR_HANDLER` | `false` | Enable Cloud Armor WAF for the handler LB. Requires `ENABLE_LB_HANDLER=true` |
+| `LB_NAME` | `lightspeed-lb` | Prefix for all load balancer resource names |
+
+When a service's LB is enabled, `deploy.sh` automatically sets `AGENT_PROVIDER_URL` and/or `MARKETPLACE_HANDLER_URL` to the GCLB domain(s) so the AgentCard advertises the correct externally-reachable URLs. When LBs are not enabled, `deploy.sh` sets Cloud Run ingress to `all` so external traffic is not blocked.
 
 ### Google Cloud Service Control
 

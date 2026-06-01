@@ -131,7 +131,7 @@ return {1, "ok", min_remaining_minute, min_remaining_hour, 0, 0}
 
     async def verify_connection(self) -> None:
         """Fail fast when Redis is not reachable."""
-        await self._redis.ping()  # type: ignore[misc]
+        await self._redis.ping()
 
     async def close(self) -> None:
         """Close Redis resources."""
@@ -154,7 +154,7 @@ return {1, "ok", min_remaining_minute, min_remaining_hour, 0, 0}
             redis_keys.append(f"{self._key_prefix}:{principal_key}:h")
 
         try:
-            result = await self._redis.eval(  # type: ignore[misc]
+            result = await self._redis.eval(
                 self.LUA_CHECK_AND_INCREMENT,
                 len(redis_keys),
                 *redis_keys,

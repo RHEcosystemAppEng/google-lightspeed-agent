@@ -462,9 +462,9 @@ httpx==0.28.1 \
     --hash=sha256:75e98c5f16b0f35b567856f597f06ff2270a374470a5c2392242528e3e3e42fc \
     --hash=sha256:d909fcccc110f8c7faf814ca82a9a4d816bc5a6dbfea25d6591d6985b8ba59ad
     # via lightspeed-agent (pyproject.toml)
-idna==3.16 \
-    --hash=sha256:cc246e3a3f89580c3a951b5ad298ca4638078b2cdd4f115654332b5c26daded5 \
-    --hash=sha256:d7a6da03db833450fca25d2358ac9ff06cd624577a4aea3a596d5c0f77b8e03d
+idna==3.17 \
+    --hash=sha256:466e48829084efe2548012b855df21540b96f2e20e51bd124c851536556a592c \
+    --hash=sha256:5eb0cb53bc467c12eadcf6de83163ad8527cec9416f44b9b61b19caedad2b87f
     # via
     #   anyio
     #   httpx
@@ -695,9 +695,9 @@ python-multipart==0.0.29 \
     --hash=sha256:2ddcc971cef266225f54f552d8fa10bcfbb1f14446caec199060daac59ff2d69 \
     --hash=sha256:643e93849196645e2dbdd81a0f8829a23123ad7f797a84a364c6fb3563f18904
     # via lightspeed-agent (pyproject.toml)
-redis==7.4.0 \
-    --hash=sha256:64a6ea7bf567ad43c964d2c30d82853f8df927c5c9017766c55a1d1ed95d18ad \
-    --hash=sha256:a9c74a5c893a5ef8455a5adb793a31bb70feb821c86eccb62eebef5a19c429ec
+redis==8.0.0 \
+    --hash=sha256:a00c5355432051ac14e593b8b197fc76c887ee12d55a0984f69328a1115fdc49 \
+    --hash=sha256:c938c18338585009f0bc310f4c7e4e4b4d37639356c4ac072cedf3af570c8dc7
     # via lightspeed-agent (pyproject.toml)
 requests==2.34.2 \
     --hash=sha256:2a0d60c172f83ac6ab31e4554906c0f3b3588d37b5cb939b1c061f4907e278e0 \
@@ -763,9 +763,9 @@ sqlalchemy==2.0.50 \
     --hash=sha256:f96233858e3df43932ac11589e22520da6e8aeb624b03fedfeebb0e8ea213086 \
     --hash=sha256:faffef4bcc20a1892e65e155293d99d60855bbbc79250ab712819cfd56a8e6bb
     # via lightspeed-agent (pyproject.toml)
-starlette==1.1.0 \
-    --hash=sha256:7f0dfd38e428aad5cb6f9f667f0ca1d2d8ca3f3385dccac8305f79ec98458382 \
-    --hash=sha256:e83c7fe0ddecd8719c5b840080325aec0260acec86e9832899e377b91d65e90f
+starlette==1.2.0 \
+    --hash=sha256:36e0c76ac59157e75dc4b3bdeafba97fb04eaf1878045f15dbef666a6f092ed7 \
+    --hash=sha256:3c5a6b23fff42492914e93890bb80cbfea72dbf37de268eec06185d62a4ca553
     # via fastapi
 typing-extensions==4.15.0 \
     --hash=sha256:0cea48d173cc12fa28ecabc3b837ea3cf6f38c6d1136f85cbaaf598984861466 \
