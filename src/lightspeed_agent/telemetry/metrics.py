@@ -73,9 +73,11 @@ class MetricsCollector:
     async def _collect_once(self) -> None:
         """Run one collection cycle."""
         try:
-            subscriptions = await self._query_subscriptions()
-            dcr_clients = await self._query_dcr_clients()
-            usage = await self._query_usage()
+            subscriptions, dcr_clients, usage = await asyncio.gather(
+                self._query_subscriptions(),
+                self._query_dcr_clients(),
+                self._query_usage(),
+            )
 
             self._cache = MetricsCache(
                 subscriptions=subscriptions,
