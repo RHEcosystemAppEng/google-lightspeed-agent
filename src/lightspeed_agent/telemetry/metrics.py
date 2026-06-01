@@ -281,7 +281,7 @@ def _register_instruments(collector: MetricsCollector) -> None:
     meter = otel_metrics.get_meter("lightspeed_agent.metrics")
 
     meter.create_observable_gauge(
-        name="subscriptions_total",
+        name="subscriptions_count",
         description="Entitlement count by account and state",
         callbacks=[
             lambda _options: [
@@ -301,7 +301,7 @@ def _register_instruments(collector: MetricsCollector) -> None:
         ],
     )
     meter.create_observable_gauge(
-        name="tokens_input_total",
+        name="input_tokens",
         description="Total input tokens by account",
         callbacks=[
             lambda _options: [
@@ -311,7 +311,7 @@ def _register_instruments(collector: MetricsCollector) -> None:
         ],
     )
     meter.create_observable_gauge(
-        name="tokens_output_total",
+        name="output_tokens",
         description="Total output tokens by account",
         callbacks=[
             lambda _options: [
@@ -321,7 +321,7 @@ def _register_instruments(collector: MetricsCollector) -> None:
         ],
     )
     meter.create_observable_gauge(
-        name="requests_total",
+        name="request_count",
         description="Total requests by account",
         callbacks=[
             lambda _options: [

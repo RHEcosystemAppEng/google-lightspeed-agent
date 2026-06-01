@@ -287,7 +287,7 @@ class TestEndToEnd:
         meter = provider.get_meter("lightspeed_agent.metrics")
 
         meter.create_observable_gauge(
-            name="subscriptions_total",
+            name="subscriptions_count",
             description="Entitlement count by account and state",
             callbacks=[
                 lambda _options: [
@@ -307,8 +307,8 @@ class TestEndToEnd:
             ],
         )
         meter.create_observable_gauge(
-            name="tokens_input_total",
-            description="Total input tokens by order",
+            name="input_tokens",
+            description="Total input tokens by account",
             callbacks=[
                 lambda _options: [
                     otel_metrics.Observation(o.value, o.attributes)
@@ -317,8 +317,8 @@ class TestEndToEnd:
             ],
         )
         meter.create_observable_gauge(
-            name="tokens_output_total",
-            description="Total output tokens by order",
+            name="output_tokens",
+            description="Total output tokens by account",
             callbacks=[
                 lambda _options: [
                     otel_metrics.Observation(o.value, o.attributes)
@@ -327,8 +327,8 @@ class TestEndToEnd:
             ],
         )
         meter.create_observable_gauge(
-            name="requests_total",
-            description="Total requests by order",
+            name="request_count",
+            description="Total requests by account",
             callbacks=[
                 lambda _options: [
                     otel_metrics.Observation(o.value, o.attributes)
@@ -351,11 +351,11 @@ class TestEndToEnd:
                 for metric in scope_metrics.metrics:
                     metric_names.add(metric.name)
 
-        assert "subscriptions_total" in metric_names
+        assert "subscriptions_count" in metric_names
         assert "dcr_clients_active" in metric_names
-        assert "tokens_input_total" in metric_names
-        assert "tokens_output_total" in metric_names
-        assert "requests_total" in metric_names
+        assert "input_tokens" in metric_names
+        assert "output_tokens" in metric_names
+        assert "request_count" in metric_names
         assert "tool_calls_by_name" in metric_names
 
         provider.shutdown()
