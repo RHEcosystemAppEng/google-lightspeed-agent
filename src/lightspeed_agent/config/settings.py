@@ -615,6 +615,7 @@ class Settings(BaseSettings):
     )
     otel_metrics_collection_interval: int = Field(
         default=60,
+        ge=10,
         description="DB polling interval in seconds for metrics collection",
     )
 
