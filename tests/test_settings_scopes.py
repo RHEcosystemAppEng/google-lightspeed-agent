@@ -15,6 +15,7 @@ def _make_settings(**overrides) -> Settings:
         "red_hat_sso_client_id": "test-client-id",
         "red_hat_sso_client_secret": "test-client-secret",
         "skip_jwt_validation": False,
+        "debug": False,
     }
     defaults.update(overrides)
     return Settings(**defaults)

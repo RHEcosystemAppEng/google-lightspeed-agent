@@ -1,11 +1,14 @@
 """Application settings and configuration management."""
 
+import logging
 import os
 from functools import lru_cache
 from typing import Literal
 
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+logger = logging.getLogger(__name__)
 
 
 class Settings(BaseSettings):
@@ -416,6 +419,26 @@ class Settings(BaseSettings):
         default=False,
         description="Skip JWT validation (development only)",
     )
+
+    @model_validator(mode="after")
+    def _warn_debug_in_production(self) -> "Settings":
+        """Warn when DEBUG is enabled in a Cloud Run deployment.
+
+        Cloud Run sets K_SERVICE automatically. If that variable is present,
+        this is a managed deployment and debug mode should not be enabled.
+        Unlike SKIP_JWT_VALIDATION (which raises on startup), DEBUG does not
+        bypass authentication, so we log a warning rather than refusing to start.
+        """
+        if self.debug and os.getenv("K_SERVICE"):
+            logger.warning(
+                "DEBUG=true is active in Cloud Run "
+                "(K_SERVICE=%s). "
+                "This exposes /docs, /redoc, enables wildcard CORS, "
+                "and turns on SQL echo logging. "
+                "This setting is intended for local development only.",
+                os.getenv("K_SERVICE"),
+            )
+        return self
 
     @model_validator(mode="after")
     def _block_skip_jwt_in_production(self) -> "Settings":
