@@ -77,7 +77,6 @@ class TestMetricsCache:
 class TestMetricsCollector:
     """Tests for the background DB polling collector."""
 
-    @pytest.mark.asyncio
     async def test_collect_populates_cache(self, seeded_db):
         from lightspeed_agent.telemetry.metrics import MetricsCollector
 
@@ -108,7 +107,6 @@ class TestMetricsCollector:
         assert u.output_tokens == 50
         assert u.request_count == 5
 
-    @pytest.mark.asyncio
     async def test_collect_handles_db_error(self, db_session, monkeypatch):
         """DB errors should log a warning and leave cache stale."""
         from lightspeed_agent.telemetry.metrics import MetricsCollector
@@ -129,7 +127,6 @@ class TestMetricsCollector:
         await collector._collect_once()
         assert collector.cache.last_updated == first_update
 
-    @pytest.mark.asyncio
     async def test_collector_start_stop(self, db_session):
         from lightspeed_agent.telemetry.metrics import MetricsCollector
 
@@ -262,16 +259,48 @@ class TestGaugeCallbacks:
 class TestToolCallCounter:
     """Tests for the in-process tool call counter."""
 
-    def test_increment_tool_call(self):
+    def test_increment_tool_call_noop_when_disabled(self):
         from lightspeed_agent.telemetry.metrics import increment_tool_call
 
         increment_tool_call(tool_name="advisor_list_recommendations")
+
+    def test_increment_tool_call_when_enabled(self, monkeypatch):
+        from opentelemetry.sdk.metrics import MeterProvider
+        from opentelemetry.sdk.metrics.export import InMemoryMetricReader
+
+        import lightspeed_agent.telemetry.metrics as metrics_mod
+
+        reader = InMemoryMetricReader()
+        provider = MeterProvider(metric_readers=[reader])
+        meter = provider.get_meter("test")
+        counter = meter.create_counter("tool_calls_by_name")
+
+        monkeypatch.setattr(metrics_mod, "_tool_call_counter", counter)
+
+        metrics_mod.increment_tool_call(tool_name="advisor")
+        metrics_mod.increment_tool_call(tool_name="advisor")
+        metrics_mod.increment_tool_call(tool_name="vulnerability")
+
+        metrics_data = reader.get_metrics_data()
+        data_points = []
+        for rm in metrics_data.resource_metrics:
+            for sm in rm.scope_metrics:
+                for metric in sm.metrics:
+                    if metric.name == "tool_calls_by_name":
+                        for dp in metric.data.data_points:
+                            data_points.append(dp)
+
+        assert len(data_points) == 2
+        by_tool = {dict(dp.attributes)["tool_name"]: dp.value for dp in data_points}
+        assert by_tool["advisor"] == 2
+        assert by_tool["vulnerability"] == 1
+
+        provider.shutdown()
 
 
 class TestEndToEnd:
     """End-to-end test: DB -> collector -> gauge callbacks -> InMemoryMetricReader."""
 
-    @pytest.mark.asyncio
     async def test_full_pipeline(self, seeded_db, monkeypatch):
         from opentelemetry import metrics as otel_metrics
         from opentelemetry.sdk.metrics import MeterProvider
