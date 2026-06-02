@@ -1,8 +1,8 @@
 # OpenTelemetry Integration
 
-The Lightspeed Agent supports distributed tracing via OpenTelemetry, enabling observability across agent-to-agent interactions and MCP tool calls.
+The Lightspeed Agent supports distributed tracing and metrics via OpenTelemetry, enabling observability across agent-to-agent interactions and MCP tool calls.
 
-## Overview
+## Tracing
 
 When enabled, OpenTelemetry automatically instruments:
 
@@ -229,6 +229,58 @@ podman run -d --name otel-collector \
   otel/opentelemetry-collector:latest \
   --config=/etc/otel-collector-config.yaml
 ```
+
+## Metrics
+
+The agent collects business-level metrics by polling the database on a configurable interval and exposing the data as OTel gauge instruments. A separate counter tracks MCP tool invocations in real time.
+
+Metrics are independent of tracing — you can enable one without the other.
+
+### Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OTEL_METRICS_ENABLED` | `false` | Enable OTel metrics collection |
+| `OTEL_METRICS_COLLECTION_INTERVAL` | `60` | DB polling interval in seconds (minimum 10) |
+
+### Metric Instruments
+
+| Name | Type | Attributes | Description |
+|------|------|------------|-------------|
+| `subscriptions_count` | Gauge | `account_id`, `state` | Entitlement count by account and state |
+| `dcr_clients_active` | Gauge | `account_id` | Active DCR client count by account |
+| `input_tokens` | Gauge | `account_id` | Total input tokens consumed by account |
+| `output_tokens` | Gauge | `account_id` | Total output tokens consumed by account |
+| `request_count` | Gauge | `account_id` | Total requests by account |
+| `tool_calls_by_name` | Counter | `tool_name` | Tool invocations by MCP tool name |
+
+### Cloud Run Setup
+
+The Cloud Run `service.yaml` includes everything needed for metrics:
+
+1. **Managed OTel collector sidecar** — the annotation `run.googleapis.com/otel-collector: '{"enabled": true}'` deploys a collector sidecar that receives OTLP on `localhost:4317` and forwards to Cloud Monitoring automatically.
+
+2. **Metrics enabled** — `OTEL_METRICS_ENABLED=true` is set in the agent container env.
+
+3. **No additional configuration required** — the default OTLP exporter endpoint (`localhost:4317`) matches the managed collector sidecar.
+
+### Multi-Agent Deployments
+
+When multiple agents share the same Cloud Monitoring project, metrics are distinguished by the OTel resource attribute `service.name`, which is set via the `OTEL_SERVICE_NAME` environment variable (default: `lightspeed_agent`). Each agent deployment should use a unique value:
+
+```yaml
+# In each agent's service.yaml
+- name: OTEL_SERVICE_NAME
+  value: "my_agent_name"
+```
+
+Cloud Monitoring applies `service.name` as a resource-level label on all metrics, so you can filter or group dashboards by agent without needing an explicit `agent_name` attribute on each metric.
+
+### Note: Minimum Instance Requirements
+
+The metrics collector runs as a background task inside the agent process, polling the database every `OTEL_METRICS_COLLECTION_INTERVAL` seconds. If the agent scales to zero, no metrics are collected or exported until an instance starts again.
+
+The current `service.yaml` sets `run.googleapis.com/minScale: "1"`, so this is not a concern with the default configuration. If you change `minScale` to `0`, be aware that metrics will have gaps during periods with no active instances. Subscription and usage data is not lost — it remains in the database and will be reported on the next collection cycle when an instance starts. However, the `tool_calls_by_name` counter is in-process only and resets to zero on instance restart.
 
 ## Span Attributes
 
