@@ -264,6 +264,18 @@ The Cloud Run `service.yaml` includes everything needed for metrics:
 
 3. **No additional configuration required** — the default OTLP exporter endpoint (`localhost:4317`) matches the managed collector sidecar.
 
+### Multi-Agent Deployments
+
+When multiple agents share the same Cloud Monitoring project, metrics are distinguished by the OTel resource attribute `service.name`, which is set via the `OTEL_SERVICE_NAME` environment variable (default: `lightspeed_agent`). Each agent deployment should use a unique value:
+
+```yaml
+# In each agent's service.yaml
+- name: OTEL_SERVICE_NAME
+  value: "my_agent_name"
+```
+
+Cloud Monitoring applies `service.name` as a resource-level label on all metrics, so you can filter or group dashboards by agent without needing an explicit `agent_name` attribute on each metric.
+
 ### Note: Minimum Instance Requirements
 
 The metrics collector runs as a background task inside the agent process, polling the database every `OTEL_METRICS_COLLECTION_INTERVAL` seconds. If the agent scales to zero, no metrics are collected or exported until an instance starts again.
