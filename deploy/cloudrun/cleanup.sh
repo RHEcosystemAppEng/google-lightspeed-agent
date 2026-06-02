@@ -13,7 +13,8 @@
 #   ./deploy/cloudrun/cleanup.sh [--force]
 #
 # Options:
-#   --force    Skip confirmation prompt
+#   --force       Skip confirmation prompt
+#   --purge-data  Also delete CloudSQL and Redis instances (IRREVERSIBLE)
 #
 # Prerequisites:
 #   - gcloud CLI installed and authenticated
@@ -58,6 +59,7 @@ LB_NAME="${LB_NAME:-lightspeed-lb}"
 
 # Parse arguments
 FORCE=false
+PURGE_DATA=false
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -65,9 +67,13 @@ while [[ $# -gt 0 ]]; do
             FORCE=true
             shift
             ;;
+        --purge-data)
+            PURGE_DATA=true
+            shift
+            ;;
         *)
             log_error "Unknown option: $1"
-            echo "Usage: $0 [--force]"
+            echo "Usage: $0 [--force] [--purge-data]"
             exit 1
             ;;
     esac
@@ -89,18 +95,33 @@ echo "  - Pub/Sub topic: $PUBSUB_TOPIC"
 echo "  - Pub/Sub subscription: $PUBSUB_SUBSCRIPTION"
 echo "  - Secrets: redhat-sso-client-id, redhat-sso-client-secret, database-url,"
 echo "             session-database-url, gma-client-id, gma-client-secret, dcr-encryption-key,"
-echo "             rate-limit-redis-url"
+echo "             rate-limit-redis-url, redis-ca-cert"
 echo "  - Service accounts: $SERVICE_ACCOUNT"
 echo "                      $PUBSUB_INVOKER_SA"
+if [ "$PURGE_DATA" = true ]; then
+    echo ""
+    log_warn "DATA PURGE ENABLED — the following will also be PERMANENTLY deleted:"
+    echo "  - CloudSQL instance: $DB_INSTANCE_NAME (IRREVERSIBLE DATA LOSS)"
+    echo "  - Cloud Memorystore Redis instances in $REGION (IRREVERSIBLE DATA LOSS)"
+fi
 echo ""
 
 # Confirmation prompt
 if [[ "$FORCE" != "true" ]]; then
-    read -p "Are you sure you want to delete these resources? (y/N) " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        log_info "Cleanup cancelled"
-        exit 0
+    if [ "$PURGE_DATA" = true ]; then
+        log_warn "⚠️  IRREVERSIBLE DATA LOSS: --purge-data will permanently destroy databases!"
+        read -p "Type 'PURGE' to confirm data destruction, or anything else to cancel: " -r
+        if [[ "$REPLY" != "PURGE" ]]; then
+            log_info "Cleanup cancelled"
+            exit 0
+        fi
+    else
+        read -p "Are you sure you want to delete these resources? (y/N) " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            log_info "Cleanup cancelled"
+            exit 0
+        fi
     fi
 fi
 
@@ -207,6 +228,7 @@ secrets=(
     "gma-client-secret"
     "dcr-encryption-key"
     "rate-limit-redis-url"
+    "redis-ca-cert"
 )
 
 for secret in "${secrets[@]}"; do
@@ -293,6 +315,31 @@ else
 fi
 
 # =============================================================================
+# Step 6: Purge Data Resources (optional)
+# =============================================================================
+if [ "$PURGE_DATA" = true ]; then
+    echo ""
+    log_info "Purging data resources..."
+    # Delete CloudSQL instance
+    if gcloud sql instances describe "$DB_INSTANCE_NAME" --project="$PROJECT_ID" &>/dev/null; then
+        echo "Deleting CloudSQL instance: $DB_INSTANCE_NAME"
+        if ! gcloud sql instances delete "$DB_INSTANCE_NAME" --project="$PROJECT_ID" --quiet; then
+            log_warn "Failed to delete CloudSQL instance: $DB_INSTANCE_NAME"
+        fi
+    else
+        log_info "CloudSQL instance '$DB_INSTANCE_NAME' does not exist, skipping"
+    fi
+    # Delete Redis instances
+    for instance in $(gcloud redis instances list --region="$REGION" --project="$PROJECT_ID" --format="value(name)" 2>/dev/null); do
+        echo "Deleting Redis instance: $instance"
+        if ! gcloud redis instances delete "$instance" --region="$REGION" --project="$PROJECT_ID" --quiet; then
+            log_warn "Failed to delete Redis instance: $instance"
+        fi
+    done
+    log_info "Data purge complete."
+fi
+
+# =============================================================================
 # Summary
 # =============================================================================
 echo ""
@@ -306,17 +353,25 @@ echo "  - Load balancer resources (if any existed)"
 echo "  - Pub/Sub topic and subscription"
 echo "  - Secret Manager secrets"
 echo "  - Service accounts (runtime + Pub/Sub invoker) and IAM bindings"
+if [ "$PURGE_DATA" = true ]; then
+    echo "  - CloudSQL instance: $DB_INSTANCE_NAME"
+    echo "  - Cloud Memorystore Redis instances in $REGION"
+fi
 echo ""
 echo "Note: The following resources were NOT deleted (delete manually if needed):"
-echo "  - Cloud SQL instances"
-echo "  - Cloud Memorystore Redis instances"
+if [ "$PURGE_DATA" != true ]; then
+    echo "  - Cloud SQL instances"
+    echo "  - Cloud Memorystore Redis instances"
+fi
 echo "  - Container images in GCR/Artifact Registry"
 echo "  - VPC connectors"
 echo "  - Cloud Build triggers"
 echo ""
 echo "To delete these, use the respective gcloud commands:"
-echo "  gcloud sql instances delete $DB_INSTANCE_NAME --project=$PROJECT_ID"
-echo "  gcloud redis instances delete lightspeed-redis --region=$REGION --project=$PROJECT_ID"
+if [ "$PURGE_DATA" != true ]; then
+    echo "  gcloud sql instances delete $DB_INSTANCE_NAME --project=$PROJECT_ID"
+    echo "  gcloud redis instances delete lightspeed-redis --region=$REGION --project=$PROJECT_ID"
+fi
 echo "  gcloud container images delete gcr.io/$PROJECT_ID/$SERVICE_NAME --force-delete-tags --quiet"
 echo "  gcloud container images delete gcr.io/$PROJECT_ID/$HANDLER_SERVICE_NAME --force-delete-tags --quiet"
 echo "  gcloud container images delete gcr.io/$PROJECT_ID/red-hat-lightspeed-mcp --force-delete-tags --quiet"
