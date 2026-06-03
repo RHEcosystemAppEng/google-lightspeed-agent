@@ -4,7 +4,7 @@
 # Images are built externally by Konflux and pushed to Quay.io.
 # This pipeline pulls pre-built images from Quay, pushes them to GCR
 # (Cloud Run cannot pull from Quay.io directly), and deploys both
-# services to Cloud Run:
+# services to Cloud Run with optional per-service GCLB and Cloud Armor WAF:
 #   1. marketplace-handler - Handles DCR and Pub/Sub events (always running)
 #   2. lightspeed-agent    - A2A agent with MCP sidecar (scales to zero)
 #
@@ -17,13 +17,16 @@
 #   - roles/run.admin (deploy Cloud Run services)
 #   - roles/iam.serviceAccountUser (act as runtime service account)
 #   - roles/pubsub.editor (create/update subscriptions)
+#   - roles/compute.admin (create GCLB resources, Cloud Armor policies)
 #
 # Usage:
-#   gcloud builds submit --config=cloudbuild.yaml
-#
-#   # With custom options:
+#   # Deploy with GCLB (default, requires domain names):
 #   gcloud builds submit --config=cloudbuild.yaml \
-#     --substitutions=_ALLOW_UNAUTHENTICATED=true,_REGION=us-central1
+#     --substitutions=_AGENT_DOMAIN_NAME=agent.example.com,_HANDLER_DOMAIN_NAME=dcr.example.com
+#
+#   # Deploy without GCLB:
+#   gcloud builds submit --config=cloudbuild.yaml \
+#     --substitutions=_ENABLE_LB_AGENT=false,_ENABLE_LB_HANDLER=false
 
 substitutions:
   _SERVICE_NAME: lightspeed-agent
@@ -42,11 +45,62 @@ substitutions:
   _AGENT_SOURCE_IMAGE: "quay.io/ecosystem-appeng/google-lightspeed-agent:latest"
   _HANDLER_SOURCE_IMAGE: "quay.io/ecosystem-appeng/google-marketplace-handler:latest"
   _SERVICE_CONTROL_SERVICE_NAME: ""
+  # GCLB and Cloud Armor configuration
+  _ENABLE_LB_AGENT: "true"
+  _ENABLE_LB_HANDLER: "true"
+  _ENABLE_CLOUD_ARMOR_AGENT: "true"
+  _ENABLE_CLOUD_ARMOR_HANDLER: "true"
+  _AGENT_DOMAIN_NAME: ""
+  _HANDLER_DOMAIN_NAME: ""
+  _LB_NAME: lightspeed-lb
+
+timeout: 1800s
 
 options:
   logging: CLOUD_LOGGING_ONLY
 
 steps:
+  # ==========================================================================
+  # VALIDATION - Fail fast on invalid configuration
+  # ==========================================================================
+
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'validate-lb-config'
+    entrypoint: 'bash'
+    args:
+      - '-euo'
+      - 'pipefail'
+      - '-c'
+      - |
+        if [ "${_ENABLE_LB_AGENT}" = "true" ] && [ -z "${_AGENT_DOMAIN_NAME}" ]; then
+          echo "ERROR: _AGENT_DOMAIN_NAME is required when _ENABLE_LB_AGENT=true"
+          echo "  Set via --substitutions=_AGENT_DOMAIN_NAME=agent.example.com"
+          echo "  Or disable GCLB: --substitutions=_ENABLE_LB_AGENT=false,_ENABLE_LB_HANDLER=false"
+          exit 1
+        fi
+        if [ "${_ENABLE_LB_HANDLER}" = "true" ] && [ -z "${_HANDLER_DOMAIN_NAME}" ]; then
+          echo "ERROR: _HANDLER_DOMAIN_NAME is required when _ENABLE_LB_HANDLER=true"
+          echo "  Set via --substitutions=_HANDLER_DOMAIN_NAME=dcr.example.com"
+          echo "  Or disable GCLB: --substitutions=_ENABLE_LB_AGENT=false,_ENABLE_LB_HANDLER=false"
+          exit 1
+        fi
+        if [ "${_ENABLE_CLOUD_ARMOR_AGENT}" = "true" ] && [ "${_ENABLE_LB_AGENT}" != "true" ]; then
+          echo "ERROR: _ENABLE_CLOUD_ARMOR_AGENT requires _ENABLE_LB_AGENT=true"
+          exit 1
+        fi
+        if [ "${_ENABLE_CLOUD_ARMOR_HANDLER}" = "true" ] && [ "${_ENABLE_LB_HANDLER}" != "true" ]; then
+          echo "ERROR: _ENABLE_CLOUD_ARMOR_HANDLER requires _ENABLE_LB_HANDLER=true"
+          exit 1
+        fi
+        # Cross-project Pub/Sub topic requires explicit subscription name
+        if echo "${_PUBSUB_TOPIC}" | grep -q '^projects/' && [ -z "${_PUBSUB_SUBSCRIPTION}" ]; then
+          echo "ERROR: _PUBSUB_SUBSCRIPTION is required when _PUBSUB_TOPIC is a fully-qualified path"
+          echo "  Set via --substitutions=_PUBSUB_SUBSCRIPTION=marketplace-events-sub"
+          exit 1
+        fi
+        echo "Configuration validated."
+    waitFor: ['-']
+
   # ==========================================================================
   # COPY PHASE - Pull pre-built images from Quay.io and push to GCR (parallel)
   # ==========================================================================
@@ -55,6 +109,8 @@ steps:
     id: 'copy-agent'
     entrypoint: 'bash'
     args:
+      - '-euo'
+      - 'pipefail'
       - '-c'
       - |
         docker pull ${_AGENT_SOURCE_IMAGE} && \
@@ -66,6 +122,8 @@ steps:
     id: 'copy-handler'
     entrypoint: 'bash'
     args:
+      - '-euo'
+      - 'pipefail'
       - '-c'
       - |
         docker pull ${_HANDLER_SOURCE_IMAGE} && \
@@ -77,6 +135,8 @@ steps:
     id: 'copy-mcp'
     entrypoint: 'bash'
     args:
+      - '-euo'
+      - 'pipefail'
       - '-c'
       - |
         docker pull ${_MCP_SOURCE_IMAGE} && \
@@ -94,12 +154,13 @@ steps:
     id: 'deploy-handler'
     entrypoint: 'bash'
     args:
+      - '-euo'
+      - 'pipefail'
       - '-c'
       - |
         sed -e 's|gcr.io/$${PROJECT_ID}/marketplace-handler:latest|gcr.io/${PROJECT_ID}/${_HANDLER_SERVICE_NAME}:${_IMAGE_TAG}|g' \
             -e 's|$${PROJECT_ID}|${PROJECT_ID}|g' \
             -e 's|$${REGION}|${_REGION}|g' \
-            -e 's|$${SERVICE_NAME}|${_SERVICE_NAME}|g' \
             -e 's|$${SERVICE_ACCOUNT_NAME}|${_SERVICE_ACCOUNT_NAME}|g' \
             -e 's|$${HANDLER_SERVICE_NAME}|${_HANDLER_SERVICE_NAME}|g' \
             -e 's|$${DB_INSTANCE_NAME}|${_DB_INSTANCE_NAME}|g' \
@@ -116,6 +177,8 @@ steps:
     id: 'deploy-agent'
     entrypoint: 'bash'
     args:
+      - '-euo'
+      - 'pipefail'
       - '-c'
       - |
         sed -e 's|gcr.io/$${PROJECT_ID}/lightspeed-agent:latest|gcr.io/${PROJECT_ID}/${_SERVICE_NAME}:${_IMAGE_TAG}|g' \
@@ -135,6 +198,70 @@ steps:
     waitFor: ['copy-agent', 'copy-mcp', 'deploy-handler']
 
   # ==========================================================================
+  # GCLB PHASE - Set up per-service Google Cloud Load Balancers
+  # Creates static IP, SSL cert, NEG, backend, Cloud Armor, URL map,
+  # HTTPS proxy, and forwarding rule for each enabled service.
+  # When LB is disabled for a service, overrides ingress to 'all'.
+  # ==========================================================================
+
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'setup-lb-agent'
+    entrypoint: 'bash'
+    args:
+      - '-euo'
+      - 'pipefail'
+      - '-c'
+      - |
+        if [ "${_ENABLE_LB_AGENT}" != "true" ]; then
+          echo "GCLB disabled for agent, skipping."
+          exit 0
+        fi
+        bash deploy/cloudrun/setup-lb.sh \
+            agent "${_SERVICE_NAME}" "${_AGENT_DOMAIN_NAME}" \
+            "${_ENABLE_CLOUD_ARMOR_AGENT}" "${_REGION}" "${PROJECT_ID}" "${_LB_NAME}"
+    waitFor: ['deploy-agent', 'validate-lb-config']
+
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'setup-lb-handler'
+    entrypoint: 'bash'
+    args:
+      - '-euo'
+      - 'pipefail'
+      - '-c'
+      - |
+        if [ "${_ENABLE_LB_HANDLER}" != "true" ]; then
+          echo "GCLB disabled for handler, skipping."
+          exit 0
+        fi
+        bash deploy/cloudrun/setup-lb.sh \
+            handler "${_HANDLER_SERVICE_NAME}" "${_HANDLER_DOMAIN_NAME}" \
+            "${_ENABLE_CLOUD_ARMOR_HANDLER}" "${_REGION}" "${PROJECT_ID}" "${_LB_NAME}"
+    waitFor: ['deploy-handler', 'validate-lb-config']
+
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'configure-ingress'
+    entrypoint: 'bash'
+    args:
+      - '-euo'
+      - 'pipefail'
+      - '-c'
+      - |
+        if [ "${_ENABLE_LB_AGENT}" != "true" ]; then
+          echo "No LB for agent — setting ingress to all..."
+          gcloud run services update ${_SERVICE_NAME} \
+              --region=${_REGION} --project=${PROJECT_ID} \
+              --ingress=all --quiet
+        fi
+        if [ "${_ENABLE_LB_HANDLER}" != "true" ]; then
+          echo "No LB for handler — setting ingress to all..."
+          gcloud run services update ${_HANDLER_SERVICE_NAME} \
+              --region=${_REGION} --project=${PROJECT_ID} \
+              --ingress=all --quiet
+        fi
+        echo "Ingress configuration complete."
+    waitFor: ['setup-lb-agent', 'setup-lb-handler']
+
+  # ==========================================================================
   # POST-DEPLOY PHASE - Configure IAM, Pub/Sub, and service URLs
   # ==========================================================================
 
@@ -142,6 +269,8 @@ steps:
     id: 'allow-unauthenticated'
     entrypoint: 'bash'
     args:
+      - '-euo'
+      - 'pipefail'
       - '-c'
       - |
         if [ "${_ALLOW_UNAUTHENTICATED}" != "true" ]; then
@@ -161,14 +290,18 @@ steps:
             --member="allUsers" \
             --role="roles/run.invoker" \
             --quiet
-    waitFor: ['deploy-handler', 'deploy-agent']
+    waitFor: ['configure-ingress']
 
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     id: 'configure-pubsub'
     entrypoint: 'bash'
     args:
+      - '-euo'
+      - 'pipefail'
       - '-c'
       - |
+        # Pub/Sub push uses the Cloud Run URL directly — internal Google Cloud
+        # traffic bypasses the GCLB, so this is correct even when LB is enabled.
         HANDLER_URL=$$(gcloud run services describe ${_HANDLER_SERVICE_NAME} \
             --region=${_REGION} \
             --project=${PROJECT_ID} \
@@ -218,6 +351,8 @@ steps:
     id: 'update-agent-urls'
     entrypoint: 'bash'
     args:
+      - '-euo'
+      - 'pipefail'
       - '-c'
       - |
         AGENT_URL=$$(gcloud run services describe ${_SERVICE_NAME} \
@@ -228,6 +363,14 @@ steps:
             --region=${_REGION} \
             --project=${PROJECT_ID} \
             --format='value(status.url)')
+
+        # Use GCLB domain URLs when load balancers are enabled
+        if [ "${_ENABLE_LB_AGENT}" = "true" ]; then
+          AGENT_URL="https://${_AGENT_DOMAIN_NAME}"
+        fi
+        if [ "${_ENABLE_LB_HANDLER}" = "true" ]; then
+          HANDLER_URL="https://${_HANDLER_DOMAIN_NAME}"
+        fi
 
         if [ -z "$$AGENT_URL" ]; then
           echo "ERROR: Could not retrieve agent URL"
@@ -252,7 +395,7 @@ steps:
         echo "Agent URLs configured:"
         echo "  AGENT_PROVIDER_URL: $$AGENT_URL"
         echo "  MARKETPLACE_HANDLER_URL: $$HANDLER_URL"
-    waitFor: ['deploy-handler', 'deploy-agent']
+    waitFor: ['configure-ingress']
 
 images:
   - 'gcr.io/${PROJECT_ID}/${_SERVICE_NAME}:${_IMAGE_TAG}'

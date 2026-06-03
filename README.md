@@ -742,8 +742,9 @@ export GOOGLE_CLOUD_LOCATION="us-central1"
 # Option A: Manual deployment with deploy.sh
 ./deploy/cloudrun/deploy.sh --service all --build --allow-unauthenticated
 
-# Option B: CI/CD pipeline with Cloud Build (pulls pre-built images from Quay.io, pushes to GCR, and deploys)
-gcloud builds submit --config=cloudbuild.yaml --substitutions=_ALLOW_UNAUTHENTICATED=true
+# Option B: CI/CD pipeline with Cloud Build (includes GCLB + Cloud Armor by default)
+gcloud builds submit --config=cloudbuild.yaml \
+  --substitutions=_AGENT_DOMAIN_NAME=agent.example.com,_HANDLER_DOMAIN_NAME=dcr.example.com
 ```
 
 ## License
