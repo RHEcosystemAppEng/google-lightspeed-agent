@@ -131,6 +131,12 @@ while [[ $# -gt 0 ]]; do
             shift 2
             ;;
         --allow-unauthenticated)
+            # WARNING: This grants allUsers the roles/run.invoker IAM binding,
+            # allowing any internet client to invoke the service. When used
+            # WITHOUT a Google Cloud Load Balancer (ENABLE_LB_AGENT/ENABLE_LB_HANDLER),
+            # the service is fully public with no Cloud Armor WAF protection.
+            # The application has its own JWT authentication middleware, but
+            # defense-in-depth recommends using GCLB + Cloud Armor in production.
             ALLOW_UNAUTH=true
             shift
             ;;
@@ -180,6 +186,18 @@ if [[ -z "$AGENT_IMAGE" ]]; then
 fi
 if [[ -z "$HANDLER_IMAGE" ]]; then
     HANDLER_IMAGE="gcr.io/${PROJECT_ID}/${HANDLER_SERVICE_NAME}:${IMAGE_TAG}"
+fi
+
+if [[ "$ALLOW_UNAUTH" == "true" ]]; then
+    if [[ "$ENABLE_LB_AGENT" != "true" && "$ENABLE_LB_HANDLER" != "true" ]]; then
+        log_warn "============================================================"
+        log_warn "  --allow-unauthenticated is set WITHOUT a load balancer."
+        log_warn "  Services will be publicly accessible with NO Cloud Armor"
+        log_warn "  WAF protection. This is acceptable for dev/testing but"
+        log_warn "  NOT recommended for production. Enable GCLB for"
+        log_warn "  defense-in-depth: ENABLE_LB_AGENT=true ENABLE_LB_HANDLER=true"
+        log_warn "============================================================"
+    fi
 fi
 
 log_info "Deploying to Cloud Run"
