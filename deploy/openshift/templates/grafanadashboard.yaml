@@ -1,0 +1,236 @@
+{{- if and .Values.otel.metricsEnabled .Values.monitoring.grafanaDashboard.enabled }}
+{{- $job := include "lightspeed-agent.fullname" . }}
+{{- $ds := .Values.monitoring.grafanaDashboard.datasource }}
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaDashboard
+metadata:
+  name: {{ $job }}
+  {{- if .Values.monitoring.grafanaDashboard.namespace }}
+  namespace: {{ .Values.monitoring.grafanaDashboard.namespace }}
+  {{- end }}
+  labels:
+    {{- include "lightspeed-agent.labels" . | nindent 4 }}
+    app.kubernetes.io/component: monitoring
+spec:
+  instanceSelector:
+    matchLabels:
+      dashboards: grafana
+  json: |
+    {
+      "annotations": { "list": [] },
+      "editable": true,
+      "fiscalYearStartMonth": 0,
+      "graphTooltip": 1,
+      "links": [],
+      "panels": [
+        {
+          "title": "Subscriptions by State",
+          "type": "barchart",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+          "datasource": { "type": "prometheus", "uid": "{{ $ds }}" },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "stacking": { "mode": "normal" },
+                "fillOpacity": 80
+              },
+              "color": { "mode": "palette-classic" }
+            },
+            "overrides": []
+          },
+          "options": {
+            "orientation": "horizontal",
+            "showValue": "always",
+            "groupWidth": 0.7,
+            "barWidth": 0.8,
+            "tooltip": { "mode": "multi" },
+            "legend": { "displayMode": "list", "placement": "bottom" }
+          },
+          "transformations": [
+            {
+              "id": "partitionByValues",
+              "options": { "fields": ["account_id"] }
+            }
+          ],
+          "targets": [
+            {
+              "expr": "subscriptions_count{job=\"{{ $job }}\"}",
+              "legendFormat": "{{`{{state}}`}}",
+              "refId": "A",
+              "format": "table",
+              "instant": true
+            }
+          ]
+        },
+        {
+          "title": "DCR Clients by Account",
+          "type": "table",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+          "datasource": { "type": "prometheus", "uid": "{{ $ds }}" },
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": [
+              {
+                "matcher": { "id": "byName", "options": "account_id" },
+                "properties": [{ "id": "displayName", "value": "Account" }]
+              },
+              {
+                "matcher": { "id": "byName", "options": "Value #A" },
+                "properties": [{ "id": "displayName", "value": "Active Subscriptions" }]
+              },
+              {
+                "matcher": { "id": "byName", "options": "Value #B" },
+                "properties": [{ "id": "displayName", "value": "DCR Clients" }]
+              }
+            ]
+          },
+          "options": {
+            "showHeader": true,
+            "footer": { "show": false }
+          },
+          "transformations": [
+            {
+              "id": "merge",
+              "options": {}
+            },
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": { "Time": true, "state": true, "__name__": true, "job": true },
+                "indexByName": { "account_id": 0, "Value #A": 1, "Value #B": 2 }
+              }
+            }
+          ],
+          "targets": [
+            {
+              "expr": "subscriptions_count{job=\"{{ $job }}\", state=\"active\"}",
+              "refId": "A",
+              "format": "table",
+              "instant": true
+            },
+            {
+              "expr": "count by (account_id) (dcr_clients_active{job=\"{{ $job }}\"}) or sum by (account_id) (subscriptions_count{job=\"{{ $job }}\", state=\"active\"}) * 0",
+              "refId": "B",
+              "format": "table",
+              "instant": true
+            }
+          ]
+        },
+        {
+          "title": "Input Tokens by Account",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+          "datasource": { "type": "prometheus", "uid": "{{ $ds }}" },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "smooth",
+                "fillOpacity": 10,
+                "pointSize": 5,
+                "showPoints": "auto"
+              }
+            },
+            "overrides": []
+          },
+          "targets": [
+            {
+              "expr": "input_tokens{job=\"{{ $job }}\"}",
+              "legendFormat": "{{`{{account_id}}`}}",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "title": "Output Tokens by Account",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+          "datasource": { "type": "prometheus", "uid": "{{ $ds }}" },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "smooth",
+                "fillOpacity": 10,
+                "pointSize": 5,
+                "showPoints": "auto"
+              }
+            },
+            "overrides": []
+          },
+          "targets": [
+            {
+              "expr": "output_tokens{job=\"{{ $job }}\"}",
+              "legendFormat": "{{`{{account_id}}`}}",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "title": "Requests by Account",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+          "datasource": { "type": "prometheus", "uid": "{{ $ds }}" },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "smooth",
+                "fillOpacity": 10,
+                "pointSize": 5,
+                "showPoints": "auto"
+              }
+            },
+            "overrides": []
+          },
+          "targets": [
+            {
+              "expr": "request_count{job=\"{{ $job }}\"}",
+              "legendFormat": "{{`{{account_id}}`}}",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "title": "Tool Calls by Name",
+          "type": "bargauge",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+          "datasource": { "type": "prometheus", "uid": "{{ $ds }}" },
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "blue", "value": null }
+                ]
+              },
+              "color": { "mode": "fixed", "fixedColor": "blue" }
+            },
+            "overrides": []
+          },
+          "options": {
+            "displayMode": "gradient",
+            "orientation": "horizontal",
+            "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+            "showUnfilled": true
+          },
+          "targets": [
+            {
+              "expr": "increase(tool_calls_by_name_total{job=\"{{ $job }}\"}[24h])",
+              "legendFormat": "{{`{{tool_name}}`}}",
+              "refId": "A",
+              "instant": true
+            }
+          ]
+        }
+      ],
+      "schemaVersion": 39,
+      "tags": ["lightspeed-agent", "opentelemetry"],
+      "templating": { "list": [] },
+      "time": { "from": "now-24h", "to": "now" },
+      "timepicker": {},
+      "timezone": "browser",
+      "title": "{{ $job }}",
+      "uid": "{{ $job }}"
+    }
+{{- end }}

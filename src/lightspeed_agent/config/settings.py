@@ -646,6 +646,10 @@ class Settings(BaseSettings):
         default=False,
         description="Enable OpenTelemetry metrics (independent of tracing)",
     )
+    otel_metrics_prometheus_port: int = Field(
+        default=9464,
+        description="Port for Prometheus metrics scrape endpoint",
+    )
     otel_metrics_collection_interval: int = Field(
         default=60,
         ge=10,

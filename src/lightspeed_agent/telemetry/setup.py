@@ -131,9 +131,14 @@ def _create_meter_provider(resource: Resource, settings: Any) -> MeterProvider:
 
     try:
         from opentelemetry.exporter.prometheus import PrometheusMetricReader
+        from prometheus_client import start_http_server
 
         readers.append(PrometheusMetricReader())
-        logger.info("Prometheus metric reader created")
+        start_http_server(port=settings.otel_metrics_prometheus_port, addr="0.0.0.0")
+        logger.info(
+            "Prometheus scrape endpoint started on port %d",
+            settings.otel_metrics_prometheus_port,
+        )
     except ImportError:
         logger.warning(
             "opentelemetry-exporter-prometheus not installed, "
