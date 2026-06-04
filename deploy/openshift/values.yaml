@@ -175,6 +175,34 @@ otel:
   otlpHttpEndpoint: "http://localhost:4318"
   tracesSampler: always_on
   tracesSamplerArg: "1.0"
+  # OTel Metrics (independent of tracing)
+  metricsEnabled: false
+  metricsPrometheusPort: 9464
+  metricsCollectionInterval: 60
+
+# ---------------------------------------------------------------------------
+# Monitoring (Prometheus Operator + Grafana Operator)
+# ---------------------------------------------------------------------------
+# PREREQUISITES — verify before enabling:
+#   1. Prometheus Operator is running (built-in OpenShift Monitoring or user workload monitoring)
+#   2. Grafana Operator is installed (OperatorHub > "Grafana Operator")
+#   3. A Grafana instance exists with label "dashboards: grafana"
+#   4. A GrafanaDatasource CR connects Grafana to Prometheus
+# See deploy/openshift/README.md "Monitoring (Prometheus + Grafana)" for
+# setup instructions and example templates.
+monitoring:
+  serviceMonitor:
+    enabled: false
+    # Scrape interval (must be ≥ otel.metricsCollectionInterval)
+    interval: 60s
+    # Namespace for the ServiceMonitor — empty = release namespace
+    namespace: ""
+  grafanaDashboard:
+    enabled: false
+    # Grafana datasource UID — must match the uid in your GrafanaDatasource CR
+    datasource: prometheus
+    # Namespace for the GrafanaDashboard CR — empty = release namespace
+    namespace: ""
 
 # ---------------------------------------------------------------------------
 # Session PostgreSQL database

@@ -44,6 +44,11 @@ spec:
             - containerPort: {{ .Values.agent.probePort }}
               protocol: TCP
               name: probe
+            {{- if .Values.otel.metricsEnabled }}
+            - containerPort: {{ .Values.otel.metricsPrometheusPort }}
+              protocol: TCP
+              name: metrics
+            {{- end }}
           envFrom:
             - configMapRef:
                 name: {{ include "lightspeed-agent.fullname" . }}-config
