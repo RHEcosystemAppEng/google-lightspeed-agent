@@ -109,7 +109,7 @@ spec:
               "instant": true
             },
             {
-              "expr": "count by (account_id) (dcr_clients_active{job=\"{{ $job }}\"})",
+              "expr": "count by (account_id) (dcr_clients_active{job=\"{{ $job }}\"}) or sum by (account_id) (subscriptions_count{job=\"{{ $job }}\", state=\"active\"}) * 0",
               "refId": "B",
               "format": "table",
               "instant": true
@@ -230,7 +230,7 @@ spec:
       "time": { "from": "now-24h", "to": "now" },
       "timepicker": {},
       "timezone": "browser",
-      "title": "Red Hat Lightspeed Agent",
-      "uid": "lightspeed-agent"
+      "title": "{{ $job }}",
+      "uid": "{{ $job }}"
     }
 {{- end }}

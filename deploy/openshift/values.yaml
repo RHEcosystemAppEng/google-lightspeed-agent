@@ -169,6 +169,7 @@ logging:
 # ---------------------------------------------------------------------------
 otel:
   enabled: false
+  # Must be unique per agent when deploying multiple agents via an umbrella chart
   serviceName: lightspeed_agent
   exporterType: otlp
   otlpEndpoint: "http://localhost:4317"

@@ -991,6 +991,37 @@ oc exec -n lightspeed-agent "${AGENT_POD}" -c lightspeed-agent -- curl -s http:/
 oc get route -n lightspeed-agent grafana-route
 ```
 
+### Multiple agents (umbrella chart)
+
+When deploying multiple agents from a parent Helm chart, each agent is a
+sub-chart dependency with a unique alias. Each sub-chart instance gets its own
+ServiceMonitor, GrafanaDashboard, and NetworkPolicy rule — all with unique
+names derived from the Helm fullname.
+
+To keep metrics distinct, set a unique `otel.serviceName` per agent in the
+parent chart's `values.yaml`:
+
+```yaml
+# Parent chart values.yaml
+insights-agent:
+  otel:
+    serviceName: insights_agent
+
+compliance-agent:
+  otel:
+    serviceName: compliance_agent
+```
+
+Each agent gets its own Grafana dashboard (titled with the agent name) and
+Prometheus scrape target. The `OTEL_SERVICE_NAME` label on all metrics ensures
+they are distinguishable in PromQL queries.
+
+> **Note:** In the parent chart, most metrics values can be set globally and
+> passed down to all sub-charts (`otel.metricsEnabled`,
+> `otel.metricsPrometheusPort`, `otel.metricsCollectionInterval`,
+> `monitoring.serviceMonitor.*`, `monitoring.grafanaDashboard.*`). Only
+> `otel.serviceName` must be set per agent since it must be unique.
+
 ## Authentication
 
 The agent authenticates requests via Red Hat SSO token introspection:
