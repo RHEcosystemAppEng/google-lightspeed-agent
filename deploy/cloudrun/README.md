@@ -1019,6 +1019,10 @@ gcloud projects add-iam-policy-binding $GOOGLE_CLOUD_PROJECT \
 gcloud projects add-iam-policy-binding $GOOGLE_CLOUD_PROJECT \
   --member="serviceAccount:$CB_SA" --role="roles/compute.admin"
 
+# Note: roles/pubsub.editor and roles/compute.admin are broader than strictly
+# needed. For production, consider custom roles scoped to the specific resources
+# (see cloudbuild.yaml header comments for recommended permissions).
+
 # Deploy with GCLB + Cloud Armor (requires domain names)
 gcloud builds submit --config=cloudbuild.yaml \
   --substitutions=_AGENT_DOMAIN_NAME=agent.example.com,_HANDLER_DOMAIN_NAME=dcr.example.com
@@ -1037,7 +1041,9 @@ gcloud builds submit --config=cloudbuild.yaml \
 | Phase | Steps | Description |
 |-------|-------|-------------|
 | Validate | `validate-lb-config` | Validates GCLB configuration (domain names, flag consistency) |
-| Copy | `copy-agent`, `copy-handler`, `copy-mcp` | Pulls pre-built images from Quay.io and pushes to GCR (parallel) |
+| Pull | `pull-agent`, `pull-handler`, `pull-mcp` | Pulls pre-built images from Quay.io (parallel) |
+| Scan | `scan-agent`, `scan-handler`, `scan-mcp` | Trivy vulnerability scanning — blocks push on CRITICAL/HIGH CVEs (parallel) |
+| Push | `push-agent`, `push-handler`, `push-mcp` | Tags and pushes scanned images to GCR (parallel) |
 | Deploy | `deploy-handler`, `deploy-agent` | Deploys handler first, then agent (using YAML configs with sed substitution, same as `deploy.sh`) |
 | GCLB | `setup-lb-agent`, `setup-lb-handler`, `configure-ingress` | Creates per-service GCLB with Cloud Armor WAF (parallel), then configures ingress |
 | Post-deploy | `allow-unauthenticated`, `configure-pubsub`, `update-agent-urls` | Configures IAM, Pub/Sub push subscription, and sets `AGENT_PROVIDER_URL`/`MARKETPLACE_HANDLER_URL` |

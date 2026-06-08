@@ -18,8 +18,11 @@
 # Required permissions for Cloud Build service account:
 #   - roles/run.admin (deploy Cloud Run services)
 #   - roles/iam.serviceAccountUser (act as runtime service account)
-#   - roles/pubsub.editor (create/update subscriptions)
-#   - roles/compute.admin (create GCLB resources, Cloud Armor policies)
+#   - roles/pubsub.editor (create/update subscriptions — broader than needed;
+#     a custom role scoped to the marketplace subscription is recommended for production)
+#   - roles/compute.admin (create GCLB resources, Cloud Armor policies — only needed
+#     when GCLB is enabled; a custom role with only LB/NEG/cert/security-policy
+#     permissions is recommended for production)
 #
 # Usage:
 #   # Deploy with GCLB (default, requires domain names):
@@ -333,13 +336,13 @@ steps:
       - '-c'
       - |
         if [ "${_ENABLE_LB_AGENT}" != "true" ]; then
-          echo "No LB for agent — setting ingress to all..."
+          echo "WARNING: No LB for agent — setting ingress to 'all' (direct internet access, no WAF protection)"
           gcloud run services update ${_SERVICE_NAME} \
               --region=${_REGION} --project=${PROJECT_ID} \
               --ingress=all --quiet
         fi
         if [ "${_ENABLE_LB_HANDLER}" != "true" ]; then
-          echo "No LB for handler — setting ingress to all..."
+          echo "WARNING: No LB for handler — setting ingress to 'all' (direct internet access, no WAF protection)"
           gcloud run services update ${_HANDLER_SERVICE_NAME} \
               --region=${_REGION} --project=${PROJECT_ID} \
               --ingress=all --quiet
@@ -442,7 +445,8 @@ steps:
               $$IMPERSONATE_FLAG
         fi
 
-        # Set PUBSUB_AUDIENCE on the handler to match the subscription audience
+        # Set PUBSUB_AUDIENCE on the handler so its auth middleware can validate
+        # the 'aud' claim in incoming Pub/Sub OIDC tokens against the expected endpoint.
         echo "Setting PUBSUB_AUDIENCE on ${_HANDLER_SERVICE_NAME}..."
         gcloud run services update ${_HANDLER_SERVICE_NAME} \
             --region=${_REGION} \

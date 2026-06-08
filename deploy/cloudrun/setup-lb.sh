@@ -118,7 +118,8 @@ if [ "$CLOUD_ARMOR_ENABLED" = "true" ]; then
             --log-level=VERBOSE \
             --global \
             --project="$PROJECT_ID"
-        echo "Security policy '$POLICY_NAME' configured: JSON parsing, verbose logging (body inspection size requires gcloud beta)"
+        echo "WARNING: Security policy '$POLICY_NAME' configured WITHOUT 64kB body inspection (requires gcloud beta)."
+        echo "  JSON parsing and verbose logging are enabled. To enable body inspection, install gcloud beta components."
     fi
 
     # Add preconfigured WAF rules (OWASP ModSecurity CRS)

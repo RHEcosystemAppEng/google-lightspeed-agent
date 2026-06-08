@@ -173,6 +173,10 @@ else
     PROJECT_NUMBER=$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')
     CB_SA="${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com"
 
+    # These roles are the simplest way to grant Cloud Build the permissions it
+    # needs. For production, consider replacing roles/pubsub.editor and
+    # roles/compute.admin with custom roles scoped to the specific resources
+    # this pipeline manages (see cloudbuild.yaml header for details).
     cb_roles=(
         "roles/run.admin"
         "roles/iam.serviceAccountUser"
