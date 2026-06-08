@@ -206,10 +206,39 @@ jobs:
       - name: Build image
         run: podman build -t lightspeed-agent:ci -f Containerfile .
 
+      - name: Save image as artifact
+        run: podman save lightspeed-agent:ci -o /tmp/image.tar
+
+      - name: Upload image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: container-image
+          path: /tmp/image.tar
+          retention-days: 1
+
+  container-scan:
+    name: Container image scan (Trivy)
+    needs: [build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download image artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: container-image
+          path: /tmp
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          input: '/tmp/image.tar'
+          format: 'table'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '1'
+
   ci-gate:
     name: CI Gate
     if: always()
-    needs: [konflux-verify, lock-file-check, lint, test, build]
+    needs: [konflux-verify, lock-file-check, lint, test, build, container-scan]
     runs-on: ubuntu-latest
     steps:
       - name: Check all jobs passed
@@ -224,8 +253,8 @@ jobs:
             echo "Lock file check failed: ${{ needs.lock-file-check.result }}"
             exit 1
           fi
-          # lint, test, build are skipped when no Python/dependency files changed — that's expected
-          for job_result in "${{ needs.lint.result }}" "${{ needs.test.result }}" "${{ needs.build.result }}"; do
+          # lint, test, build, container-scan are skipped when no Python/dependency files changed — that's expected
+          for job_result in "${{ needs.lint.result }}" "${{ needs.test.result }}" "${{ needs.build.result }}" "${{ needs.container-scan.result }}"; do
             if [[ "$job_result" != "success" && "$job_result" != "skipped" ]]; then
               echo "One or more CI jobs failed or were cancelled."
               echo "  konflux-verify:  ${{ needs.konflux-verify.result }}"
@@ -233,6 +262,7 @@ jobs:
               echo "  lint:            ${{ needs.lint.result }}"
               echo "  test:            ${{ needs.test.result }}"
               echo "  build:           ${{ needs.build.result }}"
+              echo "  container-scan:  ${{ needs.container-scan.result }}"
               exit 1
             fi
           done
