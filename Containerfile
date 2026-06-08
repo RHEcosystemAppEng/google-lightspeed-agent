@@ -10,8 +10,8 @@ WORKDIR /opt/app-root/src
 
 # Install Python dependencies from lock file
 COPY requirements-agent.txt ./
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir --require-hashes -r requirements-agent.txt
+RUN pip install --no-cache-dir --upgrade pip uv && \
+    uv pip install --no-cache-dir --require-hashes -r requirements-agent.txt
 
 # =============================================================================
 # Production Stage

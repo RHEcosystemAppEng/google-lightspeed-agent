@@ -11,8 +11,8 @@ WORKDIR /opt/app-root/src
 
 # Install Python dependencies
 COPY requirements-handler.txt ./
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir --require-hashes -r requirements-handler.txt
+RUN pip install --no-cache-dir --upgrade pip uv && \
+    uv pip install --no-cache-dir --require-hashes -r requirements-handler.txt
 
 # =============================================================================
 # Production Stage
