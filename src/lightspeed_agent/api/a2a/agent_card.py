@@ -131,17 +131,35 @@ def _build_rate_limit_extension() -> AgentExtension:
     )
 
 
+def _build_a2ui_extension() -> AgentExtension:
+    """Build A2UI extension for Gemini Enterprise rich UI rendering."""
+    return AgentExtension(
+        uri="https://a2ui.org/a2a-extension/a2ui/v0.8",
+        params={
+            "supportedCatalogIds": [
+                "https://a2ui.org/specification/v0_8/standard_catalog_definition.json"
+            ],
+            "acceptsInlineCatalogs": True,
+        },
+    )
+
+
 def _build_capabilities() -> AgentCapabilities:
     """Build agent capabilities with extensions."""
     dcr_extension = _build_dcr_extension()
     access_mode_extension = _build_access_mode_extension()
     rate_limit_extension = _build_rate_limit_extension()
 
+    settings = get_settings()
+    extensions = [dcr_extension, access_mode_extension, rate_limit_extension]
+    if settings.a2ui_enabled:
+        extensions.append(_build_a2ui_extension())
+
     return AgentCapabilities(
         streaming=True,
         push_notifications=False,
         state_transition_history=False,
-        extensions=[dcr_extension, access_mode_extension, rate_limit_extension],
+        extensions=extensions,
     )
 
 
@@ -164,6 +182,12 @@ def build_agent_card() -> AgentCard:
     capabilities = _build_capabilities()
     skills = _build_skills()
 
+    input_modes = ["text/plain"]
+    output_modes = ["text/plain"]
+    if settings.a2ui_enabled:
+        input_modes.append("application/json+a2ui")
+        output_modes.append("application/json+a2ui")
+
     agent_card = AgentCard(
         name=settings.agent_display_name,
         description=settings.agent_description,
@@ -179,8 +203,8 @@ def build_agent_card() -> AgentCard:
         security=[
             {"redhat_sso": ["openid", "api.console", "api.ocm"]},
         ],
-        default_input_modes=["text/plain"],
-        default_output_modes=["text/plain"],
+        default_input_modes=input_modes,
+        default_output_modes=output_modes,
     )
 
     return agent_card

@@ -208,6 +208,11 @@ Google Cloud Marketplace sends Pub/Sub events to the `/pubsub` endpoint as order
 
 All Procurement API calls are idempotent (400/409 treated as success). Failures on 5xx or network errors propagate so Pub/Sub retries the event. Account validation for DCR queries the Procurement API directly (source of truth), not the local DB.
 
+### A2UI (Agent-to-UI)
+
+Optional rich UI rendering for Gemini Enterprise, controlled by `A2UI_ENABLED` (default `false`).
+When enabled, the agent adds a `SendA2uiToClientToolset` (from `a2ui-agent-sdk`) with the A2UI Basic Catalog v0.8 schema and domain-specific Insights examples. The Agent Card declares the A2UI extension and adds `application/json+a2ui` to input and output modes. Code is in `a2ui/prompt.py` (schema manager, catalog access) and `a2ui/examples.py` (Insights-specific A2UI examples).
+
 ### Usage Metering
 
 `api/a2a/usage_plugin.py` hooks into ADK to track tokens/requests per LLM call. Hourly aggregates are stored in `UsageRecordModel` and async-reported to Google Cloud Service Control (`service_control/reporter.py`). Includes backfill for offline periods.
@@ -216,6 +221,7 @@ All Procurement API calls are idempotent (400/409 treated as success). Failures 
 
 ```
 src/lightspeed_agent/
+├── a2ui/                   # A2UI integration: schema manager, catalog access, Insights examples
 ├── api/app.py              # FastAPI app factory (lifespan, middleware, routes)
 ├── api/a2a/                # A2A protocol: routes, AgentCard, usage tracking
 ├── auth/                   # JWT validation middleware + token introspection
@@ -256,6 +262,9 @@ All configuration is via environment variables, managed through Pydantic setting
 **DCR:**
 - `DCR_ENCRYPTION_KEY`
 - `GMA_CLIENT_ID`, `GMA_CLIENT_SECRET`, `GMA_API_BASE_URL`
+
+**A2UI:**
+- `A2UI_ENABLED` (default `false`, enables rich UI rendering for Gemini Enterprise)
 
 **Agent:**
 - `AGENT_HOST`, `AGENT_PORT`

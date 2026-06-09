@@ -104,6 +104,21 @@ GOOGLE_CLOUD_PROJECT=your-project-id
 GOOGLE_CLOUD_LOCATION=global
 ```
 
+### A2UI (Agent-to-UI)
+
+A2UI enables rich, interactive UI rendering in Gemini Enterprise. When enabled, the agent generates declarative JSON UI components (tables, cards, buttons) alongside text responses. See [A2UI Integration](a2ui.md) for details.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `A2UI_ENABLED` | `false` | Enable A2UI rich UI rendering in agent responses |
+
+**Example:**
+
+```bash
+# Enable A2UI for Gemini Enterprise
+A2UI_ENABLED=true
+```
+
 ### Red Hat SSO / OAuth 2.0
 
 | Variable | Default | Description |
@@ -359,7 +374,7 @@ See [Usage Tracking and Metering](metering.md) for details on the plugin system 
 | `LOG_LEVEL` | `INFO` | Log level: DEBUG, INFO, WARNING, ERROR |
 | `LOG_FORMAT` | `json` | Log format: `json` or `text` |
 | `AGENT_LOGGING_DETAIL` | `basic` | Agent execution logging detail: `basic` or `detailed` |
-| `TOOL_RESULT_MAX_CHARS` | `51200` | Max character length for MCP tool results sent to the LLM. Oversized results are replaced with a message advising the user to narrow down or paginate. Set to `0` to disable. |
+| `TOOL_RESULT_MAX_CHARS` | `204800` | Max character length for MCP tool results sent to the LLM. Oversized results are replaced with a message advising the user to narrow down or paginate. Set to `0` to disable. |
 
 **Example:**
 
@@ -376,11 +391,11 @@ MCP tools can return very large responses (e.g., listing all advisories or inven
 The `TOOL_RESULT_MAX_CHARS` setting controls a size guard that detects oversized tool results and replaces them with an actionable message telling the LLM to guide the user toward narrowing down their query or using pagination.
 
 ```bash
-# Default: 50K characters (conservative, works within standard TPM quotas)
-TOOL_RESULT_MAX_CHARS=51200
+# Default: 200K characters
+TOOL_RESULT_MAX_CHARS=204800
 
-# Allow larger results if you have higher TPM quotas
-TOOL_RESULT_MAX_CHARS=100000
+# Lower limit if you have tight TPM quotas
+TOOL_RESULT_MAX_CHARS=51200
 
 # Disable the guard entirely (not recommended — may cause 429 errors)
 TOOL_RESULT_MAX_CHARS=0
