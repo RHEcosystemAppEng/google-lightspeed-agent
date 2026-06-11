@@ -145,21 +145,7 @@ A separate lightweight uvicorn server (`probes/server.py`) runs on port 8002 (`P
 
 ### Deployment Modes
 
-The agent supports three deployment targets. The application code is identical — differences are in infrastructure-level security and orchestration:
-
-| Target | Ingress | WAF | Network Isolation | Deployment Config |
-|---|---|---|---|---|
-| **Cloud Run** | GCLB with managed SSL | Cloud Armor (OWASP CRS, DDoS) | VPC + Cloud Run ingress restrictions | `deploy/cloudrun/` |
-| **OpenShift** | Routes with TLS edge termination | None built-in (use external WAF if needed) | NetworkPolicies for DB/Redis | `deploy/openshift/` (Helm) |
-| **Podman** | Direct port binding | None | Host-level | `deploy/podman/` + `Makefile` |
-
-OpenShift supports two sub-modes via Helm (`deploymentMode` value):
-- **hybrid** (default) — Agent + Redis on OCP; marketplace handler stays on Cloud Run. Order validation skipped (`SKIP_ORDER_VALIDATION=true`).
-- **standalone** — Everything on OCP including handler, UI, and PostgreSQL. Full order lifecycle with local marketplace database.
-
-Cloud Run deployments use a Cloud Build CI/CD pipeline (`cloudbuild.yaml`) that pulls pre-built images from Quay.io (built by Konflux), scans them with Trivy, pushes to GCR, and deploys both services to Cloud Run with optional GCLB and Cloud Armor WAF. One-command deployment via `deploy/cloudrun/deploy-cloudbuild.sh`.
-
-Application-level protections (body size limits, security headers, rate limiting, JWT auth) apply identically on all platforms. See `deploy/openshift/README.md` for OCP-specific details.
+Three deployment targets: Cloud Run (`deploy/cloudrun/`), OpenShift via Helm (`deploy/openshift/`), and Podman (`deploy/podman/`). Application code is identical across all — differences are infrastructure-level. See `deploy/*/README.md` for platform-specific setup.
 
 ### DCR (Dynamic Client Registration)
 
