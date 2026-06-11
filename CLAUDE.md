@@ -124,17 +124,3 @@ All configuration is via environment variables, managed through Pydantic setting
 
 Key variables: `GOOGLE_API_KEY` (or Vertex AI), `GEMINI_MODEL` (default: `gemini-2.5-flash`), `DATABASE_URL`, `SESSION_DATABASE_URL`, `MCP_TRANSPORT_MODE`, `MCP_SERVER_URL`, `RED_HAT_SSO_CLIENT_ID`/`SECRET`. Dev-only bypasses: `SKIP_JWT_VALIDATION`, `SKIP_DCR_JWT_VALIDATION`, `SKIP_ORDER_VALIDATION`.
 
-## CI Pipeline
-
-GitHub Actions (`.github/workflows/ci.yml`) runs on CentOS Stream 9 with Python 3.12:
-1. **Konflux Verify** — validates GPG signatures and Signed-off-by trailers on Konflux bot PRs
-2. **Detect Changes** — path-based filter that gates downstream jobs (python, pyproject changes)
-3. **Lock File Verification** — ensures lock files are in sync with pyproject.toml (runs when pyproject.toml changes)
-4. **Vulnerability Scan** — pip-audit for known CVEs
-5. **Lint** — ruff + mypy
-6. **Test** — pytest
-7. **Build** — Podman container build
-8. **Container Scan** — Trivy vulnerability scan on built container images
-9. **CI Gate** — blocks merge if any job fails
-
-Secret scanning is configured via `.gitleaks.toml`. CVE alerting for Python dependencies is managed via Renovate (`renovate.json`). See `CONTRIBUTING.md` for the CVE alert workflow.
