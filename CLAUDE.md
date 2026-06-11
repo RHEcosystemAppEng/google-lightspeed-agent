@@ -57,23 +57,13 @@ mypy src/lightspeed_agent/ --ignore-missing-imports  # Type checker only
 
 Ruff rules: `E, F, I, N, W, UP, B, C4, SIM`. Line length: 100. Target: Python 3.12.
 
-### Container Build & Operations (Podman)
+### Container Build (Podman)
 ```bash
-make help                              # List all available targets
 make build                             # Build both images (agent + marketplace handler)
-make build-agent                       # Build agent image only
-make build-marketplace                 # Build marketplace handler image only
 make run                               # Start all pods
 make stop                              # Stop and remove pods
 make logs                              # Agent logs
-make logs-mcp                          # MCP server logs
-make logs-all                          # All container logs
-make status                            # Show pod/container status
-make clean                             # Remove containers, images, and volumes
-make clean-all                         # Full cleanup including volumes
-make dev                               # Run agent locally without containers
-make check-env                         # Validate required env vars
-make cve-scan                          # Scan for CVEs with Trivy
+make help                              # List all available targets
 ```
 
 ### Before Pushing
