@@ -94,7 +94,7 @@ The system runs as two separate FastAPI services with separate concerns:
 ### Authentication Flow
 
 JWT tokens from Red Hat SSO flow through three layers:
-1. `auth/middleware.py` validates Bearer tokens — only `POST /` is protected; all other paths are public. Health probes (`/health`, `/ready`) run on a separate probe server (see below), not the main API. The Marketplace Handler has its own auth (Google OIDC on `/pubsub`, DCR JWT on `/dcr`).
+1. `auth/middleware.py` validates Bearer tokens — only `POST /` is protected; all other paths are public
 2. Token is stored in `contextvars` for the request lifecycle (user_id, org_id, order_id, client_id, request_id)
 3. `tools/mcp_headers.py` forwards the caller's JWT to the MCP server so it can authenticate with console.redhat.com on the user's behalf
 
