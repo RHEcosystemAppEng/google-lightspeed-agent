@@ -78,13 +78,18 @@ make cve-scan                          # Scan for CVEs with Trivy
 
 ### Before Pushing
 
-Run lint and tests before pushing commits:
-
 ```bash
 make lint && make test
 ```
 
-If you modified `pyproject.toml`, also regenerate lock files (`make lock`) and commit them together. CI only enforces lock file sync when `pyproject.toml` changes.
+If you modified `pyproject.toml`, also run `make lock` and commit the lock files together.
+
+## Common Gotchas
+
+- **SQLite vs PostgreSQL**: `ARRAY(String)` columns use a JSON variant for SQLite (see `db/models.py:StringList`). If adding array-type columns, use `StringList` — raw `ARRAY` will break tests.
+- **Dev-only bypasses blocked in prod**: `SKIP_JWT_VALIDATION=true` raises on startup when running on Cloud Run. Don't rely on it for integration testing in deployed environments.
+- **MCP tools are loaded at startup**: Changes to MCP server tool definitions require an agent restart to take effect.
+- **Two databases, two URLs**: Marketplace data (`DATABASE_URL`) and ADK sessions (`SESSION_DATABASE_URL`) are separate. Mixing them up causes silent data loss or missing tables.
 
 ## Architecture
 
