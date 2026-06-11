@@ -38,45 +38,15 @@ To run with coverage:
 python -m pytest tests/ -v --cov=src/lightspeed_agent --cov-report=term-missing
 ```
 
-### Dependency Management
+### Dependencies
 
-Lock files (`requirements-agent.txt`, `requirements-handler.txt`, `requirements-dev.txt`) pin exact versions with cryptographic hashes for reproducible builds.
+Lock files pin exact versions with hashes. After editing `pyproject.toml`, run `make lock` and commit both together. For CVE fixes in transitive deps, add them as direct deps in `pyproject.toml` with the safe version, then `make lock`. See `CONTRIBUTING.md` for detailed workflows.
 
 ```bash
-make lock                              # Regenerate all lock files (always run before committing)
-make lock-agent                        # Regenerate agent lock file only
-make lock-handler                      # Regenerate marketplace handler lock file only
-make lock-dev                          # Regenerate dev lock file only
-make check-lock                        # Verify lock files are in sync with pyproject.toml
-make audit                             # Scan dependencies for known vulnerabilities (pip-audit)
+make lock                              # Regenerate all lock files
+make check-lock                        # Verify lock files match pyproject.toml
+make audit                             # Scan for known CVEs (pip-audit)
 ```
-
-**Workflow:**
-1. Edit `pyproject.toml` (add/update dependencies)
-2. Run `make lock` to regenerate lock files
-3. Review the changes in `requirements-*.txt`
-4. Commit both `pyproject.toml` and lock files together
-
-**Note:** `make lock` is safe to run anytime - if nothing changed, it regenerates identical files.
-
-**Fixing CVEs in transitive dependencies:**
-
-If a transitive dependency has a CVE, you cannot manually edit lock files. Instead:
-
-1. Add the transitive dependency as a direct dependency in `pyproject.toml` with the safe version constraint
-2. Run `make lock` to regenerate lock files
-3. Commit both files
-
-Example:
-```toml
-# In pyproject.toml dependencies section:
-dependencies = [
-    # ... existing deps ...
-    "pydantic-core>=2.41.6",  # CVE fix: force safe version
-]
-```
-
-Then run `make lock` and commit.
 
 ### Linting & Type Checking
 ```bash
