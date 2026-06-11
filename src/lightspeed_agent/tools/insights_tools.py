@@ -149,9 +149,9 @@ ADVISOR_TOOLS = [
     "advisor__get_rule_from_node_id",
     "advisor__get_rule_details",
     "advisor__get_hosts_hitting_a_rule",
-    "advisor__get_hosts_details_hitting_a_rule",
+    "advisor__get_hosts_details_for_rule",
     "advisor__get_rule_by_text_search",
-    "advisor__get_recommendations_statistics",
+    "advisor__get_recommendations_stats",
 ]
 
 INVENTORY_TOOLS = [
@@ -173,14 +173,16 @@ VULNERABILITY_TOOLS = [
 ]
 
 REMEDIATION_TOOLS = [
-    "remediations__create_vulnerability_playbook",
+    "remediations__create_vuln_playbook",
 ]
 
 PLANNING_TOOLS = [
     "planning__get_upcoming_changes",
     "planning__get_appstreams_lifecycle",
     "planning__get_rhel_lifecycle",
-    "planning__get_relevant_upcoming_changes",
+    "planning__get_relevant_upcoming",
+    "planning__get_relevant_appstreams",
+    "planning__get_relevant_rhel_lifecycle",
 ]
 
 IMAGE_BUILDER_TOOLS = [

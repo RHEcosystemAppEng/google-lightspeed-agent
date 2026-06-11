@@ -357,7 +357,7 @@ Returns the AgentCard describing the agent's capabilities.
   "capabilities": {
     "streaming": true,
     "pushNotifications": false,
-    "stateTransitionHistory": true
+    "stateTransitionHistory": false
   },
   "authentication": {
     "schemes": [
@@ -368,7 +368,9 @@ Returns the AgentCard describing the agent's capabilities.
         "scopes": {
           "openid": "OpenID Connect",
           "profile": "User profile",
-          "email": "Email address"
+          "email": "Email address",
+          "api.console": "Access to Red Hat console APIs",
+          "api.ocm": "Access to Red Hat OpenShift Cluster Manager APIs"
         }
       }
     ]

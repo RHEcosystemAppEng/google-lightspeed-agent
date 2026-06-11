@@ -186,41 +186,86 @@ The MCP server provides these tools to the agent:
 
 | Tool | Description |
 |------|-------------|
-| `advisor_get_recommendations` | Get recommendations for a system |
-| `advisor_list_rules` | List all advisor rules |
-| `advisor_get_rule` | Get details of a specific rule |
+| `advisor__get_active_rules` | Get active advisor rules |
+| `advisor__get_rule_from_node_id` | Get rule by node ID |
+| `advisor__get_rule_details` | Get details of a specific rule |
+| `advisor__get_hosts_hitting_a_rule` | Get hosts affected by a rule |
+| `advisor__get_hosts_details_for_rule` | Get detailed host info for a rule |
+| `advisor__get_rule_by_text_search` | Search rules by text |
+| `advisor__get_recommendations_stats` | Get recommendation statistics |
 
 ### Inventory Tools
 
 | Tool | Description |
 |------|-------------|
-| `inventory_list_hosts` | List registered hosts |
-| `inventory_get_host` | Get host details by ID |
-| `inventory_search_hosts` | Search hosts by criteria |
+| `inventory__list_hosts` | List registered hosts |
+| `inventory__get_host_details` | Get host details by ID |
+| `inventory__get_host_system_profile` | Get host system profile |
+| `inventory__get_host_tags` | Get tags for a host |
+| `inventory__find_host_by_name` | Find a host by display name |
 
 ### Vulnerability Tools
 
 | Tool | Description |
 |------|-------------|
-| `vulnerability_list_cves` | List CVEs affecting systems |
-| `vulnerability_get_cve` | Get CVE details |
-| `vulnerability_get_affected_systems` | Get systems affected by a CVE |
+| `vulnerability__get_openapi` | Get vulnerability API schema |
+| `vulnerability__get_cves` | List CVEs affecting systems |
+| `vulnerability__get_cve` | Get CVE details |
+| `vulnerability__get_cve_systems` | Get systems affected by a CVE |
+| `vulnerability__get_system_cves` | Get CVEs for a specific system |
+| `vulnerability__get_systems` | Get all tracked systems |
+| `vulnerability__explain_cves` | Get CVE explanations |
 
 ### Remediation Tools
 
 | Tool | Description |
 |------|-------------|
-| `remediations_list` | List available remediations |
-| `remediations_get` | Get remediation details |
-| `remediations_create` | Create a new remediation (if not read-only) |
+| `remediations__create_vuln_playbook` | Create vulnerability remediation playbook (if not read-only) |
 
-### Patch Tools
+### Planning Tools
 
 | Tool | Description |
 |------|-------------|
-| `patch_list_advisories` | List available patches |
-| `patch_get_advisory` | Get patch details |
-| `patch_get_systems` | Get systems needing patches |
+| `planning__get_upcoming_changes` | Get upcoming changes |
+| `planning__get_appstreams_lifecycle` | Get AppStreams lifecycle info |
+| `planning__get_rhel_lifecycle` | Get RHEL lifecycle info |
+| `planning__get_relevant_upcoming` | Get relevant upcoming changes |
+| `planning__get_relevant_appstreams` | Get relevant AppStreams lifecycle info |
+| `planning__get_relevant_rhel_lifecycle` | Get relevant RHEL lifecycle info |
+
+### Image Builder Tools
+
+| Tool | Description |
+|------|-------------|
+| `image-builder__get_openapi` | Get Image Builder API schema |
+| `image-builder__get_blueprints` | List blueprints |
+| `image-builder__get_blueprint_details` | Get blueprint details |
+| `image-builder__create_blueprint` | Create a blueprint (if not read-only) |
+| `image-builder__update_blueprint` | Update a blueprint (if not read-only) |
+| `image-builder__blueprint_compose` | Compose an image from blueprint (if not read-only) |
+| `image-builder__get_composes` | List image composes |
+| `image-builder__get_compose_details` | Get compose details |
+| `image-builder__get_distributions` | List available distributions |
+| `image-builder__get_org_id` | Get organization ID |
+
+### RHSM Tools
+
+| Tool | Description |
+|------|-------------|
+| `rhsm__get_activation_keys` | List activation keys |
+| `rhsm__get_activation_key` | Get activation key details |
+
+### RBAC Tools
+
+| Tool | Description |
+|------|-------------|
+| `rbac__get_all_access` | Get all access permissions |
+
+### Content Sources Tools
+
+| Tool | Description |
+|------|-------------|
+| `content-sources__list_repositories` | List content repositories |
 
 ## Troubleshooting
 

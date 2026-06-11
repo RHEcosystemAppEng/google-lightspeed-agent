@@ -85,7 +85,7 @@ inventory__get_host_details (system context for affected hosts) →
 summarize affected systems and advise on remediation steps
 
 **"Give me an overview of my infrastructure health"**
-→ advisor__get_recommendations_statistics (advisor summary) →
+→ advisor__get_recommendations_stats (advisor summary) →
 vulnerability__get_cves (top vulns) → inventory__list_hosts (fleet size) → synthesize
 health report
 
