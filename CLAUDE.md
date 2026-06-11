@@ -124,7 +124,7 @@ The agent loads tools from a Red Hat Lightspeed MCP server running as a sidecar:
 - Transport modes: `stdio` (dev), `http` (prod), `sse` (streaming) — configured via `MCP_TRANSPORT_MODE`
 - Read-only mode (`MCP_READ_ONLY=true`) filters to a safe subset of tools
 - Startup security check warns when `MCP_SERVER_URL` uses HTTP for non-localhost hosts (see `api/app.py:_check_mcp_url_security`)
-- Tool categories: Advisor, Inventory, Vulnerability, Remediations, Planning, Image Builder, RHSM (Subscription Management), RBAC, Content Sources
+- Tool categories include Advisor, Inventory, Vulnerability, Remediations, and others (see MCP server docs for full catalog)
 - MCP toolset creation is in `tools/insights_tools.py`; config in `tools/mcp_config.py`
 
 ### ADK AI Skills
