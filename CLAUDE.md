@@ -47,6 +47,7 @@ make lock                              # Regenerate all lock files (always run b
 make lock-agent                        # Regenerate agent lock file only
 make lock-handler                      # Regenerate marketplace handler lock file only
 make lock-dev                          # Regenerate dev lock file only
+make check-lock                        # Verify lock files are in sync with pyproject.toml
 make audit                             # Scan dependencies for known vulnerabilities (pip-audit)
 ```
 
@@ -136,8 +137,8 @@ Both fall back to SQLite for development. ORM models are in `src/lightspeed_agen
 ### Authentication Flow
 
 JWT tokens from Red Hat SSO flow through three layers:
-1. `auth/middleware.py` validates Bearer tokens on POST `/` (skips health endpoints, OpenAPI docs, agent card paths, and `/marketplace/` prefixed routes)
-2. Token is stored in `contextvars` for the request lifecycle
+1. `auth/middleware.py` validates Bearer tokens — only `POST /` is protected; all other paths are public. Explicitly public paths include `/docs`, `/openapi.json`, `/redoc`, `/.well-known/agent.json`, `/.well-known/agent-card.json`, and `/marketplace/pubsub`. Health probes (`/health`, `/ready`) run on a separate probe server (see below), not the main API.
+2. Token is stored in `contextvars` for the request lifecycle (user_id, org_id, order_id, client_id, request_id)
 3. `tools/mcp_headers.py` forwards the caller's JWT to the MCP server so it can authenticate with console.redhat.com on the user's behalf
 
 Setting `SKIP_JWT_VALIDATION=true` bypasses auth (dev only, blocked when running on Cloud Run).
@@ -147,7 +148,8 @@ Setting `SKIP_JWT_VALIDATION=true` bypasses auth (dev only, blocked when running
 The agent loads tools from a Red Hat Lightspeed MCP server running as a sidecar:
 - Transport modes: `stdio` (dev), `http` (prod), `sse` (streaming) — configured via `MCP_TRANSPORT_MODE`
 - Read-only mode (`MCP_READ_ONLY=true`) filters to a safe subset of tools
-- Tool categories: Advisor, Inventory, Vulnerability, Remediations, Planning, Image Builder, Subscription Management, Content Sources
+- Startup security check warns when `MCP_SERVER_URL` uses HTTP for non-localhost hosts (see `api/app.py:_check_mcp_url_security`)
+- Tool categories: Advisor, Inventory, Vulnerability, Remediations, Planning, Image Builder, RHSM (Subscription Management), RBAC, Content Sources
 - MCP toolset creation is in `tools/insights_tools.py`; config in `tools/mcp_config.py`
 
 ### ADK AI Skills
@@ -166,6 +168,10 @@ Agent behavioral instructions use ADK's progressive-disclosure Skills system ins
 4. Redis rate limiting (`ratelimit/middleware.py`) — 60 req/min, 1000 req/hour
 5. JWT authentication (`auth/middleware.py`)
 
+### Health Probe Server
+
+A separate lightweight uvicorn server (`probes/server.py`) runs on port 8002 (`PROBES_PORT`) alongside the main API. Provides `/health` (liveness) and `/ready` (readiness with optional async validations) endpoints for Kubernetes and Cloud Run health checking. This is independent of the main FastAPI app and its middleware stack.
+
 ### Deployment Modes
 
 The agent supports three deployment targets. The application code is identical — differences are in infrastructure-level security and orchestration:
@@ -174,11 +180,13 @@ The agent supports three deployment targets. The application code is identical �
 |---|---|---|---|---|
 | **Cloud Run** | GCLB with managed SSL | Cloud Armor (OWASP CRS, DDoS) | VPC + Cloud Run ingress restrictions | `deploy/cloudrun/` |
 | **OpenShift** | Routes with TLS edge termination | None built-in (use external WAF if needed) | NetworkPolicies for DB/Redis | `deploy/openshift/` (Helm) |
-| **Podman** | Direct port binding | None | Host-level | `Makefile` targets |
+| **Podman** | Direct port binding | None | Host-level | `deploy/podman/` + `Makefile` |
 
 OpenShift supports two sub-modes via Helm (`deploymentMode` value):
 - **hybrid** (default) — Agent + Redis on OCP; marketplace handler stays on Cloud Run. Order validation skipped (`SKIP_ORDER_VALIDATION=true`).
 - **standalone** — Everything on OCP including handler, UI, and PostgreSQL. Full order lifecycle with local marketplace database.
+
+Cloud Run deployments use a Cloud Build CI/CD pipeline (`cloudbuild.yaml`) that pulls pre-built images from Quay.io (built by Konflux), scans them with Trivy, pushes to GCR, and deploys both services to Cloud Run with optional GCLB and Cloud Armor WAF. One-command deployment via `deploy/cloudrun/deploy-cloudbuild.sh`.
 
 Application-level protections (body size limits, security headers, rate limiting, JWT auth) apply identically on all platforms. See `deploy/openshift/README.md` for OCP-specific details.
 
@@ -217,19 +225,24 @@ All Procurement API calls are idempotent (400/409 treated as success). Failures 
 ```
 src/lightspeed_agent/
 ├── api/app.py              # FastAPI app factory (lifespan, middleware, routes)
-├── api/a2a/                # A2A protocol: routes, AgentCard, usage tracking
+├── api/a2a/                # A2A protocol: routes, AgentCard, usage tracking, plugins
+│                           #   (logging, output size guard, response formatter, session service)
 ├── auth/                   # JWT validation middleware + token introspection
 ├── config/                 # Pydantic BaseSettings (all env vars, validation)
 ├── core/agent.py           # LlmAgent creation with MCP tools + ADK AI Skills
+├── core/gemini_retry.py    # Gemini HTTP retry configuration (exponential backoff + jitter)
 ├── core/skills/            # Bundled ADK AI Skill definitions (SKILL.md files)
 ├── db/                     # SQLAlchemy ORM (3 models, async engine)
 ├── dcr/                    # Dynamic Client Registration service
+├── logging/                # Configurable audit context filter (PII gated by AUDIT_LOGGING_ENABLED)
 ├── marketplace/            # Marketplace handler (separate service entry point)
 ├── metering/               # Usage record repository + backfill
+├── probes/                 # Standalone health/readiness probe server (port 8002)
 ├── ratelimit/              # Redis-backed distributed rate limiter
+├── security/               # Body size limits + security headers middleware
 ├── service_control/        # Google Cloud Service Control metering
 ├── telemetry/              # OpenTelemetry setup (OTLP, Jaeger, Zipkin)
-├── tools/                  # MCP toolset definitions + JWT header forwarding + A2A skills
+├── tools/                  # MCP toolset + JWT forwarding + A2A skills + schema sanitizer
 └── main.py                 # Agent service entry point
 ```
 
@@ -240,11 +253,15 @@ All configuration is via environment variables, managed through Pydantic setting
 **LLM / Google Cloud:**
 - `GOOGLE_API_KEY` or `GOOGLE_CLOUD_PROJECT` + `GOOGLE_GENAI_USE_VERTEXAI=TRUE` (LLM access)
 - `GEMINI_MODEL` (model selection, default: `gemini-2.5-flash`)
+- `LLM_PROVIDER` (default: `gemini`; set to `litellm` for LiteLLM proxy backend)
+- `LLM_MODEL`, `LLM_API_KEY`, `LLM_API_BASE` (LiteLLM provider overrides)
 - Optional Gemini HTTP retries (Google Gen AI SDK exponential backoff + jitter): `GEMINI_HTTP_RETRY_ATTEMPTS`, `GEMINI_HTTP_RETRY_INITIAL_DELAY`, `GEMINI_HTTP_RETRY_MAX_DELAY`, `GEMINI_HTTP_RETRY_EXP_BASE`, `GEMINI_HTTP_RETRY_JITTER` (see `docs/configuration.md`)
 
 **Database:**
 - `DATABASE_URL` / `SESSION_DATABASE_URL` (PostgreSQL or SQLite)
 - `DATABASE_REQUIRE_SSL` (enforce SSL for PostgreSQL; not needed for Cloud SQL Proxy)
+- `DATABASE_POOL_SIZE` (default: 5), `DATABASE_POOL_MAX_OVERFLOW` (default: 10)
+- `SESSION_BACKEND` (default: `memory`; set to `database` for persistent sessions)
 
 **Auth:**
 - `RED_HAT_SSO_CLIENT_ID` / `RED_HAT_SSO_CLIENT_SECRET`
@@ -256,10 +273,22 @@ All configuration is via environment variables, managed through Pydantic setting
 **DCR:**
 - `DCR_ENCRYPTION_KEY`
 - `GMA_CLIENT_ID`, `GMA_CLIENT_SECRET`, `GMA_API_BASE_URL`
+- `SKIP_DCR_JWT_VALIDATION` (dev only; skip DCR JWT validation for non-Cloud-Run deployments)
 
 **Agent:**
 - `AGENT_HOST`, `AGENT_PORT`
 - `SKILLS_DIR` (optional: path to external ADK AI Skills directory; bundled skills always load, external skills overlay/override by name)
+- `PROBES_PORT` (default: 8002; standalone health probe server port)
+- `AGENT_LOGGING_DETAIL` (default: `basic`; set to `detailed` for tool arguments/results in logs)
+- `AUDIT_LOGGING_ENABLED` (default: `true`; when false, PII fields are not injected into log records)
+- `TOOL_RESULT_MAX_CHARS` (default: 204800; truncates oversized MCP tool output; 0 to disable)
+- `SKIP_ORDER_VALIDATION` (skip order/entitlement validation in auth; for hybrid OCP deployments)
+
+**Marketplace Handler:**
+- `MARKETPLACE_HOST`, `MARKETPLACE_PORT` (default: `0.0.0.0`, `8001`)
+
+**CORS:**
+- `CORS_ALLOWED_ORIGINS` (comma-separated allowed origins; empty by default)
 
 **Service Control:**
 - `SERVICE_CONTROL_SERVICE_NAME`, `SERVICE_CONTROL_ENABLED`
@@ -274,9 +303,14 @@ All configuration is via environment variables, managed through Pydantic setting
 ## CI Pipeline
 
 GitHub Actions (`.github/workflows/ci.yml`) runs on CentOS Stream 9 with Python 3.12:
-1. **Lint** — ruff + mypy
-2. **Test** — pytest
-3. **Build** — Podman container build
-4. **CI Gate** — blocks merge if any job fails
+1. **Konflux Verify** — validates GPG signatures and Signed-off-by trailers on Konflux bot PRs
+2. **Detect Changes** — path-based filter that gates downstream jobs (python, pyproject changes)
+3. **Lock File Verification** — ensures lock files are in sync with pyproject.toml (runs when pyproject.toml changes)
+4. **Vulnerability Scan** — pip-audit for known CVEs
+5. **Lint** — ruff + mypy
+6. **Test** — pytest
+7. **Build** — Podman container build
+8. **Container Scan** — Trivy vulnerability scan on built container images
+9. **CI Gate** — blocks merge if any job fails
 
-Secret scanning is configured via `.gitleaks.toml`.
+Secret scanning is configured via `.gitleaks.toml`. CVE alerting for Python dependencies is managed via Renovate (`renovate.json`). See `CONTRIBUTING.md` for the CVE alert workflow.
