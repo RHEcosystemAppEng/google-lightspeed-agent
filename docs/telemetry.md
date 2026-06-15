@@ -284,6 +284,34 @@ The metrics collector runs as a background task inside the agent process, pollin
 
 The current `service.yaml` sets `run.googleapis.com/minScale: "1"`, so this is not a concern with the default configuration. If you change `minScale` to `0`, be aware that metrics will have gaps during periods with no active instances. Subscription and usage data is not lost — it remains in the database and will be reported on the next collection cycle when an instance starts. However, the `tool_calls_by_name` counter is in-process only and resets to zero on instance restart.
 
+### Cloud Monitoring Dashboards
+
+Three pre-built dashboards are provided in `deploy/cloudrun/dashboards/`:
+
+| Dashboard | File | Panels |
+|-----------|------|--------|
+| Lightspeed — Marketplace | `marketplace.json` | Subscriptions by State, Active DCR Clients |
+| Lightspeed — Usage & Billing | `usage-billing.json` | Input Tokens, Output Tokens, Requests (all by account) |
+| Lightspeed — Agent Operations | `agent-operations.json` | Tool Calls by Name |
+
+All dashboards use PromQL queries and include a pinned `service_name` filter for switching between agent instances in multi-agent deployments.
+
+**Deploy manually:**
+
+```bash
+# Create a new dashboard
+gcloud monitoring dashboards create \
+    --config-from-file=deploy/cloudrun/dashboards/marketplace.json
+
+# Update an existing dashboard (get the ID from `gcloud monitoring dashboards list`)
+gcloud monitoring dashboards update projects/PROJECT_ID/dashboards/DASHBOARD_ID \
+    --config-from-file=deploy/cloudrun/dashboards/marketplace.json
+```
+
+**Automated deployment:** Cloud Build deploys all dashboards automatically — it discovers every `*.json` file in `deploy/cloudrun/dashboards/` and creates or updates each one. To add a new dashboard, drop a JSON file in that directory; no `cloudbuild.yaml` changes needed.
+
+**Required permission:** The Cloud Build service account needs `roles/monitoring.dashboardEditor`.
+
 ## Span Attributes
 
 The following attributes are attached to spans:

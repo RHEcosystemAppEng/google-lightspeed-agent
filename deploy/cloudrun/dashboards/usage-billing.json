@@ -1,0 +1,88 @@
+{
+  "displayName": "Lightspeed — Usage & Billing",
+  "mosaicLayout": {
+    "columns": 48,
+    "tiles": [
+      {
+        "xPos": 0,
+        "yPos": 0,
+        "width": 24,
+        "height": 16,
+        "widget": {
+          "title": "Input Tokens by Account",
+          "timeSeriesTable": {
+            "dataSets": [
+              {
+                "timeSeriesQuery": {
+                  "prometheusQuery": "sum by (account_id) (input_tokens)"
+                }
+              }
+            ],
+            "metricVisualization": "BAR",
+            "columnSettings": [
+              { "column": "account_id", "displayName": "Account", "visible": true },
+              { "column": "value", "displayName": "Input Tokens", "visible": true }
+            ]
+          }
+        }
+      },
+      {
+        "xPos": 24,
+        "yPos": 0,
+        "width": 24,
+        "height": 16,
+        "widget": {
+          "title": "Output Tokens by Account",
+          "timeSeriesTable": {
+            "dataSets": [
+              {
+                "timeSeriesQuery": {
+                  "prometheusQuery": "sum by (account_id) (output_tokens)"
+                }
+              }
+            ],
+            "metricVisualization": "BAR",
+            "columnSettings": [
+              { "column": "account_id", "displayName": "Account", "visible": true },
+              { "column": "value", "displayName": "Output Tokens", "visible": true }
+            ]
+          }
+        }
+      },
+      {
+        "xPos": 0,
+        "yPos": 16,
+        "width": 48,
+        "height": 16,
+        "widget": {
+          "title": "Requests by Account",
+          "timeSeriesTable": {
+            "dataSets": [
+              {
+                "timeSeriesQuery": {
+                  "prometheusQuery": "sum by (account_id) (request_count)"
+                }
+              }
+            ],
+            "metricVisualization": "BAR",
+            "columnSettings": [
+              { "column": "account_id", "displayName": "Account", "visible": true },
+              { "column": "value", "displayName": "Requests", "visible": true }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "dashboardFilters": [
+    {
+      "labelKey": "service_name",
+      "filterType": "METRIC_LABEL",
+      "stringValue": "",
+      "valueType": "STRING"
+    }
+  ],
+  "labels": {
+    "lightspeed-agent": ""
+  }
+}
