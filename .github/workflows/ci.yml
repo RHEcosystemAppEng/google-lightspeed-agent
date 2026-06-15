@@ -273,7 +273,7 @@ jobs:
             echo "Lock file check failed: ${{ needs.lock-file-check.result }}"
             exit 1
           fi
-          # lint, test, build, container-scan test-shell are skipped when no Python/dependency files changed — that's expected
+          # lint, test, build, container-scan, test-shell are skipped when no relevant files changed — that's expected
           for job_result in "${{ needs.lint.result }}" "${{ needs.test.result }}" "${{ needs.build.result }}" "${{ needs.container-scan.result }}" "${{ needs.test-shell.result }}"; do
             if [[ "$job_result" != "success" && "$job_result" != "skipped" ]]; then
               echo "One or more CI jobs failed or were cancelled."
