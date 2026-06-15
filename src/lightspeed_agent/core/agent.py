@@ -6,8 +6,11 @@ import pathlib
 from typing import Any
 
 from google.adk.agents import LlmAgent
+from google.adk.agents.callback_context import CallbackContext
 from google.adk.models import Gemini
 from google.adk.models.base_llm import BaseLlm
+from google.adk.models.llm_request import LlmRequest
+from google.adk.models.llm_response import LlmResponse
 from google.adk.planners import PlanReActPlanner
 from google.adk.skills import load_skill_from_dir
 from google.adk.tools.skill_toolset import SkillToolset
@@ -198,6 +201,22 @@ def _create_model(settings: Settings) -> BaseLlm:
     return Gemini(model=model_name, retry_options=retry_opts)
 
 
+def _strip_part_metadata(
+    _callback_context: CallbackContext, llm_request: LlmRequest
+) -> LlmResponse | None:
+    """Strip part_metadata from all Parts before sending to the model.
+
+    ADK >=2.2.0 sets part_metadata on Parts via the A2A converter, but Vertex AI
+    rejects it (Developer API only). Clearing it here avoids the ValueError
+    without downgrading ADK.
+    """
+    for content in llm_request.contents or []:
+        for part in content.parts or []:
+            if getattr(part, "part_metadata", None) is not None:
+                part.part_metadata = None
+    return None
+
+
 def create_agent() -> LlmAgent:
     """Create the Lightspeed Agent with MCP tools.
 
@@ -240,6 +259,8 @@ def create_agent() -> LlmAgent:
     if skill_toolset:
         tools.append(skill_toolset)
 
+    before_model_cb = _strip_part_metadata if settings.google_genai_use_vertexai else None
+
     return LlmAgent(
         name=settings.agent_name,
         model=model,
@@ -247,6 +268,7 @@ def create_agent() -> LlmAgent:
         static_instruction=AGENT_INSTRUCTION,
         tools=tools,
         planner=PlanReActPlanner(),
+        before_model_callback=before_model_cb,
     )
 
 
