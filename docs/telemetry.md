@@ -258,11 +258,13 @@ Metrics are independent of tracing — you can enable one without the other.
 
 The Cloud Run `service.yaml` includes everything needed for metrics:
 
-1. **Managed OTel collector sidecar** — the annotation `run.googleapis.com/otel-collector: '{"enabled": true}'` deploys a collector sidecar that receives OTLP on `localhost:4317` and forwards to Cloud Monitoring automatically.
+1. **OTel Collector sidecar** — the `collector` container (`otelcol-google:0.151.0`) receives OTLP metrics on `localhost:4317` and exports them to Cloud Monitoring via the `googlemanagedprometheus` exporter.
 
 2. **Metrics enabled** — `OTEL_METRICS_ENABLED=true` is set in the agent container env.
 
-3. **No additional configuration required** — the default OTLP exporter endpoint (`localhost:4317`) matches the managed collector sidecar.
+3. **Collector config** — the `otel-collector-config` secret (mounted at `/etc/otelcol-google/config.yaml`) configures the collector's receivers, processors, and exporters.
+
+Metrics appear in Cloud Monitoring under the `prometheus_target` resource type with names like `prometheus.googleapis.com/subscriptions_count/gauge`. See the [Cloud Run deployment docs](../deploy/cloudrun/README.md#opentelemetry-business-metrics) for full setup details.
 
 ### Multi-Agent Deployments
 
