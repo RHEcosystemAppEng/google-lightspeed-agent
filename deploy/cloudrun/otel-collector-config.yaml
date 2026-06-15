@@ -1,0 +1,28 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+
+processors:
+  batch:
+    timeout: 5s
+  resourcedetection:
+    detectors: [env, gcp]
+    timeout: 2s
+    override: false
+
+exporters:
+  googlemanagedprometheus: {}
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+service:
+  extensions: [health_check]
+  pipelines:
+    metrics:
+      receivers: [otlp]
+      processors: [batch, resourcedetection]
+      exporters: [googlemanagedprometheus]

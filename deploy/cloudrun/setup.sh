@@ -256,6 +256,30 @@ for secret in "${optional_secrets[@]}"; do
         --quiet || true
 done
 
+# Create OTel Collector config secret (from config file, not placeholder)
+log_info "Setting up OTel Collector config secret..."
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+OTEL_CONFIG_FILE="$SCRIPT_DIR/otel-collector-config.yaml"
+if [[ -f "$OTEL_CONFIG_FILE" ]]; then
+    if ! gcloud secrets describe "otel-collector-config" --project="$PROJECT_ID" &>/dev/null; then
+        log_info "  Creating secret: otel-collector-config"
+        gcloud secrets create "otel-collector-config" \
+            --data-file="$OTEL_CONFIG_FILE" \
+            --project="$PROJECT_ID" \
+            --replication-policy="automatic"
+    else
+        log_info "  Secret 'otel-collector-config' already exists"
+    fi
+
+    gcloud secrets add-iam-policy-binding "otel-collector-config" \
+        --member="serviceAccount:$SERVICE_ACCOUNT" \
+        --role="roles/secretmanager.secretAccessor" \
+        --project="$PROJECT_ID" \
+        --quiet || true
+else
+    log_warn "OTel Collector config not found at $OTEL_CONFIG_FILE, skipping"
+fi
+
 # =============================================================================
 # Step 4: Create Pub/Sub Invoker Service Account and Topic (Optional)
 # =============================================================================
