@@ -1,0 +1,42 @@
+{
+  "displayName": "Lightspeed — Agent Operations",
+  "mosaicLayout": {
+    "columns": 48,
+    "tiles": [
+      {
+        "xPos": 0,
+        "yPos": 0,
+        "width": 48,
+        "height": 16,
+        "widget": {
+          "title": "Tool Calls by Name",
+          "timeSeriesTable": {
+            "dataSets": [
+              {
+                "timeSeriesQuery": {
+                  "prometheusQuery": "sum by (tool_name) (tool_calls_by_name_total)"
+                }
+              }
+            ],
+            "metricVisualization": "BAR",
+            "columnSettings": [
+              { "column": "tool_name", "displayName": "Tool", "visible": true },
+              { "column": "value", "displayName": "Count", "visible": true }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "dashboardFilters": [
+    {
+      "labelKey": "service_name",
+      "filterType": "METRIC_LABEL",
+      "stringValue": "",
+      "valueType": "STRING"
+    }
+  ],
+  "labels": {
+    "lightspeed-agent": ""
+  }
+}
