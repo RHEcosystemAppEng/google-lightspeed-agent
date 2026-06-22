@@ -141,6 +141,7 @@ spec:
             periodSeconds: 30
             failureThreshold: 3
 
+        {{- if not .Values.mcpGateway.enabled }}
         # ===================================================================
         # Red Hat Lightspeed MCP Server (Sidecar)
         # ===================================================================
@@ -189,11 +190,14 @@ spec:
             failureThreshold: 3
           resources:
             {{- toYaml .Values.mcp.resources | nindent 12 }}
+        {{- end }}
       volumes:
         - name: tmp
           emptyDir: {}
+        {{- if not .Values.mcpGateway.enabled }}
         - name: mcp-tmp
           emptyDir: {}
+        {{- end }}
         {{- if and .Values.agent.skillsDir .Values.agent.skillsConfigMap }}
         - name: external-skills
           configMap:

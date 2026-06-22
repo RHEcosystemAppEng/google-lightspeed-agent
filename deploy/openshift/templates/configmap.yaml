@@ -20,9 +20,13 @@ data:
   AGENT_REQUIRED_SCOPE: {{ .Values.sso.requiredScope | quote }}
   AGENT_ALLOWED_SCOPES: {{ .Values.sso.allowedScopes | quote }}
 
-  # MCP Server Configuration (agent -> MCP sidecar)
+  # MCP Server Configuration (agent -> MCP sidecar or gateway)
   MCP_TRANSPORT_MODE: {{ .Values.mcp.transport | quote }}
+  {{- if .Values.mcpGateway.enabled }}
+  MCP_SERVER_URL: {{ .Values.mcpGateway.url | quote }}
+  {{- else }}
   MCP_SERVER_URL: {{ printf "http://localhost:%d" (int .Values.mcp.port) | quote }}
+  {{- end }}
   MCP_READ_ONLY: {{ .Values.mcp.readOnly | quote }}
 
   # MCP Server Configuration (container startup args)

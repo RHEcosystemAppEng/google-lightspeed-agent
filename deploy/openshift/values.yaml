@@ -106,6 +106,24 @@ google:
     jitter: 1.0
 
 # ---------------------------------------------------------------------------
+# MCP Gateway (Red Hat Connectivity Link / Kuadrant)
+# ---------------------------------------------------------------------------
+# When enabled, the MCP server runs as a standalone Deployment+Service
+# (instead of a sidecar) and is registered with the MCP Gateway via
+# MCPServerRegistration. The agent connects to the gateway's /mcp endpoint
+# for a federated tool catalog.
+mcpGateway:
+  enabled: false
+  # Name of the existing Gateway API Gateway resource
+  gatewayName: "mcp-gateway"
+  # Namespace where the Gateway resource lives
+  gatewayNamespace: "gateway-system"
+  # URL of the MCP Gateway endpoint (the agent connects here)
+  url: "http://mcp-gateway.gateway-system.svc.cluster.local:8080/mcp"
+  # Tool prefix added to all tools from this server (prevents name collisions)
+  toolPrefix: "redhat_lightspeed_"
+
+# ---------------------------------------------------------------------------
 # LLM Provider (alternative models via LiteLLM)
 # ---------------------------------------------------------------------------
 llm:
