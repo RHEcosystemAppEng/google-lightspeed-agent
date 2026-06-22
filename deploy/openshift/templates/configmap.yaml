@@ -60,12 +60,18 @@ data:
   {{- end }}
 
   # LLM Provider
+  {{- if .Values.modelService.enabled }}
+  LLM_PROVIDER: "litellm"
+  LLM_MODEL: {{ .Values.modelService.model | quote }}
+  LLM_API_BASE: {{ .Values.modelService.url | quote }}
+  {{- else }}
   LLM_PROVIDER: {{ .Values.llm.provider | quote }}
   {{- if .Values.llm.model }}
   LLM_MODEL: {{ .Values.llm.model | quote }}
   {{- end }}
   {{- if .Values.llm.apiBase }}
   LLM_API_BASE: {{ .Values.llm.apiBase | quote }}
+  {{- end }}
   {{- end }}
 
   # Session PostgreSQL Configuration
