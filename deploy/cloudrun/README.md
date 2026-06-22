@@ -956,6 +956,143 @@ sed -e "s|\${PROJECT_ID}|$GOOGLE_CLOUD_PROJECT|g" \
     gcloud run services replace - --region=$GOOGLE_CLOUD_LOCATION --project=$GOOGLE_CLOUD_PROJECT
 ```
 
+### Alternative: Deploy with Cloud Build
+
+Instead of running `deploy.sh` manually (step 7), you can use Google Cloud Build
+to pull pre-built images from Quay.io (built by Konflux), push them to GCR, and
+deploy both services in a single command. Cloud Build also handles step 6 (Copy
+MCP Image to GCR) automatically. By default, the pipeline creates per-service
+Google Cloud Load Balancers (GCLB) with Cloud Armor WAF protection.
+
+#### One-Command Deployment
+
+The `deploy-cloudbuild.sh` wrapper runs the full deployment in a single command —
+it calls `setup.sh` (idempotent), grants the Cloud Build service account IAM roles,
+and submits the Cloud Build pipeline:
+
+```bash
+# Deploy with GCLB + Cloud Armor (setup + build + deploy in one command)
+./deploy/cloudrun/deploy-cloudbuild.sh \
+  --agent-domain agent.example.com --handler-domain dcr.example.com
+
+# Deploy without GCLB
+./deploy/cloudrun/deploy-cloudbuild.sh --no-lb
+
+# Deploy with public access
+./deploy/cloudrun/deploy-cloudbuild.sh --no-lb --allow-unauthenticated
+
+# Preview the gcloud command without executing
+./deploy/cloudrun/deploy-cloudbuild.sh --no-lb --dry-run
+```
+
+| Flag | Description |
+|------|-------------|
+| `--agent-domain DOMAIN` | Domain name for the agent GCLB (enables LB for agent) |
+| `--handler-domain DOMAIN` | Domain name for the handler GCLB (enables LB for handler) |
+| `--no-lb` | Disable GCLB for both services |
+| `--allow-unauthenticated` | Allow public access to both services |
+| `--region REGION` | GCP region (default: `us-central1`) |
+| `--image-tag TAG` | Container image tag (default: `latest`) |
+| `--dry-run` | Print the `gcloud builds submit` command without executing |
+
+When deploying with GCLB enabled, you must configure DNS **before** running
+the script. After the first run creates static IPs, create DNS A records pointing
+your domain names to those IPs. Google-managed SSL certificates require DNS
+resolution to provision (15-60 minutes).
+
+#### Manual Cloud Build Submission
+
+If you prefer to run `setup.sh` and grant IAM roles separately, you can submit
+the Cloud Build pipeline directly:
+
+```bash
+# Grant Cloud Build SA the required roles (one-time)
+PROJECT_NUMBER=$(gcloud projects describe $GOOGLE_CLOUD_PROJECT --format='value(projectNumber)')
+CB_SA="${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com"
+
+gcloud projects add-iam-policy-binding $GOOGLE_CLOUD_PROJECT \
+  --member="serviceAccount:$CB_SA" --role="roles/run.admin"
+gcloud projects add-iam-policy-binding $GOOGLE_CLOUD_PROJECT \
+  --member="serviceAccount:$CB_SA" --role="roles/iam.serviceAccountUser"
+gcloud projects add-iam-policy-binding $GOOGLE_CLOUD_PROJECT \
+  --member="serviceAccount:$CB_SA" --role="roles/pubsub.editor"
+gcloud projects add-iam-policy-binding $GOOGLE_CLOUD_PROJECT \
+  --member="serviceAccount:$CB_SA" --role="roles/compute.admin"
+
+# Note: roles/pubsub.editor and roles/compute.admin are broader than strictly
+# needed. For production, consider custom roles scoped to the specific resources
+# (see cloudbuild.yaml header comments for recommended permissions).
+
+# Deploy with GCLB + Cloud Armor (requires domain names)
+gcloud builds submit --config=cloudbuild.yaml \
+  --substitutions=_AGENT_DOMAIN_NAME=agent.example.com,_HANDLER_DOMAIN_NAME=dcr.example.com
+
+# Deploy without GCLB (services accessible via Cloud Run URLs directly)
+gcloud builds submit --config=cloudbuild.yaml \
+  --substitutions=_ENABLE_LB_AGENT=false,_ENABLE_LB_HANDLER=false
+
+# Override region or image tag
+gcloud builds submit --config=cloudbuild.yaml \
+  --substitutions=_REGION=europe-west1,_IMAGE_TAG=v1.0,_AGENT_DOMAIN_NAME=agent.example.com,_HANDLER_DOMAIN_NAME=dcr.example.com
+```
+
+**What the pipeline does:**
+
+| Phase | Steps | Description |
+|-------|-------|-------------|
+| Validate | `validate-lb-config` | Validates GCLB configuration (domain names, flag consistency) |
+| Pull | `pull-agent`, `pull-handler`, `pull-mcp` | Pulls pre-built images from Quay.io (parallel) |
+| Scan | `scan-agent`, `scan-handler`, `scan-mcp` | Trivy vulnerability scanning — blocks push on CRITICAL/HIGH CVEs (parallel) |
+| Push | `push-agent`, `push-handler`, `push-mcp` | Tags and pushes scanned images to GCR (parallel) |
+| Deploy | `deploy-handler`, `deploy-agent` | Deploys handler first, then agent (using YAML configs with sed substitution, same as `deploy.sh`) |
+| GCLB | `setup-lb-agent`, `setup-lb-handler`, `configure-ingress` | Creates per-service GCLB with Cloud Armor WAF (parallel), then configures ingress |
+| Post-deploy | `allow-unauthenticated`, `configure-pubsub`, `update-agent-urls` | Configures IAM, Pub/Sub push subscription, and sets `AGENT_PROVIDER_URL`/`MARKETPLACE_HANDLER_URL` |
+
+**Substitution variables:**
+
+All variables have defaults matching `deploy.sh`. Override any with `--substitutions`:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `_SERVICE_NAME` | `lightspeed-agent` | Cloud Run agent service name |
+| `_HANDLER_SERVICE_NAME` | `marketplace-handler` | Cloud Run handler service name |
+| `_REGION` | `us-central1` | GCP region |
+| `_VERTEXAI_LOCATION` | `global` | Vertex AI location |
+| `_IMAGE_TAG` | `latest` | Container image tag |
+| `_SERVICE_ACCOUNT_NAME` | `lightspeed-agent` | GCP service account name |
+| `_DB_INSTANCE_NAME` | `lightspeed-agent-db` | Cloud SQL instance name |
+| `_VPC_CONNECTOR_NAME` | `lightspeed-redis-conn` | VPC connector for Redis |
+| `_MCP_SOURCE_IMAGE` | `quay.io/.../red-hat-lightspeed-mcp:latest` | MCP image to mirror to GCR |
+| `_ALLOW_UNAUTHENTICATED` | `false` | Allow public access to both services |
+| `_PUBSUB_INVOKER_NAME` | `pubsub-invoker` | Pub/Sub invoker SA name |
+| `_PUBSUB_TOPIC` | `marketplace-entitlements` | Pub/Sub topic for marketplace events |
+| `_PUBSUB_SUBSCRIPTION` | *(derived from topic)* | Pub/Sub subscription name (defaults to `{topic}-sub`) |
+| `_AGENT_SOURCE_IMAGE` | `quay.io/ecosystem-appeng/google-lightspeed-agent:latest` | Agent image to pull from Quay.io |
+| `_HANDLER_SOURCE_IMAGE` | `quay.io/ecosystem-appeng/google-marketplace-handler:latest` | Handler image to pull from Quay.io |
+| `_SERVICE_CONTROL_SERVICE_NAME` | *(empty)* | Google Cloud Service Control service name for usage metering |
+| `_ENABLE_LB_AGENT` | `true` | Enable GCLB for the agent service |
+| `_ENABLE_LB_HANDLER` | `true` | Enable GCLB for the marketplace handler service |
+| `_ENABLE_CLOUD_ARMOR_AGENT` | `true` | Enable Cloud Armor WAF for the agent LB |
+| `_ENABLE_CLOUD_ARMOR_HANDLER` | `true` | Enable Cloud Armor WAF for the handler LB |
+| `_CLOUD_ARMOR_SENSITIVITY_AGENT` | `1` | OWASP CRS sensitivity level for agent WAF (1-4) |
+| `_CLOUD_ARMOR_SENSITIVITY_HANDLER` | `2` | OWASP CRS sensitivity level for handler WAF (1-4) |
+| `_AGENT_DOMAIN_NAME` | *(empty)* | Domain name for agent SSL certificate (required when LB enabled) |
+| `_HANDLER_DOMAIN_NAME` | *(empty)* | Domain name for handler SSL certificate (required when LB enabled) |
+| `_LB_NAME` | `lightspeed-lb` | Prefix for all GCLB resource names |
+
+**Cloud Build vs deploy.sh:**
+
+| | `deploy.sh` | `cloudbuild.yaml` |
+|-|-------------|-------------------|
+| Image source | Optional local build (`--build` flag) | Pulls pre-built images from Quay.io (built by Konflux) |
+| MCP image copy | Manual (step 6) | Automatic |
+| Deployment | Manual, one service at a time | Full pipeline, both services |
+| Load balancer | Per-service GCLB via `--service lb` | Per-service GCLB (enabled by default) |
+| Cloud Armor WAF | Per-service policies | Per-service policies (enabled by default with LB) |
+| Pub/Sub setup | Automatic | Automatic |
+| URL update | Automatic | Automatic |
+| Use case | Manual/iterative deployment | CI/CD pipeline |
+
 ## Service Configuration
 
 ### Agent Container

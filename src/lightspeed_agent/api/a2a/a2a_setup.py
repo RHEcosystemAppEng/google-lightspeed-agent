@@ -22,6 +22,7 @@ from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 
 from lightspeed_agent.api.a2a.agent_card import build_agent_card
+from lightspeed_agent.api.a2a.integrity_plugin import IntegrityFingerprintPlugin
 from lightspeed_agent.api.a2a.logging_plugin import AgentLoggingPlugin
 from lightspeed_agent.api.a2a.mcp_output_size_guard_plugin import MCPOutputSizeGuardPlugin
 from lightspeed_agent.api.a2a.response_formatter_plugin import ResponseFormatterPlugin
@@ -127,6 +128,7 @@ def _create_runner() -> Runner:
         root_agent=agent,
         plugins=[
             AgentLoggingPlugin(),
+            IntegrityFingerprintPlugin(),  # before size guard: fingerprint raw MCP result
             UsageTrackingPlugin(),
             MCPOutputSizeGuardPlugin(),
             ResponseFormatterPlugin(),

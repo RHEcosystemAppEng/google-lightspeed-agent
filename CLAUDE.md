@@ -38,44 +38,15 @@ To run with coverage:
 python -m pytest tests/ -v --cov=src/lightspeed_agent --cov-report=term-missing
 ```
 
-### Dependency Management
+### Dependencies
 
-Lock files (`requirements-agent.txt`, `requirements-handler.txt`, `requirements-dev.txt`) pin exact versions with cryptographic hashes for reproducible builds.
+Lock files pin exact versions with hashes. After editing `pyproject.toml`, run `make lock` and commit both together. For CVE fixes in transitive deps, add them as direct deps in `pyproject.toml` with the safe version, then `make lock`. See `CONTRIBUTING.md` for detailed workflows.
 
 ```bash
-make lock                              # Regenerate all lock files (always run before committing)
-make lock-agent                        # Regenerate agent lock file only
-make lock-handler                      # Regenerate marketplace handler lock file only
-make lock-dev                          # Regenerate dev lock file only
-make audit                             # Scan dependencies for known vulnerabilities (pip-audit)
+make lock                              # Regenerate all lock files
+make check-lock                        # Verify lock files match pyproject.toml
+make audit                             # Scan for known CVEs (pip-audit)
 ```
-
-**Workflow:**
-1. Edit `pyproject.toml` (add/update dependencies)
-2. Run `make lock` to regenerate lock files
-3. Review the changes in `requirements-*.txt`
-4. Commit both `pyproject.toml` and lock files together
-
-**Note:** `make lock` is safe to run anytime - if nothing changed, it regenerates identical files.
-
-**Fixing CVEs in transitive dependencies:**
-
-If a transitive dependency has a CVE, you cannot manually edit lock files. Instead:
-
-1. Add the transitive dependency as a direct dependency in `pyproject.toml` with the safe version constraint
-2. Run `make lock` to regenerate lock files
-3. Commit both files
-
-Example:
-```toml
-# In pyproject.toml dependencies section:
-dependencies = [
-    # ... existing deps ...
-    "pydantic-core>=2.41.6",  # CVE fix: force safe version
-]
-```
-
-Then run `make lock` and commit.
 
 ### Linting & Type Checking
 ```bash
@@ -86,34 +57,35 @@ mypy src/lightspeed_agent/ --ignore-missing-imports  # Type checker only
 
 Ruff rules: `E, F, I, N, W, UP, B, C4, SIM`. Line length: 100. Target: Python 3.12.
 
-### Container Build & Operations (Podman)
+### Container Build (Podman)
 ```bash
-make help                              # List all available targets
 make build                             # Build both images (agent + marketplace handler)
-make build-agent                       # Build agent image only
-make build-marketplace                 # Build marketplace handler image only
 make run                               # Start all pods
 make stop                              # Stop and remove pods
 make logs                              # Agent logs
-make logs-mcp                          # MCP server logs
-make logs-all                          # All container logs
-make status                            # Show pod/container status
-make clean                             # Remove containers, images, and volumes
-make clean-all                         # Full cleanup including volumes
-make dev                               # Run agent locally without containers
-make check-env                         # Validate required env vars
-make cve-scan                          # Scan for CVEs with Trivy
+make help                              # List all available targets
 ```
 
 ### Before Pushing
-
-Run lint and tests before pushing commits:
 
 ```bash
 make lint && make test
 ```
 
-If you modified `pyproject.toml`, also regenerate lock files (`make lock`) and commit them together. CI only enforces lock file sync when `pyproject.toml` changes.
+If you modified `pyproject.toml`, also run `make lock` and commit the lock files together.
+
+When your changes affect architecture, configuration, APIs, or behavior, update the relevant docs in the same PR:
+- `docs/` — detailed reference documentation (architecture, authentication, configuration, marketplace, MCP integration)
+- `deploy/` — deployment READMEs and scripts (Cloud Run, OpenShift, Podman) and `cloudbuild.yaml` when changing deployment-related config, env vars, or infrastructure
+- `CLAUDE.md` — only if the change affects common commands, gotchas, or key architectural concepts described here
+- `README.md` — only if the change affects the project overview or quickstart
+
+## Common Gotchas
+
+- **SQLite vs PostgreSQL**: `ARRAY(String)` columns use a JSON variant for SQLite (see `db/models.py:StringList`). If adding array-type columns, use `StringList` — raw `ARRAY` will break tests.
+- **Dev-only bypasses blocked in prod**: `SKIP_JWT_VALIDATION=true` raises on startup when running on Cloud Run. Don't rely on it for integration testing in deployed environments.
+- **MCP tools are loaded at startup**: Changes to MCP server tool definitions require an agent restart to take effect.
+- **Two databases, two URLs**: Marketplace data (`DATABASE_URL`) and ADK sessions (`SESSION_DATABASE_URL`) are separate. Mixing them up causes silent data loss or missing tables.
 
 ## Architecture
 
@@ -125,19 +97,11 @@ The system runs as two separate FastAPI services with separate concerns:
 
 2. **Marketplace Handler** (port 8001, `src/lightspeed_agent/marketplace/app.py`) — Always-on service for Google Cloud Marketplace Pub/Sub provisioning events and Dynamic Client Registration (DCR). Has separate `/dcr` (DCR requests) and `/pubsub` (Pub/Sub events with Google OIDC verification) endpoints.
 
-### Database Isolation
-
-Two separate PostgreSQL databases (security boundary):
-- **Marketplace DB** (`DATABASE_URL`) — entitlements, DCR clients, usage records. Shared by both services.
-- **Session DB** (`SESSION_DATABASE_URL`) — ADK conversation sessions. Agent-only.
-
-Both fall back to SQLite for development. ORM models are in `src/lightspeed_agent/db/models.py`.
-
 ### Authentication Flow
 
 JWT tokens from Red Hat SSO flow through three layers:
-1. `auth/middleware.py` validates Bearer tokens on POST `/` (skips health endpoints, OpenAPI docs, agent card paths, and `/marketplace/` prefixed routes)
-2. Token is stored in `contextvars` for the request lifecycle
+1. `auth/middleware.py` validates Bearer tokens — only `POST /` is protected; all other paths are public
+2. Token is stored in `contextvars` for the request lifecycle (user_id, org_id, order_id, client_id, request_id)
 3. `tools/mcp_headers.py` forwards the caller's JWT to the MCP server so it can authenticate with console.redhat.com on the user's behalf
 
 Setting `SKIP_JWT_VALIDATION=true` bypasses auth (dev only, blocked when running on Cloud Run).
@@ -145,138 +109,24 @@ Setting `SKIP_JWT_VALIDATION=true` bypasses auth (dev only, blocked when running
 ### MCP Integration
 
 The agent loads tools from a Red Hat Lightspeed MCP server running as a sidecar:
-- Transport modes: `stdio` (dev), `http` (prod), `sse` (streaming) — configured via `MCP_TRANSPORT_MODE`
 - Read-only mode (`MCP_READ_ONLY=true`) filters to a safe subset of tools
-- Tool categories: Advisor, Inventory, Vulnerability, Remediations, Planning, Image Builder, Subscription Management, Content Sources
 - MCP toolset creation is in `tools/insights_tools.py`; config in `tools/mcp_config.py`
 
 ### ADK AI Skills
 
 Agent behavioral instructions use ADK's progressive-disclosure Skills system instead of a monolithic system prompt. Each skill is a `SKILL.md` file with YAML frontmatter (L1: name + description loaded at startup) and a markdown body (L2: full instructions loaded on-demand by the LLM).
 
-- **Bundled skills** (`core/skills/`): tool-invocation-rules, multi-step-workflows, pagination-handling, error-handling, guardrails-safety, response-formatting — always loaded
+- **Bundled skills** (`core/skills/`): tool-invocation-rules, multi-step-workflows, pagination-handling, efficient-counting, error-handling, guardrails-safety, response-formatting — always loaded
 - **External skills** (`SKILLS_DIR` env var): deployment-specific skills loaded alongside bundled ones; same-name skills override bundled defaults
 - A2A AgentCard skills (`tools/a2a_skills.py`) are a separate concept — they describe agent capabilities for the A2A protocol, not LLM behavioral instructions
 
-### Key Middleware Stack (request order, outermost first)
-1. CORS
-2. Request body size limit (`security/body_limit.py`) — 10 MB agent, 1 MB marketplace handler
-3. Security headers (`security/middleware.py`) — HSTS, CSP, X-Content-Type-Options,
-   X-Frame-Options, Referrer-Policy, Permissions-Policy, Cache-Control
-4. Redis rate limiting (`ratelimit/middleware.py`) — 60 req/min, 1000 req/hour
-5. JWT authentication (`auth/middleware.py`)
+### Middleware Stack
 
-### Deployment Modes
-
-The agent supports three deployment targets. The application code is identical — differences are in infrastructure-level security and orchestration:
-
-| Target | Ingress | WAF | Network Isolation | Deployment Config |
-|---|---|---|---|---|
-| **Cloud Run** | GCLB with managed SSL | Cloud Armor (OWASP CRS, DDoS) | VPC + Cloud Run ingress restrictions | `deploy/cloudrun/` |
-| **OpenShift** | Routes with TLS edge termination | None built-in (use external WAF if needed) | NetworkPolicies for DB/Redis | `deploy/openshift/` (Helm) |
-| **Podman** | Direct port binding | None | Host-level | `Makefile` targets |
-
-OpenShift supports two sub-modes via Helm (`deploymentMode` value):
-- **hybrid** (default) — Agent + Redis on OCP; marketplace handler stays on Cloud Run. Order validation skipped (`SKIP_ORDER_VALIDATION=true`).
-- **standalone** — Everything on OCP including handler, UI, and PostgreSQL. Full order lifecycle with local marketplace database.
-
-Application-level protections (body size limits, security headers, rate limiting, JWT auth) apply identically on all platforms. See `deploy/openshift/README.md` for OCP-specific details.
-
-### DCR (Dynamic Client Registration)
-
-Creates OAuth tenant clients in Red Hat SSO via the GMA API (`dcr/gma_client.py`). Authenticates with `GMA_CLIENT_ID`/`GMA_CLIENT_SECRET` using `scope=api.iam.clients.gma`. Client secrets are Fernet-encrypted at rest (`DCR_ENCRYPTION_KEY`).
-
-### Entitlement Provisioning Lifecycle
-
-Google Cloud Marketplace sends Pub/Sub events to the `/pubsub` endpoint as orders progress through their lifecycle. The `ProcurementService` (`marketplace/service.py`) processes each event type:
-
-1. **`ENTITLEMENT_CREATION_REQUESTED`** — Customer initiates an order. The handler:
-   - Creates a local entitlement record in `PENDING_APPROVAL` state
-   - Resolves the Procurement Account ID (from the event payload, or by fetching the entitlement from the Procurement API) and persists it to the entitlement record
-   - Approves the account via the Procurement API (idempotent — required before entitlement approval)
-   - Auto-approves the entitlement via the Procurement API
-
-2. **`ENTITLEMENT_ACTIVE`** — Google confirms the entitlement is active. The handler:
-   - Resolves and persists the account ID (if not already set)
-   - Updates the entitlement state to `ACTIVE` with product metadata
-
-3. **DCR request arrives** — Gemini Enterprise sends a direct DCR request with a signed JWT containing `account_id` (sub) and `order_id` (google.order). The DCR service validates both against the Procurement API and local DB, then creates OAuth credentials.
-
-4. **`ENTITLEMENT_PLAN_CHANGE_REQUESTED`** → auto-approved via Procurement API. **`ENTITLEMENT_PLAN_CHANGED`** → plan updated in DB.
-
-5. **`ENTITLEMENT_CANCELLED`** / **`ENTITLEMENT_DELETED`** → Entitlement state updated, OAuth client deleted from Red Hat SSO (if GMA-created) and local DB.
-
-All Procurement API calls are idempotent (400/409 treated as success). Failures on 5xx or network errors propagate so Pub/Sub retries the event. Account validation for DCR queries the Procurement API directly (source of truth), not the local DB.
-
-### Usage Metering
-
-`api/a2a/usage_plugin.py` hooks into ADK to track tokens/requests per LLM call. Hourly aggregates are stored in `UsageRecordModel` and async-reported to Google Cloud Service Control (`service_control/reporter.py`). Includes backfill for offline periods.
-
-## Code Layout
-
-```
-src/lightspeed_agent/
-├── api/app.py              # FastAPI app factory (lifespan, middleware, routes)
-├── api/a2a/                # A2A protocol: routes, AgentCard, usage tracking
-├── auth/                   # JWT validation middleware + token introspection
-├── config/                 # Pydantic BaseSettings (all env vars, validation)
-├── core/agent.py           # LlmAgent creation with MCP tools + ADK AI Skills
-├── core/skills/            # Bundled ADK AI Skill definitions (SKILL.md files)
-├── db/                     # SQLAlchemy ORM (3 models, async engine)
-├── dcr/                    # Dynamic Client Registration service
-├── marketplace/            # Marketplace handler (separate service entry point)
-├── metering/               # Usage record repository + backfill
-├── ratelimit/              # Redis-backed distributed rate limiter
-├── service_control/        # Google Cloud Service Control metering
-├── telemetry/              # OpenTelemetry setup (OTLP, Jaeger, Zipkin)
-├── tools/                  # MCP toolset definitions + JWT header forwarding + A2A skills
-└── main.py                 # Agent service entry point
-```
+CORS → body size limits → security headers → rate limiting (60 req/min, 1000 req/hour) → JWT auth. See `api/app.py` for ordering and configuration.
 
 ## Configuration
 
-All configuration is via environment variables, managed through Pydantic settings in `config/settings.py`. See `.env.example` for the complete list (30+ vars). Key variables:
+All configuration is via environment variables, managed through Pydantic settings in `config/settings.py`. See `.env.example` for the complete list (30+ vars) and `docs/configuration.md` for detailed documentation.
 
-**LLM / Google Cloud:**
-- `GOOGLE_API_KEY` or `GOOGLE_CLOUD_PROJECT` + `GOOGLE_GENAI_USE_VERTEXAI=TRUE` (LLM access)
-- `GEMINI_MODEL` (model selection, default: `gemini-2.5-flash`)
-- Optional Gemini HTTP retries (Google Gen AI SDK exponential backoff + jitter): `GEMINI_HTTP_RETRY_ATTEMPTS`, `GEMINI_HTTP_RETRY_INITIAL_DELAY`, `GEMINI_HTTP_RETRY_MAX_DELAY`, `GEMINI_HTTP_RETRY_EXP_BASE`, `GEMINI_HTTP_RETRY_JITTER` (see `docs/configuration.md`)
+Key variables: `GOOGLE_API_KEY` (or Vertex AI), `GEMINI_MODEL` (default: `gemini-2.5-flash`), `DATABASE_URL`, `SESSION_DATABASE_URL`, `MCP_TRANSPORT_MODE`, `MCP_SERVER_URL`, `RED_HAT_SSO_CLIENT_ID`/`SECRET`. Dev-only bypasses: `SKIP_JWT_VALIDATION`, `SKIP_DCR_JWT_VALIDATION`, `SKIP_ORDER_VALIDATION`.
 
-**Database:**
-- `DATABASE_URL` / `SESSION_DATABASE_URL` (PostgreSQL or SQLite)
-- `DATABASE_REQUIRE_SSL` (enforce SSL for PostgreSQL; not needed for Cloud SQL Proxy)
-
-**Auth:**
-- `RED_HAT_SSO_CLIENT_ID` / `RED_HAT_SSO_CLIENT_SECRET`
-- `SKIP_JWT_VALIDATION` (dev only)
-
-**MCP:**
-- `MCP_TRANSPORT_MODE`, `MCP_SERVER_URL`
-
-**DCR:**
-- `DCR_ENCRYPTION_KEY`
-- `GMA_CLIENT_ID`, `GMA_CLIENT_SECRET`, `GMA_API_BASE_URL`
-
-**Agent:**
-- `AGENT_HOST`, `AGENT_PORT`
-- `SKILLS_DIR` (optional: path to external ADK AI Skills directory; bundled skills always load, external skills overlay/override by name)
-
-**Service Control:**
-- `SERVICE_CONTROL_SERVICE_NAME`, `SERVICE_CONTROL_ENABLED`
-
-**Rate Limiting:**
-- `RATE_LIMIT_REDIS_URL`
-
-**Observability:**
-- `LOG_LEVEL`, `LOG_FORMAT`
-- `OTEL_ENABLED`, `OTEL_EXPORTER_TYPE`, `OTEL_SERVICE_NAME`
-
-## CI Pipeline
-
-GitHub Actions (`.github/workflows/ci.yml`) runs on CentOS Stream 9 with Python 3.12:
-1. **Lint** — ruff + mypy
-2. **Test** — pytest
-3. **Build** — Podman container build
-4. **CI Gate** — blocks merge if any job fails
-
-Secret scanning is configured via `.gitleaks.toml`.

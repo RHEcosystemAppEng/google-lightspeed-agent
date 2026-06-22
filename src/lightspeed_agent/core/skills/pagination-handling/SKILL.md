@@ -17,8 +17,10 @@ thousands of hosts.
 
 **Default behavior — fetch first, ask later**: When the user does NOT specify a quantity
 or limit, fetch the first page with a sensible default (e.g., 20 for CVE lists, 50 for
-host listings). After receiving the response, check `meta.total_items`. If significantly
-more data exists, tell the user the total and offer to fetch more:
+host listings). After receiving the response, check the total count — `meta.total_items` for
+Vulnerability tools, `total` for Inventory tools, `meta.count` for Advisor and
+other tools. If significantly more data exists, tell the user the total and offer
+to fetch more:
 
 "Showing 20 of 1,247 CVEs (sorted by severity). Would you like me to fetch more,
 or apply filters (e.g., Critical only, remediatable) to narrow the results?"
@@ -29,14 +31,14 @@ then let the user decide whether they need more.
 **When to skip the offer** (user already specified scope):
 - "Show me the top 3 CVEs on host X" → use limit=3, no follow-up needed
 - "Get the first page of vulnerabilities" → use limit=100 offset=0, no follow-up needed
-- "How many critical CVEs affect host X?" → fetch all pages silently to count
+- "How many critical CVEs affect host X?" → use the `efficient-counting` skill
 
 **Exception — remediatable CVE queries**: When the user asks for remediatable CVEs on a
 specific system, fetch all pages automatically. Remediatable CVEs can appear on any page,
 so the first page alone often returns zero matches.
 
 **Pagination execution**: For multi-page fetches, **call the same MCP tool repeatedly**
-with JSON arguments from the tool schema (see **Tool invocation format** above).
+with JSON arguments matching the tool schema (see the `tool-invocation-rules` skill).
 [Red Hat Lightspeed MCP](https://github.com/RedHatInsights/insights-mcp) returns Insights
 API JSON as-is; list responses are often JSON:API-style (`data`, `meta`, `links`) or
 `results` with `page`/`per_page`/`total` — read the fields present. If the pagination
@@ -75,3 +77,21 @@ report that fewer pages were available (avoids empty-page / out-of-range errors)
 parameter names or response shapes. After each response, advance `offset`/`page`
 using `meta`/`links.next` or `total`/`per_page` as appropriate for that API.
 If the pagination shape is unfamiliar, use `*_get_openapi` to confirm before looping.
+
+## Never Refuse to Paginate [STRICT]
+
+Do NOT tell the user that paginating or filtering results is "beyond your operational
+capacity" or would "exceed resource limits." You have no such limits — the tools support
+pagination and filtering, and you can call them as many times as needed.
+
+When the result set is large:
+1. **Apply filters first** — use the filter parameters documented in the
+   `multi-step-workflows` skill to narrow results before paginating.
+2. **Paginate when needed** — if the user needs actual data (not just a count), paginate
+   through all pages using the stop conditions above.
+3. **For counting queries** — see the `efficient-counting` skill; a "how many" question
+   never requires fetching every page.
+
+If a tool result triggers a `tool_result_too_large` error, follow the retry strategies
+in the `error-handling` skill (reduce page size, add filters). Never treat a large
+result set as a reason to give up.

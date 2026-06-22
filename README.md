@@ -736,15 +736,13 @@ Quick deploy:
 export GOOGLE_CLOUD_PROJECT="your-project-id"
 export GOOGLE_CLOUD_LOCATION="us-central1"
 
-# Run setup script
+# Option A: One-command Cloud Build deployment (setup + deploy + GCLB)
+./deploy/cloudrun/deploy-cloudbuild.sh \
+  --agent-domain agent.example.com --handler-domain dcr.example.com
+
+# Option B: Manual deployment with deploy.sh
 ./deploy/cloudrun/setup.sh
-
-# Deploy both services
 ./deploy/cloudrun/deploy.sh --service all --build --allow-unauthenticated
-
-# Or deploy individually:
-./deploy/cloudrun/deploy.sh --service handler --allow-unauthenticated
-./deploy/cloudrun/deploy.sh --service agent --allow-unauthenticated
 ```
 
 ## License

@@ -246,8 +246,13 @@ src/lightspeed_agent/
 ├── api/                        # Agent API layer
 │   ├── app.py                 # FastAPI application factory (Agent)
 │   └── a2a/                   # A2A protocol
-│       ├── router.py          # A2A JSON-RPC endpoints
-│       └── agent_card.py      # AgentCard builder
+│       ├── a2a_setup.py       # A2A SDK setup and request handling
+│       ├── agent_card.py      # AgentCard builder
+│       ├── logging_plugin.py  # Agent execution logging plugin
+│       ├── mcp_output_size_guard_plugin.py  # Tool result size guard
+│       ├── response_formatter_plugin.py     # Response formatting plugin
+│       ├── session_service.py # Database-backed session service
+│       └── usage_plugin.py    # Usage tracking plugin
 ├── auth/                       # Authentication (shared)
 │   ├── introspection.py       # Token introspection (RFC 7662)
 │   ├── middleware.py           # Auth middleware
@@ -259,7 +264,7 @@ src/lightspeed_agent/
 │   └── agent.py               # ADK agent definition
 ├── db/                         # Database (shared)
 │   ├── base.py                # SQLAlchemy engine and Base
-│   └── models.py              # ORM models (accounts, entitlements, DCR clients, usage)
+│   └── models.py              # ORM models (entitlements, DCR clients, usage)
 ├── dcr/                        # Dynamic Client Registration
 │   ├── google_jwt.py          # Google JWT validation
 │   ├── gma_client.py          # GMA SSO API client
@@ -386,13 +391,13 @@ The system uses PostgreSQL for persistence. For production deployments, the mark
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                     Marketplace Database (Shared)                           │
 │                                                                             │
-│  ┌────────────────────┐  ┌────────────────────┐  ┌────────────────────┐     │
-│  │ marketplace_       │  │ marketplace_       │  │ dcr_clients        │     │
-│  │ accounts           │  │ entitlements       │  │                    │     │
-│  │ - id               │  │ - id (order_id)    │  │ - client_id        │     │
-│  │ - state            │  │ - account_id       │  │ - client_secret    │     │
-│  │ - provider_id      │  │ - state            │  │ - order_id         │     │
-│  └────────────────────┘  └────────────────────┘  └────────────────────┘     │
+│  ┌──────────────────────────────┐  ┌────────────────────┐                    │
+│  │ marketplace_entitlements     │  │ dcr_clients        │                    │
+│  │ - id (order_id)              │  │ - order_id         │                    │
+│  │ - account_id                 │  │ - client_id        │                    │
+│  │ - provider_id                │  │ - client_secret    │                    │
+│  │ - state                      │  │ - account_id       │                    │
+│  └──────────────────────────────┘  └────────────────────┘                    │
 │                                                                             │
 │  ┌────────────────────┐                                                     │
 │  │ usage_records      │                                                     │
@@ -439,7 +444,7 @@ The system uses PostgreSQL for persistence. For production deployments, the mark
 
 **Status**: Accepted
 
-**Context**: Marketplace accounts, entitlements, DCR clients, and usage records need durable storage that survives container restarts and supports horizontal scaling.
+**Context**: Marketplace entitlements, DCR clients, and usage records need durable storage that survives container restarts and supports horizontal scaling.
 
 **Decision**: Use PostgreSQL with SQLAlchemy async for all persistence.
 

@@ -264,6 +264,14 @@ class Settings(BaseSettings):
         default="json",
         description="Log format",
     )
+    audit_logging_enabled: bool = Field(
+        default=True,
+        description=(
+            "Enable audit context injection (user_id, org_id, order_id, request_id) "
+            "into log records. Disabling removes PII from logs but reduces "
+            "forensic traceability."
+        ),
+    )
     agent_logging_detail: Literal["basic", "detailed"] = Field(
         default="basic",
         description="Agent execution logging detail level. "
@@ -540,6 +548,15 @@ class Settings(BaseSettings):
                 "SKIP_PUBSUB_OIDC_VERIFICATION=true is not allowed in Cloud Run "
                 f"(K_SERVICE={os.getenv('K_SERVICE')}). "
                 "This setting is intended for standalone/development deployments only."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _warn_audit_logging_disabled(self) -> "Settings":
+        if not self.audit_logging_enabled:
+            logging.getLogger(__name__).warning(
+                "AUDIT_LOGGING_ENABLED=false: PII fields will not be injected into "
+                "log records. Forensic traceability is reduced."
             )
         return self
 

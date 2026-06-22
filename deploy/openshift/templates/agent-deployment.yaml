@@ -75,8 +75,8 @@ spec:
                   name: {{ include "lightspeed-agent.fullname" . }}-secrets
                   key: SESSION_DATABASE_URL
                   optional: true
-            {{- /* DATABASE_URL only needed when order validation is on (skipOrderValidation=false) */ -}}
-            {{- if not .Values.auth.skipOrderValidation }}
+            {{- /* DATABASE_URL needed in standalone mode (local PostgreSQL) or when order validation is on */ -}}
+            {{- if or (eq .Values.deploymentMode "standalone") (not .Values.auth.skipOrderValidation) }}
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:

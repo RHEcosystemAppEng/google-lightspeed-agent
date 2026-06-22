@@ -1,98 +1,601 @@
 # Google Cloud Build Configuration
-# Builds and deploys the Lightspeed Agent to Cloud Run
+# CI/CD pipeline for the Red Hat Lightspeed Agent for Google Cloud
+#
+# Images are built externally by Konflux and pushed to Quay.io.
+# This pipeline pulls pre-built images from Quay, scans them for
+# vulnerabilities with Trivy, pushes them to GCR (Cloud Run cannot
+# pull from Quay.io directly), and deploys both
+# services to Cloud Run with optional per-service GCLB and Cloud Armor WAF:
+#   1. marketplace-handler - Handles DCR and Pub/Sub events (always running)
+#   2. lightspeed-agent    - A2A agent with MCP sidecar (always running)
+#
+# Prerequisites:
+#   - Run deploy/cloudrun/setup.sh first to configure GCP services,
+#     or use deploy/cloudrun/deploy-cloudbuild.sh for one-command deployment
+#   - Update secrets in Secret Manager with actual values
+#   - See deploy/cloudrun/README.md for full setup instructions
+#
+# Required permissions for Cloud Build service account:
+#   - roles/run.admin (deploy Cloud Run services)
+#   - roles/iam.serviceAccountUser (act as runtime service account)
+#   - roles/pubsub.editor (create/update subscriptions — broader than needed;
+#     a custom role scoped to the marketplace subscription is recommended for production)
+#   - roles/compute.admin (create GCLB resources, Cloud Armor policies — only needed
+#     when GCLB is enabled; a custom role with only LB/NEG/cert/security-policy
+#     permissions is recommended for production)
 #
 # Usage:
+#   # Deploy with GCLB (default, requires domain names):
 #   gcloud builds submit --config=cloudbuild.yaml \
-#     --substitutions=_SERVICE_NAME=lightspeed-agent,_REGION=us-central1
+#     --substitutions=_AGENT_DOMAIN_NAME=agent.example.com,_HANDLER_DOMAIN_NAME=dcr.example.com
 #
-# Required substitutions:
-#   _SERVICE_NAME: Cloud Run service name
-#   _REGION: Deployment region
-#
-# Optional substitutions:
-#   _IMAGE_TAG: Container image tag (default: latest)
+#   # Deploy without GCLB:
+#   gcloud builds submit --config=cloudbuild.yaml \
+#     --substitutions=_ENABLE_LB_AGENT=false,_ENABLE_LB_HANDLER=false
 
 substitutions:
   _SERVICE_NAME: lightspeed-agent
+  _HANDLER_SERVICE_NAME: marketplace-handler
   _REGION: us-central1
   _VERTEXAI_LOCATION: global
   _IMAGE_TAG: latest
+  _SERVICE_ACCOUNT_NAME: lightspeed-agent
+  _DB_INSTANCE_NAME: lightspeed-agent-db
+  _VPC_CONNECTOR_NAME: lightspeed-redis-conn
+  _MCP_SOURCE_IMAGE: quay.io/redhat-services-prod/insights-management-tenant/insights-mcp/red-hat-lightspeed-mcp:latest
+  _ALLOW_UNAUTHENTICATED: "false"
+  _PUBSUB_INVOKER_NAME: pubsub-invoker
+  _PUBSUB_TOPIC: marketplace-entitlements
+  _PUBSUB_SUBSCRIPTION: ""
+  _AGENT_SOURCE_IMAGE: quay.io/ecosystem-appeng/google-lightspeed-agent:latest
+  _HANDLER_SOURCE_IMAGE: quay.io/ecosystem-appeng/google-marketplace-handler:latest
+  _SERVICE_CONTROL_SERVICE_NAME: ""
+  # GCLB and Cloud Armor configuration
+  _ENABLE_LB_AGENT: "true"
+  _ENABLE_LB_HANDLER: "true"
+  _ENABLE_CLOUD_ARMOR_AGENT: "true"
+  _ENABLE_CLOUD_ARMOR_HANDLER: "true"
+  _CLOUD_ARMOR_SENSITIVITY_AGENT: 1
+  _CLOUD_ARMOR_SENSITIVITY_HANDLER: 2
+  _AGENT_DOMAIN_NAME: ""
+  _HANDLER_DOMAIN_NAME: ""
+  _LB_NAME: lightspeed-lb
+  _SCAN_SEVERITY: CRITICAL,HIGH
+
+timeout: 1800s
 
 options:
   logging: CLOUD_LOGGING_ONLY
-  machineType: E2_HIGHCPU_8
 
 steps:
   # ==========================================================================
-  # Step 1: Build the container image
+  # VALIDATION - Fail fast on invalid configuration
   # ==========================================================================
-  - name: 'gcr.io/cloud-builders/docker'
-    id: 'build'
-    args:
-      - 'build'
-      - '-t'
-      - 'gcr.io/${PROJECT_ID}/${_SERVICE_NAME}:${_IMAGE_TAG}'
-      - '-t'
-      - 'gcr.io/${PROJECT_ID}/${_SERVICE_NAME}:${SHORT_SHA}'
-      - '-f'
-      - 'Containerfile'
-      - '.'
 
-  # ==========================================================================
-  # Step 2: Push the container image to Container Registry
-  # ==========================================================================
-  - name: 'gcr.io/cloud-builders/docker'
-    id: 'push'
-    args:
-      - 'push'
-      - '--all-tags'
-      - 'gcr.io/${PROJECT_ID}/${_SERVICE_NAME}'
-    waitFor:
-      - 'build'
-
-  # ==========================================================================
-  # Step 3: Deploy to Cloud Run
-  # ==========================================================================
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
-    id: 'deploy'
-    entrypoint: 'gcloud'
+    id: 'validate-lb-config'
+    entrypoint: 'bash'
     args:
-      - 'run'
-      - 'deploy'
-      - '${_SERVICE_NAME}'
-      - '--image'
-      - 'gcr.io/${PROJECT_ID}/${_SERVICE_NAME}:${_IMAGE_TAG}'
-      - '--region'
-      - '${_REGION}'
-      - '--platform'
-      - 'managed'
-      - '--port'
-      - '8000'
-      - '--cpu'
-      - '2'
-      - '--memory'
-      - '2Gi'
-      - '--min-instances'
-      - '0'
-      - '--max-instances'
-      - '10'
-      - '--timeout'
-      - '300'
-      - '--concurrency'
-      - '80'
-      - '--set-env-vars'
-      - 'GOOGLE_GENAI_USE_VERTEXAI=TRUE,GOOGLE_CLOUD_PROJECT=${PROJECT_ID},GOOGLE_CLOUD_LOCATION=${_VERTEXAI_LOCATION},AGENT_HOST=0.0.0.0,AGENT_PORT=8000,LOG_FORMAT=json'
-      - '--set-secrets'
-      - 'RED_HAT_SSO_CLIENT_ID=redhat-sso-client-id:latest,RED_HAT_SSO_CLIENT_SECRET=redhat-sso-client-secret:latest,DATABASE_URL=database-url:latest,REDIS_URL=redis-url:latest'
-      - '--service-account'
-      - 'lightspeed-agent@${PROJECT_ID}.iam.gserviceaccount.com'
-      - '--allow-unauthenticated'
-    waitFor:
-      - 'push'
+      - '-euo'
+      - 'pipefail'
+      - '-c'
+      - |
+        if [ "${_ENABLE_LB_AGENT}" = "true" ] && [ -z "${_AGENT_DOMAIN_NAME}" ]; then
+          echo "ERROR: _AGENT_DOMAIN_NAME is required when _ENABLE_LB_AGENT=true"
+          echo "  Set via --substitutions=_AGENT_DOMAIN_NAME=agent.example.com"
+          echo "  Or disable GCLB: --substitutions=_ENABLE_LB_AGENT=false,_ENABLE_LB_HANDLER=false"
+          exit 1
+        fi
+        if [ "${_ENABLE_LB_HANDLER}" = "true" ] && [ -z "${_HANDLER_DOMAIN_NAME}" ]; then
+          echo "ERROR: _HANDLER_DOMAIN_NAME is required when _ENABLE_LB_HANDLER=true"
+          echo "  Set via --substitutions=_HANDLER_DOMAIN_NAME=dcr.example.com"
+          echo "  Or disable GCLB: --substitutions=_ENABLE_LB_AGENT=false,_ENABLE_LB_HANDLER=false"
+          exit 1
+        fi
+        if [ "${_ENABLE_CLOUD_ARMOR_AGENT}" = "true" ] && [ "${_ENABLE_LB_AGENT}" != "true" ]; then
+          echo "ERROR: _ENABLE_CLOUD_ARMOR_AGENT requires _ENABLE_LB_AGENT=true"
+          exit 1
+        fi
+        if [ "${_ENABLE_CLOUD_ARMOR_HANDLER}" = "true" ] && [ "${_ENABLE_LB_HANDLER}" != "true" ]; then
+          echo "ERROR: _ENABLE_CLOUD_ARMOR_HANDLER requires _ENABLE_LB_HANDLER=true"
+          exit 1
+        fi
+        # Cross-project Pub/Sub topic requires explicit subscription name
+        if echo "${_PUBSUB_TOPIC}" | grep -q '^projects/' && [ -z "${_PUBSUB_SUBSCRIPTION}" ]; then
+          echo "ERROR: _PUBSUB_SUBSCRIPTION is required when _PUBSUB_TOPIC is a fully-qualified path"
+          echo "  Set via --substitutions=_PUBSUB_SUBSCRIPTION=marketplace-events-sub"
+          exit 1
+        fi
+        echo "Configuration validated."
+    waitFor: ['-']
+
+  # ==========================================================================
+  # PULL PHASE - Pull pre-built images from Quay.io (parallel)
+  # ==========================================================================
+
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'pull-agent'
+    args: ['pull', '${_AGENT_SOURCE_IMAGE}']
+    waitFor: ['-']
+
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'pull-handler'
+    args: ['pull', '${_HANDLER_SOURCE_IMAGE}']
+    waitFor: ['-']
+
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'pull-mcp'
+    args: ['pull', '${_MCP_SOURCE_IMAGE}']
+    waitFor: ['-']
+
+  # ==========================================================================
+  # SCAN PHASE - Vulnerability scan with Trivy (parallel, blocks push on failure)
+  # Download the DB once, then run parallel scans with --skip-db-update to
+  # avoid race conditions when multiple Trivy instances download concurrently.
+  # ==========================================================================
+
+  - name: 'aquasec/trivy'
+    id: 'download-trivy-db'
+    entrypoint: 'sh'
+    args:
+      - '-c'
+      - |
+        trivy image --download-db-only --cache-dir /workspace/.trivy-cache
+        cp -r /workspace/.trivy-cache /workspace/.trivy-cache-agent
+        cp -r /workspace/.trivy-cache /workspace/.trivy-cache-handler
+        cp -r /workspace/.trivy-cache /workspace/.trivy-cache-mcp
+    waitFor: ['-']
+
+  - name: 'aquasec/trivy'
+    id: 'scan-agent'
+    args:
+      - 'image'
+      - '--exit-code'
+      - '1'
+      - '--severity'
+      - '${_SCAN_SEVERITY}'
+      - '--no-progress'
+      - '--cache-dir'
+      - '/workspace/.trivy-cache-agent'
+      - '--skip-db-update'
+      - '${_AGENT_SOURCE_IMAGE}'
+    waitFor: ['pull-agent', 'download-trivy-db']
+
+  - name: 'aquasec/trivy'
+    id: 'scan-handler'
+    args:
+      - 'image'
+      - '--exit-code'
+      - '1'
+      - '--severity'
+      - '${_SCAN_SEVERITY}'
+      - '--no-progress'
+      - '--cache-dir'
+      - '/workspace/.trivy-cache-handler'
+      - '--skip-db-update'
+      - '${_HANDLER_SOURCE_IMAGE}'
+    waitFor: ['pull-handler', 'download-trivy-db']
+
+  - name: 'aquasec/trivy'
+    id: 'scan-mcp'
+    args:
+      - 'image'
+      - '--exit-code'
+      - '1'
+      - '--severity'
+      - '${_SCAN_SEVERITY}'
+      - '--no-progress'
+      - '--cache-dir'
+      - '/workspace/.trivy-cache-mcp'
+      - '--skip-db-update'
+      - '${_MCP_SOURCE_IMAGE}'
+    waitFor: ['pull-mcp', 'download-trivy-db']
+
+  # ==========================================================================
+  # PUSH PHASE - Tag and push scanned images to GCR (parallel)
+  # ==========================================================================
+
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'push-agent'
+    entrypoint: 'bash'
+    args:
+      - '-euo'
+      - 'pipefail'
+      - '-c'
+      - |
+        docker tag ${_AGENT_SOURCE_IMAGE} gcr.io/${PROJECT_ID}/${_SERVICE_NAME}:${_IMAGE_TAG} && \
+        docker push gcr.io/${PROJECT_ID}/${_SERVICE_NAME}:${_IMAGE_TAG}
+    waitFor: ['scan-agent']
+
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'push-handler'
+    entrypoint: 'bash'
+    args:
+      - '-euo'
+      - 'pipefail'
+      - '-c'
+      - |
+        docker tag ${_HANDLER_SOURCE_IMAGE} gcr.io/${PROJECT_ID}/${_HANDLER_SERVICE_NAME}:${_IMAGE_TAG} && \
+        docker push gcr.io/${PROJECT_ID}/${_HANDLER_SERVICE_NAME}:${_IMAGE_TAG}
+    waitFor: ['scan-handler']
+
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'push-mcp'
+    entrypoint: 'bash'
+    args:
+      - '-euo'
+      - 'pipefail'
+      - '-c'
+      - |
+        docker tag ${_MCP_SOURCE_IMAGE} gcr.io/${PROJECT_ID}/red-hat-lightspeed-mcp:latest && \
+        docker push gcr.io/${PROJECT_ID}/red-hat-lightspeed-mcp:latest
+    waitFor: ['scan-mcp']
+
+  # ==========================================================================
+  # DEPLOY PHASE - Deploy services to Cloud Run
+  # Handler deploys first (must be running before agent goes live).
+  # Uses the same YAML configs and sed substitution as deploy.sh.
+  # ==========================================================================
+
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'deploy-handler'
+    entrypoint: 'bash'
+    args:
+      - '-euo'
+      - 'pipefail'
+      - '-c'
+      - |
+        sed -e 's|gcr.io/$${PROJECT_ID}/marketplace-handler:latest|gcr.io/${PROJECT_ID}/${_HANDLER_SERVICE_NAME}:${_IMAGE_TAG}|g' \
+            -e 's|$${PROJECT_ID}|${PROJECT_ID}|g' \
+            -e 's|$${REGION}|${_REGION}|g' \
+            -e 's|$${SERVICE_ACCOUNT_NAME}|${_SERVICE_ACCOUNT_NAME}|g' \
+            -e 's|$${HANDLER_SERVICE_NAME}|${_HANDLER_SERVICE_NAME}|g' \
+            -e 's|$${DB_INSTANCE_NAME}|${_DB_INSTANCE_NAME}|g' \
+            -e 's|$${VPC_CONNECTOR_NAME}|${_VPC_CONNECTOR_NAME}|g' \
+            -e 's|$${SERVICE_CONTROL_SERVICE_NAME}|${_SERVICE_CONTROL_SERVICE_NAME}|g' \
+            deploy/cloudrun/marketplace-handler.yaml > /workspace/handler.yaml
+
+        gcloud run services replace /workspace/handler.yaml \
+            --region=${_REGION} \
+            --project=${PROJECT_ID}
+    waitFor: ['push-agent', 'push-handler', 'push-mcp']
+
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'deploy-agent'
+    entrypoint: 'bash'
+    args:
+      - '-euo'
+      - 'pipefail'
+      - '-c'
+      - |
+        sed -e 's|gcr.io/$${PROJECT_ID}/lightspeed-agent:latest|gcr.io/${PROJECT_ID}/${_SERVICE_NAME}:${_IMAGE_TAG}|g' \
+            -e 's|$${MCP_IMAGE}|gcr.io/${PROJECT_ID}/red-hat-lightspeed-mcp:latest|g' \
+            -e 's|$${PROJECT_ID}|${PROJECT_ID}|g' \
+            -e 's|$${REGION}|${_REGION}|g' \
+            -e 's|$${VERTEXAI_LOCATION}|${_VERTEXAI_LOCATION}|g' \
+            -e 's|$${SERVICE_NAME}|${_SERVICE_NAME}|g' \
+            -e 's|$${SERVICE_ACCOUNT_NAME}|${_SERVICE_ACCOUNT_NAME}|g' \
+            -e 's|$${DB_INSTANCE_NAME}|${_DB_INSTANCE_NAME}|g' \
+            -e 's|$${VPC_CONNECTOR_NAME}|${_VPC_CONNECTOR_NAME}|g' \
+            deploy/cloudrun/service.yaml > /workspace/service.yaml
+
+        gcloud run services replace /workspace/service.yaml \
+            --region=${_REGION} \
+            --project=${PROJECT_ID}
+    waitFor: ['push-agent', 'push-handler', 'push-mcp', 'deploy-handler']
+
+  # ==========================================================================
+  # HEALTHCHECK PHASE - Verify services are ready before post-deploy config
+  # Polls the Ready condition every 10s for up to 3 minutes (18 attempts).
+  # gcloud run services replace waits for rollout, but there can be a brief
+  # propagation delay before the Ready condition reflects the new revision.
+  # ==========================================================================
+
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'healthcheck-handler'
+    entrypoint: 'bash'
+    args:
+      - '-euo'
+      - 'pipefail'
+      - '-c'
+      - |
+        echo "Verifying ${_HANDLER_SERVICE_NAME} is healthy..."
+        for i in $$(seq 1 18); do
+          READY=$$(gcloud run services describe ${_HANDLER_SERVICE_NAME} \
+              --region=${_REGION} \
+              --project=${PROJECT_ID} \
+              --format=json | python3 << 'PYEOF'
+        import json, sys
+        svc = json.load(sys.stdin)
+        for c in svc.get("status", {}).get("conditions", []):
+            if c["type"] == "Ready":
+                print(c["status"])
+                sys.exit(0)
+        print("Unknown")
+        PYEOF
+          )
+          if [ "$$READY" = "True" ]; then
+            echo "${_HANDLER_SERVICE_NAME} is healthy and serving traffic."
+            exit 0
+          fi
+          echo "  Attempt $$i/18: status=$$READY, retrying in 10s..."
+          sleep 10
+        done
+        echo "ERROR: ${_HANDLER_SERVICE_NAME} failed to become healthy within 3 minutes"
+        gcloud run services describe ${_HANDLER_SERVICE_NAME} \
+            --region=${_REGION} --project=${PROJECT_ID} \
+            --format='yaml(status.conditions)'
+        exit 1
+    waitFor: ['deploy-handler']
+
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'healthcheck-agent'
+    entrypoint: 'bash'
+    args:
+      - '-euo'
+      - 'pipefail'
+      - '-c'
+      - |
+        echo "Verifying ${_SERVICE_NAME} is healthy..."
+        for i in $$(seq 1 18); do
+          READY=$$(gcloud run services describe ${_SERVICE_NAME} \
+              --region=${_REGION} \
+              --project=${PROJECT_ID} \
+              --format=json | python3 << 'PYEOF'
+        import json, sys
+        svc = json.load(sys.stdin)
+        for c in svc.get("status", {}).get("conditions", []):
+            if c["type"] == "Ready":
+                print(c["status"])
+                sys.exit(0)
+        print("Unknown")
+        PYEOF
+          )
+          if [ "$$READY" = "True" ]; then
+            echo "${_SERVICE_NAME} is healthy and serving traffic."
+            exit 0
+          fi
+          echo "  Attempt $$i/18: status=$$READY, retrying in 10s..."
+          sleep 10
+        done
+        echo "ERROR: ${_SERVICE_NAME} failed to become healthy within 3 minutes"
+        gcloud run services describe ${_SERVICE_NAME} \
+            --region=${_REGION} --project=${PROJECT_ID} \
+            --format='yaml(status.conditions)'
+        exit 1
+    waitFor: ['deploy-agent']
+
+  # ==========================================================================
+  # GCLB PHASE - Set up per-service Google Cloud Load Balancers
+  # Creates static IP, SSL cert, NEG, backend, Cloud Armor, URL map,
+  # HTTPS proxy, and forwarding rule for each enabled service.
+  # When LB is disabled for a service, overrides ingress to 'all'.
+  # ==========================================================================
+
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'setup-lb-agent'
+    entrypoint: 'bash'
+    args:
+      - '-euo'
+      - 'pipefail'
+      - '-c'
+      - |
+        if [ "${_ENABLE_LB_AGENT}" != "true" ]; then
+          echo "GCLB disabled for agent, skipping."
+          exit 0
+        fi
+        bash deploy/cloudrun/setup-lb.sh \
+            agent "${_SERVICE_NAME}" "${_AGENT_DOMAIN_NAME}" \
+            "${_ENABLE_CLOUD_ARMOR_AGENT}" "${_REGION}" "${PROJECT_ID}" "${_LB_NAME}" \
+            "${_CLOUD_ARMOR_SENSITIVITY_AGENT}"
+    waitFor: ['healthcheck-agent', 'validate-lb-config']
+
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'setup-lb-handler'
+    entrypoint: 'bash'
+    args:
+      - '-euo'
+      - 'pipefail'
+      - '-c'
+      - |
+        if [ "${_ENABLE_LB_HANDLER}" != "true" ]; then
+          echo "GCLB disabled for handler, skipping."
+          exit 0
+        fi
+        bash deploy/cloudrun/setup-lb.sh \
+            handler "${_HANDLER_SERVICE_NAME}" "${_HANDLER_DOMAIN_NAME}" \
+            "${_ENABLE_CLOUD_ARMOR_HANDLER}" "${_REGION}" "${PROJECT_ID}" "${_LB_NAME}" \
+            "${_CLOUD_ARMOR_SENSITIVITY_HANDLER}"
+    waitFor: ['healthcheck-handler', 'validate-lb-config']
+
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'configure-ingress'
+    entrypoint: 'bash'
+    args:
+      - '-euo'
+      - 'pipefail'
+      - '-c'
+      - |
+        if [ "${_ENABLE_LB_AGENT}" != "true" ]; then
+          echo "WARNING: No LB for agent — setting ingress to 'all' (direct internet access, no WAF protection)"
+          gcloud run services update ${_SERVICE_NAME} \
+              --region=${_REGION} --project=${PROJECT_ID} \
+              --ingress=all --quiet
+        fi
+        if [ "${_ENABLE_LB_HANDLER}" != "true" ]; then
+          echo "WARNING: No LB for handler — setting ingress to 'all' (direct internet access, no WAF protection)"
+          gcloud run services update ${_HANDLER_SERVICE_NAME} \
+              --region=${_REGION} --project=${PROJECT_ID} \
+              --ingress=all --quiet
+        fi
+        echo "Ingress configuration complete."
+    waitFor: ['setup-lb-agent', 'setup-lb-handler']
+
+  # ==========================================================================
+  # POST-DEPLOY PHASE - Configure IAM, Pub/Sub, and service URLs
+  # ==========================================================================
+
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'allow-unauthenticated'
+    entrypoint: 'bash'
+    args:
+      - '-euo'
+      - 'pipefail'
+      - '-c'
+      - |
+        if [ "${_ALLOW_UNAUTHENTICATED}" != "true" ]; then
+          echo "Skipping unauthenticated access (set _ALLOW_UNAUTHENTICATED=true to enable)"
+          exit 0
+        fi
+        echo "Allowing unauthenticated access for both services..."
+        gcloud run services add-iam-policy-binding ${_HANDLER_SERVICE_NAME} \
+            --region=${_REGION} \
+            --project=${PROJECT_ID} \
+            --member="allUsers" \
+            --role="roles/run.invoker" \
+            --quiet
+        gcloud run services add-iam-policy-binding ${_SERVICE_NAME} \
+            --region=${_REGION} \
+            --project=${PROJECT_ID} \
+            --member="allUsers" \
+            --role="roles/run.invoker" \
+            --quiet
+    waitFor: ['configure-ingress']
+
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'configure-pubsub'
+    entrypoint: 'bash'
+    args:
+      - '-euo'
+      - 'pipefail'
+      - '-c'
+      - |
+        # Pub/Sub push uses the Cloud Run URL directly — internal Google Cloud
+        # traffic bypasses the GCLB, so this is correct even when LB is enabled.
+        HANDLER_URL=$$(gcloud run services describe ${_HANDLER_SERVICE_NAME} \
+            --region=${_REGION} \
+            --project=${PROJECT_ID} \
+            --format='value(status.url)')
+
+        if [ -z "$$HANDLER_URL" ]; then
+          echo "ERROR: Could not get handler URL — Pub/Sub configuration requires a running handler"
+          exit 1
+        fi
+
+        PUSH_ENDPOINT="$$HANDLER_URL/pubsub"
+        INVOKER_SA="${_PUBSUB_INVOKER_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
+
+        # Cloud Build does not substitute _VARS inside bash default syntax,
+        # so capture the value in a shell variable first, then apply the fallback.
+        TOPIC_SHORT=$$(echo "${_PUBSUB_TOPIC}" | sed 's|.*/||')
+        CB_SUB="${_PUBSUB_SUBSCRIPTION}"
+        SUBSCRIPTION="$${CB_SUB:-$${TOPIC_SHORT}-sub}"
+
+        gcloud run services add-iam-policy-binding ${_HANDLER_SERVICE_NAME} \
+            --region=${_REGION} \
+            --project=${PROJECT_ID} \
+            --member="serviceAccount:$$INVOKER_SA" \
+            --role="roles/run.invoker" \
+            --quiet || true
+
+        # Use service account impersonation for cross-project topics
+        IMPERSONATE_FLAG=""
+        if echo "${_PUBSUB_TOPIC}" | grep -q '^projects/'; then
+          IMPERSONATE_FLAG="--impersonate-service-account=$$INVOKER_SA"
+          echo "Using service account impersonation for cross-project topic"
+        fi
+
+        if gcloud pubsub subscriptions describe "$$SUBSCRIPTION" --project=${PROJECT_ID} &>/dev/null; then
+          echo "Updating existing subscription '$$SUBSCRIPTION'..."
+          gcloud pubsub subscriptions update "$$SUBSCRIPTION" \
+              --push-endpoint="$$PUSH_ENDPOINT" \
+              --push-auth-service-account="$$INVOKER_SA" \
+              --push-auth-token-audience="$$PUSH_ENDPOINT" \
+              --ack-deadline=60 \
+              --project=${PROJECT_ID} \
+              --quiet
+        else
+          echo "Creating push subscription '$$SUBSCRIPTION'..."
+          gcloud pubsub subscriptions create "$$SUBSCRIPTION" \
+              --topic=${_PUBSUB_TOPIC} \
+              --push-endpoint="$$PUSH_ENDPOINT" \
+              --push-auth-service-account="$$INVOKER_SA" \
+              --push-auth-token-audience="$$PUSH_ENDPOINT" \
+              --ack-deadline=60 \
+              --project=${PROJECT_ID} \
+              $$IMPERSONATE_FLAG
+        fi
+
+        # Set PUBSUB_AUDIENCE on the handler so its auth middleware can validate
+        # the 'aud' claim in incoming Pub/Sub OIDC tokens against the expected endpoint.
+        echo "Setting PUBSUB_AUDIENCE on ${_HANDLER_SERVICE_NAME}..."
+        gcloud run services update ${_HANDLER_SERVICE_NAME} \
+            --region=${_REGION} \
+            --project=${PROJECT_ID} \
+            --update-env-vars="PUBSUB_AUDIENCE=$$PUSH_ENDPOINT" \
+            --quiet
+
+        echo "Pub/Sub push subscription configured:"
+        echo "  Subscription: $$SUBSCRIPTION"
+        echo "  Push endpoint: $$PUSH_ENDPOINT"
+        echo "  Audience: $$PUSH_ENDPOINT"
+        echo "  Auth SA: $$INVOKER_SA"
+    waitFor: ['healthcheck-handler']
+
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'update-agent-urls'
+    entrypoint: 'bash'
+    args:
+      - '-euo'
+      - 'pipefail'
+      - '-c'
+      - |
+        AGENT_URL=$$(gcloud run services describe ${_SERVICE_NAME} \
+            --region=${_REGION} \
+            --project=${PROJECT_ID} \
+            --format='value(status.url)')
+        HANDLER_URL=$$(gcloud run services describe ${_HANDLER_SERVICE_NAME} \
+            --region=${_REGION} \
+            --project=${PROJECT_ID} \
+            --format='value(status.url)')
+
+        # Use GCLB domain URLs when load balancers are enabled
+        if [ "${_ENABLE_LB_AGENT}" = "true" ]; then
+          AGENT_URL="https://${_AGENT_DOMAIN_NAME}"
+        fi
+        if [ "${_ENABLE_LB_HANDLER}" = "true" ]; then
+          HANDLER_URL="https://${_HANDLER_DOMAIN_NAME}"
+        fi
+
+        if [ -z "$$AGENT_URL" ]; then
+          echo "ERROR: Could not retrieve agent URL"
+          exit 1
+        fi
+
+        ENV_VARS="AGENT_PROVIDER_URL=$$AGENT_URL"
+        if [ -n "$$HANDLER_URL" ]; then
+          ENV_VARS="$$ENV_VARS,MARKETPLACE_HANDLER_URL=$$HANDLER_URL"
+        else
+          echo "WARNING: Could not retrieve handler URL. MARKETPLACE_HANDLER_URL not set."
+          echo "DCR endpoints in the AgentCard will fall back to AGENT_PROVIDER_URL."
+        fi
+
+        echo "Updating agent env vars with service URLs..."
+        gcloud run services update ${_SERVICE_NAME} \
+            --region=${_REGION} \
+            --project=${PROJECT_ID} \
+            --update-env-vars="$$ENV_VARS" \
+            --quiet
+
+        echo "Agent URLs configured:"
+        echo "  AGENT_PROVIDER_URL: $$AGENT_URL"
+        echo "  MARKETPLACE_HANDLER_URL: $$HANDLER_URL"
+    waitFor: ['configure-ingress']
 
 images:
   - 'gcr.io/${PROJECT_ID}/${_SERVICE_NAME}:${_IMAGE_TAG}'
-  - 'gcr.io/${PROJECT_ID}/${_SERVICE_NAME}:${SHORT_SHA}'
+  - 'gcr.io/${PROJECT_ID}/${_HANDLER_SERVICE_NAME}:${_IMAGE_TAG}'
+  - 'gcr.io/${PROJECT_ID}/red-hat-lightspeed-mcp:latest'
 
 tags:
   - 'lightspeed-agent'
