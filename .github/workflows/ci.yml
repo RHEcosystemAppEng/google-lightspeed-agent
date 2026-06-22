@@ -91,6 +91,7 @@ jobs:
               - 'agent.py'
             pyproject:
               - 'pyproject.toml'
+              - 'requirements-*.txt'
 
   lock-file-check:
     name: Lock file verification
@@ -98,14 +99,14 @@ jobs:
     if: needs.detect-changes.outputs.pyproject == 'true'
     runs-on: ubuntu-latest
     container:
-      image: quay.io/centos/centos:stream9
+      image: quay.io/centos/centos:stream10
     steps:
       - uses: actions/checkout@v4
 
       - name: Install Python and uv
         run: |
-          dnf install -y python3.12 python3.12-pip python3.12-devel diffutils make
-          python3.12 -m pip install uv
+          dnf install -y epel-release
+          dnf install -y python3-devel diffutils make uv
 
       - name: Verify lock files
         run: make lock-check
@@ -120,14 +121,15 @@ jobs:
     runs-on: ubuntu-latest
     continue-on-error: true
     container:
-      image: quay.io/centos/centos:stream9
+      image: quay.io/centos/centos:stream10
     steps:
       - uses: actions/checkout@v4
 
       - name: Install Python and pip-audit
         run: |
-          dnf install -y python3.12 python3.12-pip make
-          python3.12 -m pip install pip-audit
+          dnf install -y epel-release
+          dnf install -y make uv
+          uv tool install pip-audit
 
       - name: Scan dependencies
         run: make audit
@@ -142,14 +144,14 @@ jobs:
       (needs.lock-file-check.result == 'success' || needs.lock-file-check.result == 'skipped')
     runs-on: ubuntu-latest
     container:
-      image: quay.io/centos/centos:stream9
+      image: quay.io/centos/centos:stream10
     steps:
       - uses: actions/checkout@v4
 
       - name: Install Python and uv
         run: |
-          dnf install -y python3.12 python3.12-pip python3.12-devel
-          python3.12 -m pip install uv
+          dnf install -y epel-release
+          dnf install -y python3-devel uv
 
       - name: Install dependencies
         run: |
@@ -173,14 +175,14 @@ jobs:
       (needs.lock-file-check.result == 'success' || needs.lock-file-check.result == 'skipped')
     runs-on: ubuntu-latest
     container:
-      image: quay.io/centos/centos:stream9
+      image: quay.io/centos/centos:stream10
     steps:
       - uses: actions/checkout@v4
 
       - name: Install Python and uv
         run: |
-          dnf install -y python3.12 python3.12-pip python3.12-devel
-          python3.12 -m pip install uv
+          dnf install -y epel-release
+          dnf install -y python3-devel uv
 
       - name: Install dependencies
         run: |
