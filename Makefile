@@ -106,9 +106,9 @@ lock-check:
 
 audit:
 	@echo "Scanning dependencies for known vulnerabilities..."
-	uv tool run pip-audit -r requirements-agent.txt
-	uv tool run pip-audit -r requirements-handler.txt
-	uv tool run pip-audit -r requirements-dev.txt
+	uv tool run pip-audit --no-deps --disable-pip -r requirements-agent.txt
+	uv tool run pip-audit --no-deps --disable-pip -r requirements-handler.txt
+	uv tool run pip-audit --no-deps --disable-pip -r requirements-dev.txt
 	@echo "✓ Vulnerability scan complete"
 
 # =============================================================================
