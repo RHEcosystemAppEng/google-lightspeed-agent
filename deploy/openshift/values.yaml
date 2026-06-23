@@ -95,7 +95,7 @@ mcp:
 google:
   # Set to true to use Vertex AI instead of Google AI Studio
   useVertexAI: false
-  cloudLocation: us-central1
+  cloudLocation: global
   geminiModel: gemini-2.5-flash
   httpRetry:
     attempts: 5
@@ -356,7 +356,9 @@ secrets:
   # GMA SSO API credentials for DCR tenant creation (handler only)
   gmaClientId: ""
   gmaClientSecret: ""
-  # Plain-text GCP service account key JSON (for ADC outside Cloud Run)
+  # Plain-text GCP service account key JSON (for ADC outside Cloud Run).
+  # Used by: marketplace handler and/or agent for Vertex AI authentication
+  # via LiteLLM or direct Gemini when GOOGLE_API_KEY is not set.
   gcpServiceAccountKey: ""
   # API key for non-Google LLM providers (litellm only)
   llmApiKey: ""

@@ -17,6 +17,7 @@ spec:
       annotations:
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
         checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        checksum/gcp-sa: {{ include (print $.Template.BasePath "/gcp-sa-secret.yaml") . | sha256sum }}
     spec:
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
@@ -59,6 +60,10 @@ spec:
                   name: {{ include "lightspeed-agent.fullname" . }}-secrets
                   key: GOOGLE_CLOUD_PROJECT
                   optional: true
+            {{- if .Values.secrets.gcpServiceAccountKey }}
+            - name: GOOGLE_APPLICATION_CREDENTIALS
+              value: /var/run/secrets/gcp/sa-key.json
+            {{- end }}
             - name: RED_HAT_SSO_CLIENT_ID
               valueFrom:
                 secretKeyRef:
@@ -102,6 +107,11 @@ spec:
             {{- if and .Values.agent.skillsDir .Values.agent.skillsConfigMap }}
             - name: external-skills
               mountPath: {{ .Values.agent.skillsDir }}
+              readOnly: true
+            {{- end }}
+            {{- if .Values.secrets.gcpServiceAccountKey }}
+            - name: gcp-sa-key
+              mountPath: /var/run/secrets/gcp
               readOnly: true
             {{- end }}
           resources:
@@ -183,4 +193,9 @@ spec:
         - name: external-skills
           configMap:
             name: {{ .Values.agent.skillsConfigMap }}
+        {{- end }}
+        {{- if .Values.secrets.gcpServiceAccountKey }}
+        - name: gcp-sa-key
+          secret:
+            secretName: {{ include "lightspeed-agent.fullname" . }}-gcp-sa-key
         {{- end }}

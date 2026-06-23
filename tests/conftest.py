@@ -12,6 +12,7 @@ os.environ.pop("GOOGLE_CLOUD_PROJECT", None)  # Prevent leaking from user's shel
 os.environ.pop("GMA_CLIENT_ID", None)
 os.environ.pop("GMA_CLIENT_SECRET", None)
 os.environ.pop("GMA_API_BASE_URL", None)
+os.environ.pop("GOOGLE_APPLICATION_CREDENTIALS", None)
 os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///:memory:"
 os.environ["DEBUG"] = "true"
 os.environ["SKIP_JWT_VALIDATION"] = "true"

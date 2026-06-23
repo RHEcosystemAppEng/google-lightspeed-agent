@@ -141,6 +141,18 @@ def _setup_environment() -> None:
     elif settings.google_api_key:
         os.environ["GOOGLE_API_KEY"] = settings.google_api_key
 
+    if settings.google_application_credentials:
+        path = pathlib.Path(settings.google_application_credentials)
+        if not path.is_file():
+            logger.warning(
+                "GOOGLE_APPLICATION_CREDENTIALS path does not exist: %s", path
+            )
+        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = settings.google_application_credentials
+        logger.info(
+            "Using GCP service account credentials from %s",
+            settings.google_application_credentials,
+        )
+
 
 def _create_model(settings: Settings) -> BaseLlm:
     """Create the LLM model instance based on provider configuration.

@@ -81,6 +81,7 @@ These settings apply when `LLM_PROVIDER=gemini` (the default).
 | `GOOGLE_CLOUD_PROJECT` | - | GCP project ID (required for Vertex AI) |
 | `GOOGLE_CLOUD_LOCATION` | `global` | Vertex AI model location (use `global` for pay-as-you-go) |
 | `GEMINI_MODEL` | `gemini-2.5-flash` | Gemini model to use (overridden by `LLM_MODEL` if set) |
+| `GOOGLE_APPLICATION_CREDENTIALS` | - | Path to GCP service account key JSON file for Vertex AI authentication (ADC) |
 | `GEMINI_HTTP_RETRY_ATTEMPTS` | `5` | Max HTTP attempts per model call (including the first). Use `1` to disable SDK retries. Aligns with [google-genai defaults](https://cloud.google.com/vertex-ai/generative-ai/docs/retry-strategy). |
 | `GEMINI_HTTP_RETRY_INITIAL_DELAY` | `1.0` | Initial backoff delay in seconds (exponential backoff with jitter). |
 | `GEMINI_HTTP_RETRY_MAX_DELAY` | `60.0` | Maximum delay in seconds between retries. |

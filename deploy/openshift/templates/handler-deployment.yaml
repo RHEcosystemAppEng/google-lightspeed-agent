@@ -46,13 +46,6 @@ spec:
             - configMapRef:
                 name: {{ include "lightspeed-agent.fullname" . }}-config
           env:
-            - name: GOOGLE_APPLICATION_CREDENTIALS
-              value: /var/run/secrets/gcp/sa-key.json
-            - name: GOOGLE_API_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "lightspeed-agent.fullname" . }}-secrets
-                  key: GOOGLE_API_KEY
             - name: GOOGLE_CLOUD_PROJECT
               valueFrom:
                 secretKeyRef:
@@ -97,9 +90,6 @@ spec:
             - name: RATE_LIMIT_REDIS_URL
               value: {{ printf "redis://default:$(REDIS_PASSWORD)@%s-redis:6379/0" (include "lightspeed-agent.fullname" .) | quote }}
           volumeMounts:
-            - name: gcp-sa-key
-              mountPath: /var/run/secrets/gcp
-              readOnly: true
             - name: tmp
               mountPath: /tmp
           resources:
@@ -124,9 +114,6 @@ spec:
             periodSeconds: 30
             failureThreshold: 3
       volumes:
-        - name: gcp-sa-key
-          secret:
-            secretName: {{ include "lightspeed-agent.fullname" . }}-gcp-sa-key
         - name: tmp
           emptyDir: {}
 {{- end }}

@@ -101,7 +101,7 @@ curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 - Container image access: `quay.io/ecosystem-appeng/google-lightspeed-agent`,
   `quay.io/redhat-services-prod/.../red-hat-lightspeed-mcp`,
   `quay.io/fedora/redis-7`, `registry.redhat.io/rhel9/postgresql-16` (if using database session backend or standalone mode)
-- Google AI Studio API key **or** Vertex AI project
+- Google AI Studio API key, Vertex AI project, or GCP service account key (for ADC)
 - Red Hat SSO OAuth credentials (client ID and secret)
 
 **Standalone mode (additional):**
@@ -200,6 +200,17 @@ secrets:
   redHatSsoClientSecret: "your-real-client-secret"
   redisPassword: "a-strong-redis-password"
 ```
+
+> **Vertex AI with service account**: As an alternative to `googleApiKey`, you
+> can authenticate with a GCP service account key for Vertex AI (including
+> LiteLLM with `vertex_ai/*` models):
+>
+> ```yaml
+> secrets:
+>   googleCloudProject: "your-gcp-project-id"
+>   gcpServiceAccountKey: |
+>     { ... service account JSON ... }
+> ```
 
 No database, handler, or UI configuration is needed — sessions use in-memory
 storage by default, and the handler and standalone UI are not deployed in hybrid
@@ -585,7 +596,8 @@ The MCP server runs as a sidecar container in the agent pod.
 |---|---|---|
 | `google.geminiModel` | Gemini model name | `gemini-2.5-flash` |
 | `google.useVertexAI` | Use Vertex AI instead of AI Studio | `false` |
-| `google.cloudLocation` | Vertex AI region | `us-central1` |
+| `google.cloudLocation` | Vertex AI region (use `global` for pay-as-you-go) | `global` |
+| `secrets.gcpServiceAccountKey` | GCP service account key JSON for Vertex AI authentication via ADC (alternative to `secrets.googleApiKey`) | `""` |
 | `google.httpRetry.attempts` | Max retry attempts for Gemini HTTP calls | `5` |
 | `google.httpRetry.initialDelay` | Initial retry delay (seconds) | `1.0` |
 | `google.httpRetry.maxDelay` | Max retry delay (seconds) | `60.0` |
@@ -614,6 +626,30 @@ secrets:
 ```
 
 The `openai/` prefix tells LiteLLM to use the OpenAI-compatible chat completions protocol, which is the standard API exposed by vLLM, text-generation-inference, and most model serving frameworks.
+
+To use a Vertex AI model via LiteLLM with service account authentication, set in
+`my-values.yaml`:
+
+```yaml
+llm:
+  provider: "litellm"
+  model: "vertex_ai/gemini-2.5-flash"
+
+google:
+  useVertexAI: true
+  cloudLocation: global
+```
+
+And in `secrets.yaml`:
+
+```yaml
+secrets:
+  googleCloudProject: "your-gcp-project-id"
+  gcpServiceAccountKey: |
+    { ... service account JSON ... }
+```
+
+The service account key is mounted into the agent container and `GOOGLE_APPLICATION_CREDENTIALS` is set automatically. Both LiteLLM with `vertex_ai/*` models and the direct Gemini SDK use `google.auth.default()`, which respects this variable.
 
 > **Notes:**
 > - Gemini HTTP retry settings (`google.httpRetry.*`) do not apply to `litellm` providers.
@@ -754,7 +790,7 @@ Deployed only when `deploymentMode: standalone`.
 | `secrets.gmaClientId` | GMA API client ID (for DCR tenant creation) | Standalone only |
 | `secrets.gmaClientSecret` | GMA API client secret | Standalone only |
 | `secrets.llmApiKey` | API key for non-Google LLM providers (`litellm` only) | When using `litellm` provider |
-| `secrets.gcpServiceAccountKey` | Base64-encoded GCP SA key JSON (for ADC outside Cloud Run) | Standalone + GCP only |
+| `secrets.gcpServiceAccountKey` | GCP service account key JSON for ADC (Vertex AI agent auth and/or standalone handler) | When using Vertex AI auth or standalone + GCP |
 
 ### Observability
 

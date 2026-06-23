@@ -249,3 +249,70 @@ def test_settings_reads_llm_api_base_env(monkeypatch):
     finally:
         os.environ.pop("LLM_API_BASE", None)
         get_settings.cache_clear()
+
+
+# ---------------------------------------------------------------------------
+# Service account credentials
+# ---------------------------------------------------------------------------
+
+
+def test_google_application_credentials_defaults_to_none():
+    s = Settings(google_api_key="test-key")
+    assert s.google_application_credentials is None
+
+
+def test_google_application_credentials_accepts_path():
+    s = Settings(google_api_key="test-key", google_application_credentials="/path/to/sa.json")
+    assert s.google_application_credentials == "/path/to/sa.json"
+
+
+def test_setup_environment_sets_google_application_credentials(monkeypatch, tmp_path):
+    from lightspeed_agent.core.agent import _setup_environment
+
+    creds_file = tmp_path / "sa-key.json"
+    creds_file.write_text("{}")
+    monkeypatch.setenv("GOOGLE_APPLICATION_CREDENTIALS", str(creds_file))
+    get_settings.cache_clear()
+    try:
+        _setup_environment()
+        assert os.environ["GOOGLE_APPLICATION_CREDENTIALS"] == str(creds_file)
+    finally:
+        os.environ.pop("GOOGLE_APPLICATION_CREDENTIALS", None)
+        get_settings.cache_clear()
+
+
+def test_setup_environment_warns_when_credentials_file_missing(monkeypatch, caplog):
+    from lightspeed_agent.core.agent import _setup_environment
+
+    monkeypatch.setenv("GOOGLE_APPLICATION_CREDENTIALS", "/nonexistent/path/sa.json")
+    get_settings.cache_clear()
+    try:
+        _setup_environment()
+        assert os.environ["GOOGLE_APPLICATION_CREDENTIALS"] == "/nonexistent/path/sa.json"
+        assert "GOOGLE_APPLICATION_CREDENTIALS path does not exist" in caplog.text
+    finally:
+        os.environ.pop("GOOGLE_APPLICATION_CREDENTIALS", None)
+        get_settings.cache_clear()
+
+
+def test_setup_environment_skips_google_application_credentials_when_not_set(monkeypatch):
+    from lightspeed_agent.core.agent import _setup_environment
+
+    monkeypatch.delenv("GOOGLE_APPLICATION_CREDENTIALS", raising=False)
+    get_settings.cache_clear()
+    try:
+        _setup_environment()
+        assert "GOOGLE_APPLICATION_CREDENTIALS" not in os.environ
+    finally:
+        get_settings.cache_clear()
+
+
+def test_settings_reads_google_application_credentials_env(monkeypatch):
+    monkeypatch.setenv("GOOGLE_APPLICATION_CREDENTIALS", "/opt/keys/sa.json")
+    get_settings.cache_clear()
+    try:
+        s = get_settings()
+        assert s.google_application_credentials == "/opt/keys/sa.json"
+    finally:
+        os.environ.pop("GOOGLE_APPLICATION_CREDENTIALS", None)
+        get_settings.cache_clear()

@@ -75,6 +75,10 @@ class Settings(BaseSettings):
         default="gemini-2.5-flash",
         description="Gemini model to use",
     )
+    google_application_credentials: str | None = Field(
+        default=None,
+        description="Path to GCP service account key JSON file for Vertex AI authentication (ADC)",
+    )
     gemini_http_retry_attempts: int = Field(
         default=5,
         ge=1,
