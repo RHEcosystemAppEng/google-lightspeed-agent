@@ -175,6 +175,8 @@ spec:
             # Probe server port (health/readiness checks on separate port)
             - name: AGENT_PROBE_PORT
               value: "8002"
+            - name: FORWARDED_ALLOW_IPS
+              value: "*"
           volumeMounts:
             - name: redis-ca-cert
               mountPath: /secrets/redis-ca-cert

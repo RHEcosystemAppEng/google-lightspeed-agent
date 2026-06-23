@@ -15,23 +15,31 @@ def setup_logging() -> None:
 
     settings = get_settings()
 
-    log_format = (
-        '{"time": "%(asctime)s", "level": "%(levelname)s", '
-        '"logger": "%(name)s", "message": "%(message)s", '
-        '"user_id": "%(user_id)s", "org_id": "%(org_id)s", '
-        '"order_id": "%(order_id)s", "request_id": "%(request_id)s"}'
-        if settings.log_format == "json"
-        else "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    )
-
     handler = logging.StreamHandler(sys.stdout)
     handler.addFilter(AuditContextFilter())
 
-    logging.basicConfig(
-        level=getattr(logging, settings.log_level.upper()),
-        format=log_format,
-        handlers=[handler],
-    )
+    level = getattr(logging, settings.log_level.upper())
+    if settings.log_format == "json":
+        from pythonjsonlogger.json import JsonFormatter
+
+        handler.setFormatter(
+            JsonFormatter(
+                fmt="%(asctime)s %(levelname)s %(name)s %(message)s "
+                "%(user_id)s %(org_id)s %(order_id)s %(request_id)s",
+                rename_fields={
+                    "asctime": "time",
+                    "levelname": "level",
+                    "name": "logger",
+                },
+            )
+        )
+        logging.basicConfig(level=level, handlers=[handler])
+    else:
+        logging.basicConfig(
+            level=level,
+            format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+            handlers=[handler],
+        )
 
 
 def main() -> None:
@@ -74,6 +82,8 @@ def main() -> None:
             host=settings.agent_host,
             port=settings.agent_port,
             log_level=settings.log_level.lower(),
+            proxy_headers=settings.proxy_headers,
+            forwarded_allow_ips=settings.forwarded_allow_ips,
         )
     finally:
         # Ensure telemetry is properly shut down

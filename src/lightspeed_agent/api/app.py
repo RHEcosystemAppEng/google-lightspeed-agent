@@ -226,14 +226,14 @@ def create_app() -> A2AFastAPI:
         """AgentCard endpoint (alias for agent.json)."""
         return _agent_card_response(request)
 
-    # Add authentication middleware for A2A endpoint (innermost layer)
-    # Validates Red Hat SSO JWT tokens on POST / requests
-    # Can be disabled with SKIP_JWT_VALIDATION=true for development
-    app.add_middleware(AuthenticationMiddleware)
-
-    # Add rate limiting middleware (runs before auth so unauthenticated
-    # floods are throttled at the IP level before any auth processing)
+    # Rate limiting runs after auth so tenant-based bucketing (order/user/client)
+    # is available via request.state. Pre-auth flood protection is handled at the
+    # infrastructure layer: Cloud Armor throttle rules (Cloud Run) or external
+    # WAF rate limiting (OpenShift). See deploy/cloudrun/deploy.sh.
     app.add_middleware(RateLimitMiddleware)
+
+    # Authentication middleware (outermost auth layer)
+    app.add_middleware(AuthenticationMiddleware)
 
     # Add security headers middleware (HSTS, X-Content-Type-Options, X-Frame-Options)
     app.add_middleware(SecurityHeadersMiddleware)
@@ -246,7 +246,8 @@ def create_app() -> A2AFastAPI:
     # - production with CORS_ALLOWED_ORIGINS set: allow those origins with credentials
     # - production without CORS_ALLOWED_ORIGINS: skip CORS entirely (server-to-server)
     # Middleware execution order:
-    #   CORS -> BodyLimit -> SecurityHeaders -> RateLimit -> Auth -> Handler
+    #   CORS -> BodyLimit -> SecurityHeaders -> Auth -> RateLimit -> Handler
+    #   Pre-auth flood protection: Cloud Armor / external WAF (infrastructure layer)
     cors_origins = settings.cors_origins_list
     if settings.debug and not cors_origins:
         # Development: wide-open for A2A Inspector / browser dev tools

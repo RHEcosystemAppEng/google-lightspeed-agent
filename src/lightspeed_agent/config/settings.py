@@ -188,6 +188,19 @@ class Settings(BaseSettings):
         description="Port for health/readiness probe server",
     )
 
+    # Proxy / forwarded-header trust (required behind GCLB, OpenShift Routes)
+    proxy_headers: bool = Field(
+        default=True,
+        description="Trust proxy headers (X-Forwarded-For, X-Forwarded-Proto). "
+        "Required behind load balancers (GCLB, OpenShift Routes).",
+    )
+    forwarded_allow_ips: str = Field(
+        default="",
+        description="Comma-separated list of trusted proxy IPs for forwarded headers. "
+        "'*' trusts all proxies. Empty disables proxy trust (safe for development). "
+        "Set to '*' in production behind a load balancer (GCLB, OpenShift Routes).",
+    )
+
     # Marketplace Handler Configuration
     # The marketplace handler is a separate service that handles DCR and Pub/Sub events
     marketplace_handler_url: str = Field(

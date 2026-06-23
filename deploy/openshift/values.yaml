@@ -41,6 +41,7 @@ agent:
   probePort: 8002
   displayName: "Red Hat Lightspeed Agent for Google Cloud (OpenShift)"
   providerOrganizationUrl: "https://www.redhat.com"
+  forwardedAllowIps: "*"
   loggingDetail: basic
   toolResultMaxChars: 204800
   # ADK AI Skills — optional external skills directory.

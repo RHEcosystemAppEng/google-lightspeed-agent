@@ -2,6 +2,7 @@
 
 import logging
 import os
+import sys
 
 import uvicorn
 
@@ -12,18 +13,27 @@ def main() -> None:
     log_level = os.getenv("LOG_LEVEL", "INFO").upper()
     log_format = os.getenv("LOG_FORMAT", "text")
 
+    handler = logging.StreamHandler(sys.stdout)  # stdout for container log collectors
+
     if log_format == "json":
-        logging.basicConfig(
-            level=log_level,
-            format=(
-                '{"time": "%(asctime)s", "level": "%(levelname)s",'
-                ' "logger": "%(name)s", "message": "%(message)s"}'
-            ),
+        from pythonjsonlogger.json import JsonFormatter
+
+        handler.setFormatter(
+            JsonFormatter(
+                fmt="%(asctime)s %(levelname)s %(name)s %(message)s",
+                rename_fields={
+                    "asctime": "time",
+                    "levelname": "level",
+                    "name": "logger",
+                },
+            )
         )
+        logging.basicConfig(level=log_level, handlers=[handler])
     else:
         logging.basicConfig(
             level=log_level,
             format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+            handlers=[handler],
         )
 
     # Get host and port from environment
@@ -40,6 +50,8 @@ def main() -> None:
         port=port,
         factory=True,
         log_level=log_level.lower(),
+        proxy_headers=os.getenv("PROXY_HEADERS", "true").lower() == "true",
+        forwarded_allow_ips=os.getenv("FORWARDED_ALLOW_IPS", "*"),
     )
 
 

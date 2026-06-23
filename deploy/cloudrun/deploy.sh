@@ -500,6 +500,25 @@ setup_service_lb() {
             exit 1
         fi
 
+        # Pre-auth IP-level rate limiting (defense-in-depth: throttles floods
+        # before they reach application-level JWT validation)
+        if ! gcloud compute security-policies rules describe 100 \
+            --security-policy="$policy_name" \
+            --project="$PROJECT_ID" &>/dev/null; then
+            gcloud compute security-policies rules create 100 \
+                --security-policy="$policy_name" \
+                --action=throttle \
+                --rate-limit-threshold-count=300 \
+                --rate-limit-threshold-interval-sec=60 \
+                --conform-action=allow \
+                --exceed-action=deny-429 \
+                --enforce-on-key=IP \
+                --project="$PROJECT_ID"
+            log_info "IP-based rate limiting rule added at priority 100"
+        else
+            log_info "Rate limiting rule at priority 100 already exists"
+        fi
+
         # Add preconfigured WAF rules (OWASP ModSecurity CRS)
         declare -A WAF_RULES=(
             [900]="methodenforcement-v422-stable"

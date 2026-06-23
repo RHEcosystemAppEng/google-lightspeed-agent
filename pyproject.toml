@@ -41,6 +41,8 @@ dependencies = [
     "requests>=2.20.0",  # Required by google.auth.transport.requests
     # Redis for distributed rate limiting (used by both agent and marketplace handler)
     "redis>=5.0.0",
+    # Structured JSON logging with proper value escaping (CWE-117 safe)
+    "python-json-logger>=3.0.0",
 ]
 
 [project.optional-dependencies]

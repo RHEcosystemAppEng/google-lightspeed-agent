@@ -47,6 +47,7 @@ data:
   AGENT_HOST: {{ .Values.agent.host | quote }}
   AGENT_PORT: {{ .Values.agent.port | quote }}
   AGENT_PROBE_PORT: {{ .Values.agent.probePort | quote }}
+  FORWARDED_ALLOW_IPS: {{ .Values.agent.forwardedAllowIps | quote }}
   AGENT_PROVIDER_ORGANIZATION_URL: {{ .Values.agent.providerOrganizationUrl | quote }}
   AGENT_LOGGING_DETAIL: {{ .Values.agent.loggingDetail | quote }}
   TOOL_RESULT_MAX_CHARS: {{ .Values.agent.toolResultMaxChars | quote }}
