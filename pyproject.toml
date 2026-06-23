@@ -46,7 +46,7 @@ dependencies = [
 [project.optional-dependencies]
 agent = [
     # AI/Agent frameworks
-    "aiohttp>=3.14.1",
+    "aiohttp>=3.14.1",  # CVE fixes: CookieJar.load() ACE, DigestAuthMiddleware cross-origin leak
     "google-adk==2.2.0",
     "a2a-sdk[http-server]>=0.3.0,<0.4.0",
     "litellm>=1.30.0,<2.0.0",
