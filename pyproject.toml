@@ -64,11 +64,11 @@ agent = [
     "opentelemetry-instrumentation-fastapi>=0.41b0",
     "opentelemetry-instrumentation-httpx>=0.41b0",
     "opentelemetry-instrumentation-logging>=0.41b0",
+    "opentelemetry-exporter-prometheus>=0.62b1",
 ]
 telemetry = [
     "opentelemetry-exporter-jaeger>=1.20.0",
     "opentelemetry-exporter-zipkin>=1.20.0",
-    "opentelemetry-exporter-prometheus>=0.62b1",
 ]
 dev = [
     "pytest>=8.0.0",
