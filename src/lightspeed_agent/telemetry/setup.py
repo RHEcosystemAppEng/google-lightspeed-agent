@@ -155,15 +155,21 @@ def _create_meter_provider(resource: Resource, settings: Any) -> MeterProvider:
 
 
 def setup_telemetry() -> None:
-    """Initialize OpenTelemetry tracing and/or metrics."""
+    """Initialize OpenTelemetry tracing, metrics, and/or MLflow span export.
+
+    All three features are independently toggleable:
+    - otel_enabled: standard OTel tracing (Jaeger/Zipkin/OTLP) + instrumentation
+    - otel_metrics_enabled: OTel metrics with Prometheus + OTLP export
+    - mlflow_enabled: span export to MLflow's OTLP endpoint (works with or without otel_enabled)
+    """
     global _tracer_provider, _meter_provider
 
     from lightspeed_agent.config import get_settings
 
     settings = get_settings()
 
-    if not settings.otel_enabled and not settings.otel_metrics_enabled:
-        logger.debug("OpenTelemetry tracing and metrics are disabled")
+    if not settings.otel_enabled and not settings.otel_metrics_enabled and not settings.mlflow_enabled:
+        logger.debug("OpenTelemetry tracing, metrics, and MLflow are disabled")
         return
 
     resource = Resource.create(
@@ -174,32 +180,34 @@ def setup_telemetry() -> None:
         }
     )
 
-    # Tracing setup
-    if settings.otel_enabled:
-        logger.info(
-            "Initializing OpenTelemetry tracing (service=%s, exporter=%s, sampler=%s)",
-            settings.otel_service_name,
-            settings.otel_exporter_type,
-            settings.otel_traces_sampler,
-        )
-
+    # Tracing setup (needed for both otel_enabled and mlflow_enabled)
+    if settings.otel_enabled or settings.mlflow_enabled:
         sampler = _get_sampler(settings.otel_traces_sampler, settings.otel_traces_sampler_arg)
         _tracer_provider = TracerProvider(resource=resource, sampler=sampler)
 
-        exporter = _create_exporter(
-            settings.otel_exporter_type,
-            settings.otel_exporter_otlp_endpoint,
-            settings.otel_exporter_otlp_http_endpoint,
-        )
-        span_processor = BatchSpanProcessor(exporter)
-        _tracer_provider.add_span_processor(span_processor)
+        if settings.otel_enabled:
+            logger.info(
+                "Initializing OpenTelemetry tracing (service=%s, exporter=%s, sampler=%s)",
+                settings.otel_service_name,
+                settings.otel_exporter_type,
+                settings.otel_traces_sampler,
+            )
+            exporter = _create_exporter(
+                settings.otel_exporter_type,
+                settings.otel_exporter_otlp_endpoint,
+                settings.otel_exporter_otlp_http_endpoint,
+            )
+            _tracer_provider.add_span_processor(BatchSpanProcessor(exporter))
+
+        if settings.mlflow_enabled:
+            _add_mlflow_processor(settings, _tracer_provider)
 
         trace.set_tracer_provider(_tracer_provider)
 
-        _instrument_fastapi()
-        _instrument_httpx()
-
-        logger.info("OpenTelemetry tracing initialized successfully")
+        if settings.otel_enabled:
+            _instrument_fastapi()
+            _instrument_httpx()
+            logger.info("OpenTelemetry tracing initialized successfully")
 
     # Metrics setup (independent of tracing)
     if settings.otel_metrics_enabled:
@@ -239,6 +247,43 @@ def _instrument_httpx() -> None:
         )
     except Exception as e:
         logger.warning("Failed to instrument HTTPX: %s", e)
+
+
+def _add_mlflow_processor(settings: Any, provider: TracerProvider) -> None:
+    """Add an OTLP HTTP span processor that exports traces to MLflow."""
+    try:
+        from opentelemetry.exporter.otlp.proto.http.trace_exporter import (
+            OTLPSpanExporter as OTLPHttpSpanExporter,
+        )
+
+        tracking_uri = settings.mlflow_tracking_uri.rstrip("/")
+
+        mlflow_headers: dict[str, str] = {}
+        if settings.mlflow_experiment_id:
+            mlflow_headers["x-mlflow-experiment-id"] = settings.mlflow_experiment_id
+        if settings.mlflow_experiment_name:
+            mlflow_headers["x-mlflow-experiment-name"] = settings.mlflow_experiment_name
+        if settings.mlflow_log_prompts:
+            mlflow_headers["x-mlflow-log-prompts"] = "true"
+        if settings.mlflow_run_tags:
+            mlflow_headers["x-mlflow-run-tags"] = settings.mlflow_run_tags
+
+        mlflow_exporter = OTLPHttpSpanExporter(
+            endpoint=f"{tracking_uri}/v1/traces",
+            headers=mlflow_headers,
+        )
+        provider.add_span_processor(BatchSpanProcessor(mlflow_exporter))
+
+        logger.info(
+            "MLflow tracing enabled (endpoint=%s/v1/traces)",
+            tracking_uri,
+        )
+    except ImportError:
+        logger.error(
+            "MLflow tracing requires opentelemetry-exporter-otlp-proto-http. "
+            "Install with: pip install 'lightspeed-agent[mlflow]'"
+        )
+        raise
 
 
 def shutdown_telemetry() -> None:
