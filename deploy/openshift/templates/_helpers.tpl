@@ -117,6 +117,36 @@ UI service name
 {{- end }}
 
 {{/*
+MLflow service name
+*/}}
+{{- define "lightspeed-agent.mlflowServiceName" -}}
+{{- include "lightspeed-agent.fullname" . }}-mlflow
+{{- end }}
+
+{{/*
+Selector labels for MLflow
+*/}}
+{{- define "lightspeed-agent.mlflowSelectorLabels" -}}
+app.kubernetes.io/name: {{ include "lightspeed-agent.fullname" . }}-mlflow
+app.kubernetes.io/component: mlflow
+{{- end }}
+
+{{/*
+MLflow PostgreSQL service name
+*/}}
+{{- define "lightspeed-agent.mlflowPostgresqlServiceName" -}}
+{{- include "lightspeed-agent.fullname" . }}-mlflow-postgresql
+{{- end }}
+
+{{/*
+Selector labels for MLflow PostgreSQL
+*/}}
+{{- define "lightspeed-agent.mlflowPostgresqlSelectorLabels" -}}
+app.kubernetes.io/name: {{ include "lightspeed-agent.fullname" . }}-mlflow-postgresql
+app.kubernetes.io/component: mlflow-database
+{{- end }}
+
+{{/*
 Whether the handler should be deployed on OCP.
 Only deployed in standalone mode — in hybrid the handler stays on GCP.
 */}}
