@@ -131,3 +131,17 @@ data:
   OTEL_METRICS_ENABLED: {{ .Values.otel.metricsEnabled | quote }}
   OTEL_METRICS_PROMETHEUS_PORT: {{ .Values.otel.metricsPrometheusPort | quote }}
   OTEL_METRICS_COLLECTION_INTERVAL: {{ .Values.otel.metricsCollectionInterval | quote }}
+
+  # MLflow
+  MLFLOW_ENABLED: {{ .Values.mlflow.enabled | quote }}
+  {{- if .Values.mlflow.enabled }}
+  MLFLOW_TRACKING_URI: "http://{{ include "lightspeed-agent.mlflowServiceName" . }}:{{ .Values.mlflow.port }}"
+  MLFLOW_EXPERIMENT_NAME: {{ .Values.mlflow.experimentName | quote }}
+  {{- if .Values.mlflow.experimentId }}
+  MLFLOW_EXPERIMENT_ID: {{ .Values.mlflow.experimentId | quote }}
+  {{- end }}
+  MLFLOW_LOG_PROMPTS: {{ .Values.mlflow.logPrompts | quote }}
+  {{- if .Values.mlflow.runTags }}
+  MLFLOW_RUN_TAGS: {{ .Values.mlflow.runTags | quote }}
+  {{- end }}
+  {{- end }}
