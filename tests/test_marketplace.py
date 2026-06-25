@@ -173,6 +173,7 @@ class TestProcurementService:
             patch("httpx.AsyncClient.get", new_callable=AsyncMock, return_value=mock_response),
         ):
             mock_settings.google_cloud_project = "test-project"
+            mock_settings.skip_pubsub_oidc_verification = False
             mock_settings.service_control_service_name = None
             await service.process_event(event)
 
@@ -255,6 +256,7 @@ class TestProcurementService:
             patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_response),
         ):
             mock_settings.google_cloud_project = "test-project"
+            mock_settings.skip_pubsub_oidc_verification = False
 
             # Should NOT raise — 409 means a concurrent handler already approved
             await service._approve_account("account-123")
@@ -272,6 +274,7 @@ class TestProcurementService:
             patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_response),
         ):
             mock_settings.google_cloud_project = "test-project"
+            mock_settings.skip_pubsub_oidc_verification = False
 
             # Should NOT raise — 409 means a concurrent handler already approved
             await service._approve_entitlement("entitlement-123")
@@ -289,6 +292,7 @@ class TestProcurementService:
             patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_response),
         ):
             mock_settings.google_cloud_project = "test-project"
+            mock_settings.skip_pubsub_oidc_verification = False
 
             # Should NOT raise — 409 means a concurrent handler already approved
             await service._approve_plan_change("entitlement-123", "new-plan")
@@ -306,6 +310,7 @@ class TestProcurementService:
             patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_response),
         ):
             mock_settings.google_cloud_project = "test-project"
+            mock_settings.skip_pubsub_oidc_verification = False
 
             with pytest.raises(RuntimeError, match="Failed to approve entitlement"):
                 await service._approve_entitlement("entitlement-123")
@@ -319,6 +324,7 @@ class TestProcurementService:
             patch("httpx.AsyncClient.post", new_callable=AsyncMock, side_effect=error),
         ):
             mock_settings.google_cloud_project = "test-project"
+            mock_settings.skip_pubsub_oidc_verification = False
 
             with pytest.raises(httpx.ConnectError):
                 await service._approve_entitlement("entitlement-123")
@@ -336,6 +342,7 @@ class TestProcurementService:
             patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_response),
         ):
             mock_settings.google_cloud_project = "test-project"
+            mock_settings.skip_pubsub_oidc_verification = False
 
             with pytest.raises(RuntimeError, match="Failed to approve plan change"):
                 await service._approve_plan_change("entitlement-123", "new-plan")
@@ -363,6 +370,7 @@ class TestProcurementService:
         # The key assertion is that it doesn't raise a duplicate-key error.
         with patch.object(service, "_settings") as mock_settings:
             mock_settings.google_cloud_project = None
+            mock_settings.skip_pubsub_oidc_verification = False
             await service.process_event(event)
 
     # --- _resolve_account_id tests ---
@@ -404,6 +412,7 @@ class TestProcurementService:
             patch("httpx.AsyncClient.get", new_callable=AsyncMock, return_value=mock_response),
         ):
             mock_settings.google_cloud_project = "test-project"
+            mock_settings.skip_pubsub_oidc_verification = False
             result = await service._resolve_account_id("order-1", event)
 
         assert result == "account-from-api"
@@ -429,6 +438,7 @@ class TestProcurementService:
             patch("httpx.AsyncClient.get", new_callable=AsyncMock, return_value=mock_response),
         ):
             mock_settings.google_cloud_project = "test-project"
+            mock_settings.skip_pubsub_oidc_verification = False
             result = await service._resolve_account_id("order-1", event)
 
         assert result is None
@@ -453,6 +463,7 @@ class TestProcurementService:
             ),
         ):
             mock_settings.google_cloud_project = "test-project"
+            mock_settings.skip_pubsub_oidc_verification = False
             with pytest.raises(RuntimeError, match="Network error resolving account"):
                 await service._resolve_account_id("order-1", event)
 
@@ -470,6 +481,7 @@ class TestProcurementService:
             patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_response),
         ):
             mock_settings.google_cloud_project = "test-project"
+            mock_settings.skip_pubsub_oidc_verification = False
             # Should not raise
             await service._approve_account("account-123")
 
@@ -486,6 +498,7 @@ class TestProcurementService:
             patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_response),
         ):
             mock_settings.google_cloud_project = "test-project"
+            mock_settings.skip_pubsub_oidc_verification = False
             # Should not raise — 400 is treated as idempotent success
             await service._approve_account("account-123")
 
@@ -502,6 +515,7 @@ class TestProcurementService:
             patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_response),
         ):
             mock_settings.google_cloud_project = "test-project"
+            mock_settings.skip_pubsub_oidc_verification = False
             with pytest.raises(RuntimeError, match="Failed to approve account"):
                 await service._approve_account("account-123")
 
@@ -549,6 +563,7 @@ class TestProcurementService:
 
         with patch.object(service, "_settings") as mock_settings:
             mock_settings.google_cloud_project = None
+            mock_settings.skip_pubsub_oidc_verification = False
             await service.process_event(event)
 
         ent = await service._entitlement_repo.get("order-with-product")
