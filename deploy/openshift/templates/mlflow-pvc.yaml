@@ -1,0 +1,18 @@
+{{- if .Values.mlflow.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "lightspeed-agent.fullname" . }}-mlflow-artifacts
+  labels:
+    {{- include "lightspeed-agent.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mlflow
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.mlflow.storage.artifactSize }}
+  {{- if .Values.mlflow.storage.storageClassName }}
+  storageClassName: {{ .Values.mlflow.storage.storageClassName | quote }}
+  {{- end }}
+{{- end }}

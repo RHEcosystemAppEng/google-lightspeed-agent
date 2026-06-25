@@ -1,0 +1,18 @@
+{{- if and .Values.mlflow.enabled (eq .Values.mlflow.postgresql.mode "dedicated") }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "lightspeed-agent.fullname" . }}-mlflow-postgresql-data
+  labels:
+    {{- include "lightspeed-agent.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mlflow-database
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.mlflow.postgresql.storage.size }}
+  {{- if .Values.mlflow.postgresql.storage.storageClassName }}
+  storageClassName: {{ .Values.mlflow.postgresql.storage.storageClassName | quote }}
+  {{- end }}
+{{- end }}
