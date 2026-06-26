@@ -168,7 +168,11 @@ def setup_telemetry() -> None:
 
     settings = get_settings()
 
-    if not settings.otel_enabled and not settings.otel_metrics_enabled and not settings.mlflow_enabled:
+    if (
+        not settings.otel_enabled
+        and not settings.otel_metrics_enabled
+        and not settings.mlflow_enabled
+    ):
         logger.debug("OpenTelemetry tracing, metrics, and MLflow are disabled")
         return
 
