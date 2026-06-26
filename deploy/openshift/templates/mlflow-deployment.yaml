@@ -43,9 +43,11 @@ spec:
             - {{ .Values.mlflow.port | quote }}
             - "--artifacts-destination"
             - "/mlflow/artifacts"
-            {{- if eq .Values.mlflow.postgresql.mode "dedicated" }}
             - "--backend-store-uri"
+            {{- if eq .Values.mlflow.postgresql.mode "dedicated" }}
             - "postgresql://$(MLFLOW_DB_USER):$(MLFLOW_DB_PASSWORD)@$(MLFLOW_DB_HOST):5432/$(MLFLOW_DB_NAME)"
+            {{- else }}
+            {{- fail "mlflow.postgresql.mode must be 'dedicated' — MLflow requires a SQL backend for OpenTelemetry OTLP trace ingestion (file-based backends silently drop traces)" }}
             {{- end }}
           ports:
             - containerPort: {{ .Values.mlflow.port }}

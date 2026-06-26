@@ -215,6 +215,7 @@ mlflow:
   enabled: false
   trackingUri: "http://localhost:5000"
   experimentName: lightspeed-agent
+  # Must already exist on the MLflow server — use experimentName for auto-creation.
   experimentId: ""
   logPrompts: false
   runTags: ""
@@ -242,6 +243,8 @@ mlflow:
       clientId: ""
       clientSecret: ""
   postgresql:
+    # Must be "dedicated" — MLflow requires a SQL backend for OTLP trace ingestion.
+    # File-based backends silently drop traces. The chart fails if set otherwise.
     mode: dedicated
     user: mlflow
     database: mlflow_tracking

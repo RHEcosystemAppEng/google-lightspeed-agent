@@ -2662,15 +2662,17 @@ the appropriate auth headers.
 
 ### Dependencies
 
-The agent container needs the `mlflow-tracing` package (~5 MB lightweight SDK)
-and `opentelemetry-exporter-otlp-proto-http`. Install via the `mlflow` optional
-dependency group:
+The agent needs `opentelemetry-exporter-otlp-proto-http` for OTLP span export to
+MLflow. This package is already included in the default container image (pulled in
+by `opentelemetry-exporter-otlp` in the `[agent]` extra) — no additional
+installation is needed.
+
+For minimal (non-agent) installs, the `[mlflow]` optional dependency group
+provides only the OTLP HTTP exporter:
 
 ```bash
 pip install 'lightspeed-agent[mlflow]'
 ```
-
-Or include in the Containerfile when building with MLflow support.
 
 ## Monitoring
 

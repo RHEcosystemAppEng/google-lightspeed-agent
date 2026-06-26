@@ -671,7 +671,11 @@ class Settings(BaseSettings):
     )
     mlflow_experiment_id: str = Field(
         default="",
-        description="MLflow experiment ID (sent as x-mlflow-experiment-id header)",
+        description=(
+            "MLflow experiment ID (sent as x-mlflow-experiment-id header). "
+            "The experiment must already exist on the MLflow server — "
+            "use MLFLOW_EXPERIMENT_NAME instead for auto-creation on first trace."
+        ),
     )
     mlflow_log_prompts: bool = Field(
         default=False,
