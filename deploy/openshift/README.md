@@ -1085,15 +1085,16 @@ MLflow provides LLM-specific tracing — token counts, latency, tool call traces
 and optional prompt/response logging. It works via an OpenTelemetry bridge:
 Google ADK natively generates OTel traces, and MLflow accepts them via its OTLP
 endpoint at `/v1/traces`. The agent adds a second OTel span processor alongside
-the existing exporters. Requires MLflow >= 3.6.0 on the server side and the
-lightweight `mlflow-tracing` package (~5 MB) on the agent side.
+the existing exporters. Requires MLflow >= 3.6.0 on the server side and
+`opentelemetry-exporter-otlp-proto-http` on the agent side (already included in
+the default container image via the `[agent]` dependency group).
 
 | Value | Description | Default |
 |---|---|---|
 | `mlflow.enabled` | Deploy MLflow Tracking Server and enable agent tracing | `false` |
 | `mlflow.trackingUri` | MLflow server URI (on OCP the ConfigMap auto-resolves to the ClusterIP Service) | `http://localhost:5000` |
 | `mlflow.experimentName` | MLflow experiment name | `lightspeed-agent` |
-| `mlflow.experimentId` | MLflow experiment ID (sent as `x-mlflow-experiment-id` OTLP header) | `""` |
+| `mlflow.experimentId` | MLflow experiment ID (sent as `x-mlflow-experiment-id` OTLP header). Must already exist on the server — use `experimentName` for auto-creation. | `""` |
 | `mlflow.logPrompts` | Log LLM prompts/responses (**security-sensitive** — may contain PII) | `false` |
 | `mlflow.runTags` | Extra run tags as `key=value` pairs | `""` |
 | `mlflow.image.repository` | MLflow container image | `ghcr.io/mlflow/mlflow` |
