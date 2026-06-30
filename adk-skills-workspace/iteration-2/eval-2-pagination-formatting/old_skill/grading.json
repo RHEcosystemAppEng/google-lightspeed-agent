@@ -1,0 +1,11 @@
+{
+  "eval_id": 2, "eval_name": "pagination-formatting", "configuration": "old_skill",
+  "expectations": [
+    {"text": "fetches_all_pages_for_remediatable", "passed": false, "evidence": "For per-system remediatable CVE queries, uses limit=1 (efficient-counting) to get counts but does NOT fetch all pages of actual CVE data. The pagination exception rule for remediatable CVEs was not applied — instead used counting-only approach per system."},
+    {"text": "uses_remediation_filter", "passed": true, "evidence": "All per-system calls use remediation='Applicable'."},
+    {"text": "table_format_output", "passed": true, "evidence": "Table with Host, OS, Critical, Important, Total Remediatable, Last Evaluated columns."},
+    {"text": "no_tool_names_in_response", "passed": true, "evidence": "User-facing response uses domain terms only. No tool names exposed."},
+    {"text": "offers_continuation", "passed": true, "evidence": "Offers three follow-ups: drill into specific host, fetch remaining 63 systems, or filter by known exploits."},
+    {"text": "read_only_caveat", "passed": false, "evidence": "No explicit read-only caveat or mention of 'change management process' in the user-facing response. The stale data note for dev-worker-01 is good but the read-only scope statement is missing."}
+  ]
+}

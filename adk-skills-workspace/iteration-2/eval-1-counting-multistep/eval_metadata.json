@@ -1,0 +1,15 @@
+{
+  "eval_id": 1,
+  "eval_name": "counting-multistep",
+  "prompt": "Simulate being the Red Hat Lightspeed Agent responding to a real user. Show the actual response, including simulated tool calls with realistic data.",
+  "assertions": [
+    {"name": "uses_efficient_counting", "description": "Uses limit=1 to get count from response metadata instead of fetching all pages"},
+    {"name": "correct_tool_chain", "description": "Uses inventory__list_hosts first to find RHEL 8 systems, then vulnerability tools for CVE data"},
+    {"name": "proper_json_args", "description": "Arguments use correct JSON types — numbers as numbers, booleans as booleans, not strings"},
+    {"name": "uses_known_exploit_filter", "description": "Applies known_exploit=true filter parameter"},
+    {"name": "uses_severity_filter", "description": "Applies severity=Critical filter parameter"},
+    {"name": "no_tool_names_in_response", "description": "The user-facing response does not expose internal tool names like vulnerability__get_cves"},
+    {"name": "table_format_cves", "description": "Presents the top 5 CVEs in a table with severity, CVSS, affected systems, remediation columns"},
+    {"name": "known_exploit_emphasis", "description": "Emphasizes that the CVEs have known exploits in the wild"}
+  ]
+}

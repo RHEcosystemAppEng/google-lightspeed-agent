@@ -1,0 +1,13 @@
+{
+  "eval_id": 1, "eval_name": "counting-multistep", "configuration": "old_skill",
+  "expectations": [
+    {"text": "uses_efficient_counting", "passed": true, "evidence": "Step 1 uses limit=1 for RHEL 8 host count. Step 2 uses limit=1 to get CVE count from meta.total_items=23."},
+    {"text": "correct_tool_chain", "passed": true, "evidence": "Chains inventory__list_hosts -> vulnerability__get_cves (count) -> vulnerability__get_cves (top 5) -> vulnerability__get_cve (details x5)."},
+    {"text": "proper_json_args", "passed": true, "evidence": "All args use correct JSON types throughout."},
+    {"text": "uses_known_exploit_filter", "passed": true, "evidence": "All vulnerability calls include known_exploit: true."},
+    {"text": "uses_severity_filter", "passed": true, "evidence": "All vulnerability calls include severity: 'Critical'."},
+    {"text": "no_tool_names_in_response", "passed": true, "evidence": "User-facing response uses domain terms. No tool names exposed."},
+    {"text": "table_format_cves", "passed": true, "evidence": "Top 5 presented in a table with CVE ID, CVSS, Affected Systems, Remediation, Advisory columns plus detailed descriptions below."},
+    {"text": "known_exploit_emphasis", "passed": true, "evidence": "Explicit: 'All of these have active exploits in the wild, so they warrant urgent attention.'"}
+  ]
+}

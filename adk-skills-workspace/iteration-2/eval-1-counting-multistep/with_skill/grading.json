@@ -1,0 +1,13 @@
+{
+  "eval_id": 1, "eval_name": "counting-multistep", "configuration": "with_skill",
+  "expectations": [
+    {"text": "uses_efficient_counting", "passed": true, "evidence": "Step 1 uses limit=1 with meta.total_items=23. Step 3 also uses limit=1 to get RHEL-8-specific count (18)."},
+    {"text": "correct_tool_chain", "passed": true, "evidence": "Chains vulnerability__get_cves (count) -> inventory__list_hosts (RHEL 8 hosts) -> vulnerability__get_system_cves (RHEL 8 count) -> vulnerability__get_cves (top 5 details)."},
+    {"text": "proper_json_args", "passed": true, "evidence": "Numbers as numbers (limit: 1, 5, 20), booleans as booleans (known_exploit: true), strings as strings (severity: 'Critical')."},
+    {"text": "uses_known_exploit_filter", "passed": true, "evidence": "All vulnerability calls include known_exploit: true."},
+    {"text": "uses_severity_filter", "passed": true, "evidence": "All vulnerability calls include severity: 'Critical'."},
+    {"text": "no_tool_names_in_response", "passed": true, "evidence": "User-facing response uses domain terms only: 'critical CVEs', 'RHEL 8 systems', 'remediations available'. No tool names exposed."},
+    {"text": "table_format_cves", "passed": true, "evidence": "Top 5 CVEs presented in a markdown table with CVE ID, CVSS, Description, Affected Systems, Remediation, Advisory columns."},
+    {"text": "known_exploit_emphasis", "passed": true, "evidence": "Explicit emphasis: 'each has a confirmed known exploit in the wild and a Critical severity rating, meaning they warrant immediate attention.'"}
+  ]
+}

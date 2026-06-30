@@ -1,73 +1,78 @@
 ---
 name: tool-invocation-rules
 description: |
-  Extends the base tool invocation format with examples of correct vs.
-  incorrect invocations, argument formatting guidance, schema lookup
-  procedures, and edge cases for unknown tools. [STRICT]
+  Correct syntax, argument formatting, and known parameters for calling
+  Red Hat Insights MCP tools. Use this skill when invoking a tool for the
+  first time, when unsure about argument format or required parameters,
+  or when a tool call was rejected due to malformed input. Includes the
+  confirmed filter parameters for Vulnerability and Inventory tools. [STRICT]
 metadata:
   author: red-hat
-  version: "1.1"
+  version: "1.2"
 ---
 
-## Tool Invocation — Extended Rules [STRICT]
+## Invocation Format
 
-In addition to the base tool invocation format in the system prompt, follow these
-detailed rules and examples.
+Capabilities are exposed as MCP tools. Each action is a separate function call
+with JSON arguments. Do not output Python, shell scripts, or pseudocode instead
+of making an actual tool call — even when describing a multi-step plan.
 
-### Correct vs. Incorrect Invocation
-
-**Correct** — a single function call with JSON arguments:
+**Correct:**
 ```
 tool: vulnerability__get_cves
 args: {"limit": 20, "severity": "Critical", "sort": "-cvss_score"}
 ```
 
-**Incorrect** — generating code that would call the API:
+**Wrong** (generating code instead of calling the tool):
 ```python
-# NEVER do this:
 response = default_api.get_cves(limit=20, severity="Critical")
-for cve in response.data:
-    print(cve.id)
 ```
 
-**Incorrect** — pseudocode or instructional text:
+**Wrong** (pseudocode):
 ```
 Step 1: Call the vulnerability API at /api/v1/cves?limit=20
-Step 2: Parse the JSON response...
 ```
 
-Even when describing a multi-step plan to the user, execute each step as an actual
-tool call — do not write out what the calls "would look like."
-
-### Argument Formatting
+## Argument Formatting
 
 - Pass arguments as their native JSON types: strings as `"text"`, numbers as `20`
-(not `"20"`), booleans as `true`/`false` (not `"true"`/`"false"`).
-- Omit optional arguments you don't need — do not pass them as `null` or empty
-strings unless the schema specifically requires it.
-- For list/array parameters, use JSON arrays: `["tag1", "tag2"]`, not
-comma-separated strings.
+  (not `"20"`), booleans as `true`/`false` (not `"true"`/`"false"`).
+- Omit optional arguments you don't need — do not pass `null` or empty strings.
+- For list/array parameters, use JSON arrays: `["tag1", "tag2"]`.
 
-### Schema Lookup
+## Known Filter Parameters
 
-If you're unsure about a tool's parameters, call the corresponding
-`*_get_openapi` tool (e.g., `vulnerability__get_openapi`) to retrieve the schema.
-Prefer this over guessing parameter names or types. However, for well-known
-parameters documented in the `multi-step-workflows` skill (like `limit`, `offset`,
-`severity`, `sort`), use them directly without a schema lookup.
+These parameters are confirmed available — use them directly without a schema lookup.
 
-### Tool Discovery
+**`vulnerability__get_cves`**: `limit`, `offset`, `sort` (e.g., `-cvss_score`),
+`severity` (Critical, Important, Moderate, Low), `known_exploit` (true/false),
+`affecting` (true/false — only CVEs affecting at least one system).
+
+**`vulnerability__get_system_cves`**: `limit`, `offset`, `sort`,
+`severity` (Critical, Important, Moderate, Low), `known_exploit` (true/false),
+`status` (Applicable, Not applicable), `remediation`
+(Applicable — has a remediation available).
+
+**`vulnerability__get_systems`**: `limit`, `offset`, `sort`,
+`filter` (search string for display name or hostname).
+
+**`inventory__list_hosts`**: `limit`, `offset`, `hostname_or_id`,
+`display_name`, `tags`, `operating_system`, `order_by`, `order_how` (ASC/DESC).
+
+For parameters not listed here, call the corresponding `*_get_openapi` tool
+(e.g., `vulnerability__get_openapi`) as a fallback — but prefer the parameters
+above to avoid large OpenAPI responses.
+
+## Tool Discovery
 
 - Only invoke tools that are registered and available in your current toolset.
-Do not invent tool names or guess at tools that might exist.
-- If a user asks for something and no matching tool exists, say so clearly rather
-than attempting a plausible-sounding tool name.
-- When describing your capabilities to users, use domain terms ("I can look up
-your CVE data" or "I can check your host inventory") rather than exposing internal
-tool names.
+  Do not invent tool names or guess at tools that might exist.
+- If no matching tool exists for a user request, say so clearly.
+- When describing capabilities to users, use domain terms ("I can look up your
+  CVE data") rather than exposing internal tool names.
 
-### One Action Per Call
+## One Action Per Call
 
 Each tool call performs exactly one action. To query CVEs for three different hosts,
-make three separate tool calls — do not try to batch them into a single call unless
-the tool schema explicitly supports a list of host IDs.
+make three separate tool calls — do not try to batch them unless the tool schema
+explicitly supports a list of IDs.

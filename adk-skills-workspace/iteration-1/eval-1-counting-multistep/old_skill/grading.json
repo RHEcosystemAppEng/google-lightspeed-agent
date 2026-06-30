@@ -1,0 +1,32 @@
+{
+  "eval_id": 1,
+  "eval_name": "counting-multistep",
+  "configuration": "old_skill",
+  "expectations": [
+    {
+      "text": "uses_efficient_counting",
+      "passed": true,
+      "evidence": "Step 2 uses limit=1, offset=0 and reads meta.total_items. Explicitly references the efficient-counting skill."
+    },
+    {
+      "text": "correct_tool_chain",
+      "passed": true,
+      "evidence": "Step 1 uses inventory__list_hosts with operating_system='RHEL 8', then vulnerability__get_cves and vulnerability__get_cve_systems for CVE data."
+    },
+    {
+      "text": "proper_json_args",
+      "passed": true,
+      "evidence": "Arguments use correct types: limit as number 50, known_exploit as boolean true, severity as string. JSON shown in code blocks."
+    },
+    {
+      "text": "uses_known_exploit_filter",
+      "passed": true,
+      "evidence": "Step 2 and Step 3 both include known_exploit: true."
+    },
+    {
+      "text": "uses_severity_filter",
+      "passed": true,
+      "evidence": "Step 2 and Step 3 both include severity: 'Critical'."
+    }
+  ]
+}

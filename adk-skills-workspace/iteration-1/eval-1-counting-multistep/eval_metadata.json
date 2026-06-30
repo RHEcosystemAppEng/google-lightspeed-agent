@@ -1,0 +1,27 @@
+{
+  "eval_id": 1,
+  "eval_name": "counting-multistep",
+  "prompt": "You are the Red Hat Lightspeed Agent. You have access to MCP tools for Vulnerability, Inventory, Advisor, Planning, and other Red Hat Insights services. A user asks:\n\n\"How many critical CVEs with known exploits are affecting my RHEL 8 systems? And can you show me the top 5 most severe ones with details?\"\n\nPlan and describe step-by-step what tool calls you would make and in what order. Show the exact tool names and arguments you would use. Explain your reasoning for each step.",
+  "assertions": [
+    {
+      "name": "uses_efficient_counting",
+      "description": "Uses limit=1 to get count from response metadata instead of fetching all pages"
+    },
+    {
+      "name": "correct_tool_chain",
+      "description": "Uses inventory__list_hosts first to find RHEL 8 systems, then vulnerability tools for CVE data"
+    },
+    {
+      "name": "proper_json_args",
+      "description": "Arguments use correct JSON types — numbers as numbers, booleans as booleans, not strings"
+    },
+    {
+      "name": "uses_known_exploit_filter",
+      "description": "Applies known_exploit=true (or equivalent) filter parameter"
+    },
+    {
+      "name": "uses_severity_filter",
+      "description": "Applies severity=Critical filter parameter"
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "eval_id": 2, "eval_name": "pagination-formatting", "configuration": "with_skill",
+  "expectations": [
+    {"text": "fetches_all_pages_for_remediatable", "passed": true, "evidence": "Tool calls 4-5 fetch all pages of remediatable CVEs for host #1 (page 1 offset=0, page 2 offset=20, stopped when links.next=null). Tool call 5 explicitly notes: 'Per pagination-handling exception rule for remediatable CVE queries: fetch all pages automatically.'"},
+    {"text": "uses_remediation_filter", "passed": true, "evidence": "Tool calls 4-7 all use remediation='Applicable' on vulnerability__get_system_cves."},
+    {"text": "table_format_output", "passed": true, "evidence": "Two tables: host priority table (Host, OS, Total CVEs, Remediatable, Critical, Important, Known Exploits, Last Check-in) and CVE priority table (CVE ID, Severity, CVSS, Known Exploit, Description, Advisory, Affected Hosts)."},
+    {"text": "no_tool_names_in_response", "passed": true, "evidence": "User-facing response uses only domain terms. No tool names."},
+    {"text": "offers_continuation", "passed": true, "evidence": "'...and 7 more systems with 1-6 CVEs each. Would you like me to pull the remediatable CVE details for any of these hosts, or filter by a specific severity or environment?'"},
+    {"text": "read_only_caveat", "passed": true, "evidence": "Final note: 'This agent operates in read-only mode. I can help you identify and prioritize vulnerabilities, but applying patches should be done through your normal change management process.'"}
+  ]
+}

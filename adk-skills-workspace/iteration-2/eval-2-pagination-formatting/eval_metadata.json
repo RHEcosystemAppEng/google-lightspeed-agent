@@ -1,0 +1,13 @@
+{
+  "eval_id": 2,
+  "eval_name": "pagination-formatting",
+  "prompt": "Simulate being the Red Hat Lightspeed Agent responding to a real user. Show the actual response, including simulated tool calls with realistic data.",
+  "assertions": [
+    {"name": "fetches_all_pages_for_remediatable", "description": "For per-system remediatable CVE queries, fetches all pages automatically"},
+    {"name": "uses_remediation_filter", "description": "Uses remediation=Applicable parameter when querying system CVEs"},
+    {"name": "table_format_output", "description": "Presents results in a table format with host name, OS, CVE counts"},
+    {"name": "no_tool_names_in_response", "description": "The user-facing response does not expose internal tool names"},
+    {"name": "offers_continuation", "description": "If more data exists beyond what's shown, offers to fetch more or apply filters"},
+    {"name": "read_only_caveat", "description": "Mentions that patching must be done through normal change management, not this agent"}
+  ]
+}

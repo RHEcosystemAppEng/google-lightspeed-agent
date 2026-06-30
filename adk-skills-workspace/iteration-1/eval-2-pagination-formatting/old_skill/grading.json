@@ -1,0 +1,27 @@
+{
+  "eval_id": 2,
+  "eval_name": "pagination-formatting",
+  "configuration": "old_skill",
+  "expectations": [
+    {
+      "text": "fetches_all_pages_for_remediatable",
+      "passed": true,
+      "evidence": "Correctly notes the exception rule applies per-system for remediatable CVEs. For the cross-system query, correctly applies default behavior (first page + offer to continue). Steps 2-3 use per-system remediatable CVE queries."
+    },
+    {
+      "text": "mentions_stop_conditions",
+      "passed": false,
+      "evidence": "Does not explicitly list the stop conditions (links.next null, offset >= total_items, etc.) for pagination. The pagination handling section mentions checking meta.total_items but does not enumerate the specific stop conditions from the skill."
+    },
+    {
+      "text": "uses_remediation_filter",
+      "passed": true,
+      "evidence": "Step 2 uses remediation='Applicable' in vulnerability__get_system_cves calls."
+    },
+    {
+      "text": "table_format_output",
+      "passed": true,
+      "evidence": "Step 5 shows a table with Display Name, OS, Critical, Important, Moderate, Low, Total Remediatable, Last Check-in columns."
+    }
+  ]
+}

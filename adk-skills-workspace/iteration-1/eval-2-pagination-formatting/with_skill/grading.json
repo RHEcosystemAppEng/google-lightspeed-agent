@@ -1,0 +1,27 @@
+{
+  "eval_id": 2,
+  "eval_name": "pagination-formatting",
+  "configuration": "with_skill",
+  "expectations": [
+    {
+      "text": "fetches_all_pages_for_remediatable",
+      "passed": true,
+      "evidence": "Step 3 explicitly references the pagination-handling exception rule for remediatable CVEs on specific systems and fetches all pages automatically. Also correctly notes the default behavior applies for the cross-system query."
+    },
+    {
+      "text": "mentions_stop_conditions",
+      "passed": true,
+      "evidence": "Step 2 lists all stop conditions: links.next is null, next offset >= meta.total_items, data has fewer elements than limit or is empty."
+    },
+    {
+      "text": "uses_remediation_filter",
+      "passed": true,
+      "evidence": "Step 3 uses remediation='Applicable' in vulnerability__get_system_cves calls."
+    },
+    {
+      "text": "table_format_output",
+      "passed": true,
+      "evidence": "Step 5 shows a detailed table with Display Name, OS, Last Check-in, Critical CVEs, Important CVEs, Total Remediatable, Top CVE columns. Includes example response with markdown table."
+    }
+  ]
+}
