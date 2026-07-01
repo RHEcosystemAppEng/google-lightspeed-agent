@@ -1,0 +1,112 @@
+{{- if and .Values.mlflow.enabled (eq .Values.mlflow.postgresql.mode "dedicated") }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "lightspeed-agent.mlflowPostgresqlServiceName" . }}
+  labels:
+    {{- include "lightspeed-agent.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mlflow-database
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "lightspeed-agent.mlflowPostgresqlSelectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "lightspeed-agent.mlflowPostgresqlSelectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+      containers:
+        - name: postgresql
+          image: {{ printf "%s:%s" .Values.postgresql.image.repository .Values.postgresql.image.tag }}
+          imagePullPolicy: {{ .Values.postgresql.image.pullPolicy }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          ports:
+            - containerPort: 5432
+              protocol: TCP
+          env:
+            - name: POSTGRESQL_USER
+              value: {{ .Values.mlflow.postgresql.user | quote }}
+            - name: POSTGRESQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "lightspeed-agent.fullname" . }}-secrets
+                  key: MLFLOW_DB_PASSWORD
+            - name: POSTGRESQL_DATABASE
+              value: {{ .Values.mlflow.postgresql.database | quote }}
+          volumeMounts:
+            - name: postgresql-home
+              mountPath: /var/lib/pgsql
+            - name: postgresql-data
+              mountPath: /var/lib/pgsql/data
+            - name: tmp
+              mountPath: /tmp
+            - name: run-postgresql
+              mountPath: /var/run/postgresql
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          startupProbe:
+            exec:
+              command:
+                - /usr/libexec/check-container
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 15
+          readinessProbe:
+            exec:
+              command:
+                - /usr/libexec/check-container
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command:
+                - /usr/libexec/check-container
+                - --live
+            initialDelaySeconds: 30
+            periodSeconds: 10
+      volumes:
+        - name: postgresql-data
+          persistentVolumeClaim:
+            claimName: {{ include "lightspeed-agent.fullname" . }}-mlflow-postgresql-data
+        - name: postgresql-home
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+        - name: run-postgresql
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "lightspeed-agent.mlflowPostgresqlServiceName" . }}
+  labels:
+    {{- include "lightspeed-agent.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mlflow-database
+spec:
+  selector:
+    {{- include "lightspeed-agent.mlflowPostgresqlSelectorLabels" . | nindent 4 }}
+  ports:
+    - port: 5432
+      targetPort: 5432
+      protocol: TCP
+  type: ClusterIP
+{{- end }}

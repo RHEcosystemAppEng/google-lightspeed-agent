@@ -656,6 +656,36 @@ class Settings(BaseSettings):
         description="DB polling interval in seconds for metrics collection",
     )
 
+    # MLflow Tracing Configuration (via OpenTelemetry bridge)
+    mlflow_enabled: bool = Field(
+        default=False,
+        description="Enable MLflow tracing via OpenTelemetry span export",
+    )
+    mlflow_tracking_uri: str = Field(
+        default="http://localhost:5000",
+        description="MLflow tracking server URI",
+    )
+    mlflow_experiment_name: str = Field(
+        default="lightspeed-agent",
+        description="MLflow experiment name",
+    )
+    mlflow_experiment_id: str = Field(
+        default="",
+        description=(
+            "MLflow experiment ID (sent as x-mlflow-experiment-id header). "
+            "The experiment must already exist on the MLflow server — "
+            "use MLFLOW_EXPERIMENT_NAME instead for auto-creation on first trace."
+        ),
+    )
+    mlflow_log_prompts: bool = Field(
+        default=False,
+        description="Enable logging of prompts and responses in MLflow traces",
+    )
+    mlflow_run_tags: str = Field(
+        default="",
+        description="Comma-separated key=value tags for MLflow runs (e.g., env=prod,team=ai)",
+    )
+
 
 @lru_cache
 def get_settings() -> Settings:

@@ -1,0 +1,93 @@
+{{- if .Values.mlflow.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "lightspeed-agent.mlflowServiceName" . }}
+  labels:
+    {{- include "lightspeed-agent.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mlflow
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "lightspeed-agent.mlflowSelectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "lightspeed-agent.mlflowSelectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+      containers:
+        - name: mlflow
+          image: {{ printf "%s:%s" .Values.mlflow.image.repository .Values.mlflow.image.tag }}
+          imagePullPolicy: {{ .Values.mlflow.image.pullPolicy }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          args:
+            - "mlflow"
+            - "server"
+            - "--host"
+            - "0.0.0.0"
+            - "--port"
+            - {{ .Values.mlflow.port | quote }}
+            - "--artifacts-destination"
+            - "/mlflow/artifacts"
+            - "--backend-store-uri"
+            {{- if eq .Values.mlflow.postgresql.mode "dedicated" }}
+            - "postgresql://$(MLFLOW_DB_USER):$(MLFLOW_DB_PASSWORD)@$(MLFLOW_DB_HOST):5432/$(MLFLOW_DB_NAME)"
+            {{- else }}
+            {{- fail "mlflow.postgresql.mode must be 'dedicated' — MLflow requires a SQL backend for OpenTelemetry OTLP trace ingestion (file-based backends silently drop traces)" }}
+            {{- end }}
+          ports:
+            - containerPort: {{ .Values.mlflow.port }}
+              protocol: TCP
+          env:
+            {{- if eq .Values.mlflow.postgresql.mode "dedicated" }}
+            - name: MLFLOW_DB_USER
+              value: {{ .Values.mlflow.postgresql.user | quote }}
+            - name: MLFLOW_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "lightspeed-agent.fullname" . }}-secrets
+                  key: MLFLOW_DB_PASSWORD
+            - name: MLFLOW_DB_HOST
+              value: {{ include "lightspeed-agent.mlflowPostgresqlServiceName" . }}
+            - name: MLFLOW_DB_NAME
+              value: {{ .Values.mlflow.postgresql.database | quote }}
+            {{- end }}
+          volumeMounts:
+            - name: mlflow-artifacts
+              mountPath: /mlflow/artifacts
+            - name: tmp
+              mountPath: /tmp
+          resources:
+            {{- toYaml .Values.mlflow.resources | nindent 12 }}
+          readinessProbe:
+            httpGet:
+              path: /api/2.0/mlflow/experiments/search?max_results=1
+              port: {{ .Values.mlflow.port }}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: {{ .Values.mlflow.port }}
+            initialDelaySeconds: 30
+            periodSeconds: 10
+      volumes:
+        - name: mlflow-artifacts
+          persistentVolumeClaim:
+            claimName: {{ include "lightspeed-agent.fullname" . }}-mlflow-artifacts
+        - name: tmp
+          emptyDir: {}
+{{- end }}
