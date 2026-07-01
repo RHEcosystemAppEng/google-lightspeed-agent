@@ -3,7 +3,13 @@
 import logging
 from typing import TYPE_CHECKING, Any
 
+from opentelemetry import metrics as otel_metrics
 from opentelemetry import trace
+from opentelemetry.sdk.metrics import MeterProvider
+from opentelemetry.sdk.metrics.export import (
+    ConsoleMetricExporter,
+    PeriodicExportingMetricReader,
+)
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter
@@ -20,6 +26,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _tracer_provider: TracerProvider | None = None
+_meter_provider: MeterProvider | None = None
 
 
 def _get_sampler(sampler_type: str, sampler_arg: float) -> "Sampler":
@@ -89,30 +96,76 @@ def _create_exporter(exporter_type: str, otlp_endpoint: str, otlp_http_endpoint:
         return ConsoleSpanExporter()
 
 
-def setup_telemetry() -> None:
-    """Initialize OpenTelemetry tracing.
+def _create_meter_provider(resource: Resource, settings: Any) -> MeterProvider:
+    """Create MeterProvider with OTLP and Prometheus MetricReaders."""
+    from opentelemetry.sdk.metrics.export import MetricReader
 
-    Call this function early in application startup, before creating
-    any traced components.
-    """
-    global _tracer_provider
+    readers: list[MetricReader] = []
+
+    if settings.otel_exporter_type in ("otlp", "otlp-http", "console"):
+        metric_exporter: Any
+        if settings.otel_exporter_type == "console":
+            metric_exporter = ConsoleMetricExporter()
+        elif settings.otel_exporter_type == "otlp":
+            from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter
+
+            metric_exporter = OTLPMetricExporter(
+                endpoint=settings.otel_exporter_otlp_endpoint
+            )
+        else:  # otlp-http
+            from opentelemetry.exporter.otlp.proto.http.metric_exporter import (  # type: ignore[assignment]
+                OTLPMetricExporter,
+            )
+
+            metric_exporter = OTLPMetricExporter(
+                endpoint=f"{settings.otel_exporter_otlp_http_endpoint}/v1/metrics"
+            )
+
+        readers.append(PeriodicExportingMetricReader(metric_exporter))
+        logger.info("Metric reader created for exporter '%s'", settings.otel_exporter_type)
+    else:
+        logger.debug(
+            "Exporter '%s' does not support metrics, skipping metric reader",
+            settings.otel_exporter_type,
+        )
+
+    try:
+        from opentelemetry.exporter.prometheus import PrometheusMetricReader
+        from prometheus_client import start_http_server
+
+        readers.append(PrometheusMetricReader())
+        start_http_server(port=settings.otel_metrics_prometheus_port, addr="0.0.0.0")
+        logger.info(
+            "Prometheus scrape endpoint started on port %d",
+            settings.otel_metrics_prometheus_port,
+        )
+    except ImportError:
+        logger.warning(
+            "opentelemetry-exporter-prometheus not installed, "
+            "Prometheus scrape endpoint unavailable"
+        )
+    except OSError as e:
+        logger.error(
+            "Failed to start Prometheus scrape endpoint on port %d: %s",
+            settings.otel_metrics_prometheus_port,
+            e,
+        )
+
+    return MeterProvider(resource=resource, metric_readers=readers)
+
+
+def setup_telemetry() -> None:
+    """Initialize OpenTelemetry tracing and/or metrics."""
+    global _tracer_provider, _meter_provider
 
     from lightspeed_agent.config import get_settings
 
     settings = get_settings()
 
-    if not settings.otel_enabled:
-        logger.debug("OpenTelemetry tracing is disabled")
+    if not settings.otel_enabled and not settings.otel_metrics_enabled:
+        logger.debug("OpenTelemetry tracing and metrics are disabled")
         return
 
-    logger.info(
-        "Initializing OpenTelemetry tracing (service=%s, exporter=%s, sampler=%s)",
-        settings.otel_service_name,
-        settings.otel_exporter_type,
-        settings.otel_traces_sampler,
-    )
-
-    # Create resource with service information
     resource = Resource.create(
         {
             "service.name": settings.otel_service_name,
@@ -121,31 +174,39 @@ def setup_telemetry() -> None:
         }
     )
 
-    # Create sampler
-    sampler = _get_sampler(settings.otel_traces_sampler, settings.otel_traces_sampler_arg)
+    # Tracing setup
+    if settings.otel_enabled:
+        logger.info(
+            "Initializing OpenTelemetry tracing (service=%s, exporter=%s, sampler=%s)",
+            settings.otel_service_name,
+            settings.otel_exporter_type,
+            settings.otel_traces_sampler,
+        )
 
-    # Create tracer provider
-    _tracer_provider = TracerProvider(resource=resource, sampler=sampler)
+        sampler = _get_sampler(settings.otel_traces_sampler, settings.otel_traces_sampler_arg)
+        _tracer_provider = TracerProvider(resource=resource, sampler=sampler)
 
-    # Create and add span processor with exporter
-    exporter = _create_exporter(
-        settings.otel_exporter_type,
-        settings.otel_exporter_otlp_endpoint,
-        settings.otel_exporter_otlp_http_endpoint,
-    )
-    span_processor = BatchSpanProcessor(exporter)
-    _tracer_provider.add_span_processor(span_processor)
+        exporter = _create_exporter(
+            settings.otel_exporter_type,
+            settings.otel_exporter_otlp_endpoint,
+            settings.otel_exporter_otlp_http_endpoint,
+        )
+        span_processor = BatchSpanProcessor(exporter)
+        _tracer_provider.add_span_processor(span_processor)
 
-    # Set as global tracer provider
-    trace.set_tracer_provider(_tracer_provider)
+        trace.set_tracer_provider(_tracer_provider)
 
-    # Instrument FastAPI
-    _instrument_fastapi()
+        _instrument_fastapi()
+        _instrument_httpx()
 
-    # Instrument HTTPX (for outgoing HTTP requests)
-    _instrument_httpx()
+        logger.info("OpenTelemetry tracing initialized successfully")
 
-    logger.info("OpenTelemetry tracing initialized successfully")
+    # Metrics setup (independent of tracing)
+    if settings.otel_metrics_enabled:
+        logger.info("Initializing OpenTelemetry metrics")
+        _meter_provider = _create_meter_provider(resource, settings)
+        otel_metrics.set_meter_provider(_meter_provider)
+        logger.info("OpenTelemetry metrics initialized")
 
 
 def _instrument_fastapi() -> None:
@@ -181,12 +242,13 @@ def _instrument_httpx() -> None:
 
 
 def shutdown_telemetry() -> None:
-    """Shutdown OpenTelemetry and flush any pending spans.
+    """Shutdown OpenTelemetry and flush any pending spans/metrics."""
+    global _tracer_provider, _meter_provider
 
-    Call this function during application shutdown to ensure all
-    spans are exported before the process exits.
-    """
-    global _tracer_provider
+    if _meter_provider is not None:
+        logger.info("Shutting down OpenTelemetry metrics")
+        _meter_provider.shutdown()
+        _meter_provider = None
 
     if _tracer_provider is not None:
         logger.info("Shutting down OpenTelemetry tracing")

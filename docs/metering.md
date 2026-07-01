@@ -222,30 +222,20 @@ See [Rate Limiting](rate-limiting.md) for more details.
 
 ### Per-Tool Metrics
 
-To track usage per tool, extend the `after_tool_callback` and call `_persist_increment` (which records `tool_calls=1` per order). For per-tool breakdown, you would need to extend the `usage_records` schema or add a separate tracking table.
+The `after_tool_callback` persists `tool_calls=1` per order for billing purposes. In addition, the OTel metrics system exposes a `tool_calls_by_name` counter with a `tool_name` attribute for per-tool operational visibility (see [docs/telemetry.md](telemetry.md#metric-instruments)). The counter is in-process only and resets on restart.
 
 ### Database Persistence
 
 Usage is persisted via `UsageRepository` and the `usage_records` table. See `src/lightspeed_agent/metering/repository.py` and `docs/troubleshooting.md` for migration and index setup.
 
-### OpenTelemetry Integration
+### OpenTelemetry Metrics
 
-ADK has built-in OpenTelemetry support. Enable it for distributed tracing:
+The agent exposes business-level OTel metrics (subscriptions, DCR clients, token usage, request counts, tool calls) for operational dashboards. These metrics read from the same `usage_records` table as Service Control but serve a different purpose:
 
-```bash
-# Enable OTEL export to Google Cloud
-adk run --otel_to_cloud agents/rh_lightspeed_agent
-```
+- **OTel metrics** = observability — cumulative snapshots for dashboards, aggregated by `account_id`
+- **Service Control** = billing — hourly deltas reported to Google, per `order_id`
 
-Or configure programmatically:
-
-```python
-from opentelemetry import trace
-from opentelemetry.exporter.cloud_monitoring import CloudMonitoringMetricsExporter
-
-# Export metrics to Cloud Monitoring
-exporter = CloudMonitoringMetricsExporter(project_id="your-project")
-```
+OTel metrics are read-only and do not interfere with the claim-then-report billing flow. See [docs/telemetry.md](telemetry.md#metrics) for configuration, available instruments, and deployment setup.
 
 ### Google Cloud Service Control
 

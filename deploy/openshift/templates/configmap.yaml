@@ -127,3 +127,7 @@ data:
   OTEL_EXPORTER_OTLP_HTTP_ENDPOINT: {{ .Values.otel.otlpHttpEndpoint | quote }}
   OTEL_TRACES_SAMPLER: {{ .Values.otel.tracesSampler | quote }}
   OTEL_TRACES_SAMPLER_ARG: {{ .Values.otel.tracesSamplerArg | quote }}
+  # OpenTelemetry - Metrics
+  OTEL_METRICS_ENABLED: {{ .Values.otel.metricsEnabled | quote }}
+  OTEL_METRICS_PROMETHEUS_PORT: {{ .Values.otel.metricsPrometheusPort | quote }}
+  OTEL_METRICS_COLLECTION_INTERVAL: {{ .Values.otel.metricsCollectionInterval | quote }}

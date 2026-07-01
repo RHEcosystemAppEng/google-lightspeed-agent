@@ -350,3 +350,20 @@ class TestMcpUrlSecurityCheck:
         ):
             _check_mcp_url_security(self._settings(server_url=""))
         assert caplog.text == ""
+
+
+class TestOtelMetricsSettings:
+    """Tests for OpenTelemetry metrics configuration settings."""
+
+    def test_otel_metrics_settings_defaults(self):
+        """Verify metrics settings have correct defaults."""
+        settings = Settings(
+            google_api_key="test",
+            database_url="sqlite+aiosqlite:///:memory:",
+            skip_jwt_validation=True,
+            red_hat_sso_client_id="test",
+            red_hat_sso_client_secret="test",
+        )
+        assert settings.otel_metrics_enabled is False
+        assert settings.otel_metrics_prometheus_port == 9464
+        assert settings.otel_metrics_collection_interval == 60

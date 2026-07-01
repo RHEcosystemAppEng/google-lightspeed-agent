@@ -47,6 +47,9 @@ Deploy the Red Hat Lightspeed Agent for Google Cloud to Google Cloud Run for pro
 - [GMA SSO API Configuration (Staging vs Production)](#gma-sso-api-configuration-staging-vs-production)
 - [Audit Logging](#audit-logging)
 - [Monitoring](#monitoring)
+  - [Built-in Cloud Run Metrics](#built-in-cloud-run-metrics)
+  - [OpenTelemetry Business Metrics](#opentelemetry-business-metrics)
+  - [Alerts](#alerts)
 - [Troubleshooting](#troubleshooting)
   - [DCR Requests Not Reaching Marketplace Handler](#dcr-requests-not-reaching-marketplace-handler)
 - [Cleanup / Teardown](#cleanup--teardown)
@@ -2615,10 +2618,125 @@ No additional configuration is required — audit logging is automatically activ
 
 ## Monitoring
 
-View metrics in Google Cloud Console:
+### Built-in Cloud Run Metrics
+
+View standard Cloud Run metrics in the Google Cloud Console:
 - **Cloud Run** → **Services** → **lightspeed-agent** → **Metrics**
 
-Set up alerts:
+### OpenTelemetry Business Metrics
+
+The agent collects business-level metrics via OpenTelemetry and exports them to Cloud Monitoring using the [Google-Built OpenTelemetry Collector](https://cloud.google.com/stackdriver/docs/instrumentation/opentelemetry-collector-cloud-run) as a sidecar. This is enabled by default in `service.yaml` — both `deploy.sh` and Cloud Build deployments include the required configuration.
+
+#### How It Works
+
+```
+┌──────────────────────────────────┐
+│  Agent Container (port 8000)     │
+│                                  │
+│  MetricsCollector polls DB       │
+│  every 60s, exports via OTLP     │
+│       │                          │
+│       ▼                          │
+│  localhost:4317 (gRPC)           │
+└──────────┬───────────────────────┘
+           │
+           ▼
+┌──────────────────────────────────┐
+│  OTel Collector Sidecar          │
+│  (otelcol-google:0.151.0)        │
+│                                  │
+│  Receives OTLP metrics,          │
+│  exports to Cloud Monitoring     │
+└──────────┬───────────────────────┘
+           │
+           ▼
+┌──────────────────────────────────┐
+│  Google Cloud Monitoring         │
+│                                  │
+│  Metrics available under:        │
+│  prometheus_target resource type │
+└──────────────────────────────────┘
+```
+
+The setup in `service.yaml` consists of:
+
+1. **OTel Collector sidecar** — the `collector` container (`otelcol-google:0.151.0`) receives OTLP metrics on `localhost:4317` and exports them to Cloud Monitoring via the `googlemanagedprometheus` exporter.
+
+2. **Metrics enabled** — `OTEL_METRICS_ENABLED=true` starts the background metrics collector in the agent.
+
+3. **Collector config** — the `otel-collector-config` Secret Manager secret (mounted at `/etc/otelcol-google/config.yaml`) configures the collector's receivers, processors, and exporters.
+
+**Prerequisites:** The `otel-collector-config` secret must be created before deploying. Run `setup.sh` to create it automatically from `deploy/cloudrun/otel-collector-config.yaml`, or create it manually:
+
+```bash
+gcloud secrets create otel-collector-config \
+  --data-file=deploy/cloudrun/otel-collector-config.yaml \
+  --project=$GOOGLE_CLOUD_PROJECT
+```
+
+#### Available Metrics
+
+| Name | Type | Attributes | Description |
+|------|------|------------|-------------|
+| `subscriptions_count` | Gauge | `account_id`, `state` | Entitlement count by account and state |
+| `dcr_clients_active` | Gauge | `account_id` | Active DCR client count by account |
+| `input_tokens` | Gauge | `account_id` | Total input tokens consumed by account |
+| `output_tokens` | Gauge | `account_id` | Total output tokens consumed by account |
+| `request_count` | Gauge | `account_id` | Total requests by account |
+| `tool_calls_by_name` | Counter | `tool_name` | Tool invocations by MCP tool name |
+
+Gauge metrics are polled from the database on each collection cycle. The `tool_calls_by_name` counter is incremented in real time but is in-process only — it resets to zero on instance restart.
+
+#### Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OTEL_METRICS_ENABLED` | `true` (in `service.yaml`) | Enable OTel metrics collection |
+| `OTEL_METRICS_COLLECTION_INTERVAL` | `60` | DB polling interval in seconds (minimum 10) |
+
+To change the collection interval on a running deployment:
+
+```bash
+gcloud run services update ${SERVICE_NAME:-lightspeed-agent} \
+  --region=$GOOGLE_CLOUD_LOCATION \
+  --project=$GOOGLE_CLOUD_PROJECT \
+  --update-env-vars="OTEL_METRICS_COLLECTION_INTERVAL=30"
+```
+
+To update the OTel Collector configuration, add a new secret version:
+
+```bash
+gcloud secrets versions add otel-collector-config \
+  --data-file=deploy/cloudrun/otel-collector-config.yaml \
+  --project=$GOOGLE_CLOUD_PROJECT
+```
+
+Then redeploy the service to pick up the new config version.
+
+#### Viewing Metrics in Cloud Monitoring
+
+Metrics appear in Cloud Monitoring under the `prometheus_target` resource type with the prefix `prometheus.googleapis.com/`:
+
+```bash
+# List metrics from the agent
+gcloud monitoring metrics-descriptors list \
+  --project=$GOOGLE_CLOUD_PROJECT \
+  --filter='metric.type=starts_with("prometheus.googleapis.com/")'
+```
+
+To explore in the console:
+1. Go to **Monitoring** → **Metrics Explorer**
+2. Select resource type **Prometheus Target**
+3. Search for metric names like `subscriptions_count`, `input_tokens`, etc.
+4. Metrics are named `prometheus.googleapis.com/{metric_name}/{type}` (e.g., `prometheus.googleapis.com/subscriptions_count/gauge`)
+
+#### Minimum Instance Requirement
+
+The metrics collector runs as a background task inside the agent process. If the agent scales to zero, no metrics are collected until an instance starts again. The default `service.yaml` sets `minScale: "1"`, so this is not a concern. If you change `minScale` to `0`, metrics will have gaps during idle periods. Subscription and usage data is not lost — it remains in the database and is reported on the next collection cycle. However, the `tool_calls_by_name` counter resets to zero on restart.
+
+### Alerts
+
+Set up alerts for error rates:
 ```bash
 gcloud monitoring policies create \
   --display-name="Lightspeed Agent Error Rate" \

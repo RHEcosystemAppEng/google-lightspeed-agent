@@ -13,4 +13,10 @@ spec:
       targetPort: {{ .Values.agent.port }}
       protocol: TCP
       name: http
+    {{- if .Values.otel.metricsEnabled }}
+    - port: {{ .Values.otel.metricsPrometheusPort }}
+      targetPort: {{ .Values.otel.metricsPrometheusPort }}
+      protocol: TCP
+      name: metrics
+    {{- end }}
   type: ClusterIP

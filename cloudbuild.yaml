@@ -9,6 +9,9 @@
 #   1. marketplace-handler - Handles DCR and Pub/Sub events (always running)
 #   2. lightspeed-agent    - A2A agent with MCP sidecar (always running)
 #
+# After deployment, Cloud Monitoring dashboards are created/updated from
+# JSON files in deploy/cloudrun/dashboards/ (requires roles/monitoring.dashboardEditor).
+#
 # Prerequisites:
 #   - Run deploy/cloudrun/setup.sh first to configure GCP services,
 #     or use deploy/cloudrun/deploy-cloudbuild.sh for one-command deployment
@@ -20,6 +23,7 @@
 #   - roles/iam.serviceAccountUser (act as runtime service account)
 #   - roles/pubsub.editor (create/update subscriptions — broader than needed;
 #     a custom role scoped to the marketplace subscription is recommended for production)
+#   - roles/monitoring.dashboardEditor (create/update Cloud Monitoring dashboards)
 #   - roles/compute.admin (create GCLB resources, Cloud Armor policies — only needed
 #     when GCLB is enabled; a custom role with only LB/NEG/cert/security-policy
 #     permissions is recommended for production)
@@ -55,8 +59,8 @@ substitutions:
   _ENABLE_LB_HANDLER: "true"
   _ENABLE_CLOUD_ARMOR_AGENT: "true"
   _ENABLE_CLOUD_ARMOR_HANDLER: "true"
-  _CLOUD_ARMOR_SENSITIVITY_AGENT: 1
-  _CLOUD_ARMOR_SENSITIVITY_HANDLER: 2
+  _CLOUD_ARMOR_SENSITIVITY_AGENT: "1"
+  _CLOUD_ARMOR_SENSITIVITY_HANDLER: "2"
   _AGENT_DOMAIN_NAME: ""
   _HANDLER_DOMAIN_NAME: ""
   _LB_NAME: lightspeed-lb
@@ -591,6 +595,43 @@ steps:
         echo "  AGENT_PROVIDER_URL: $$AGENT_URL"
         echo "  MARKETPLACE_HANDLER_URL: $$HANDLER_URL"
     waitFor: ['configure-ingress']
+
+  # ==========================================================================
+  # DASHBOARDS PHASE - Create or update Cloud Monitoring dashboards
+  # Auto-discovers all JSON files in deploy/cloudrun/dashboards/.
+  # After this initial setup, adding a new dashboard only requires
+  # dropping a JSON file in that directory — no further cloudbuild.yaml edits.
+  # Requires roles/monitoring.dashboardEditor on the Cloud Build SA.
+  # ==========================================================================
+
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'deploy-dashboards'
+    entrypoint: 'bash'
+    args:
+      - '-euo'
+      - 'pipefail'
+      - '-c'
+      - |
+        for f in deploy/cloudrun/dashboards/*.json; do
+          [ -f "$$f" ] || continue
+          name=$$(python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['displayName'])" "$$f")
+          echo "Processing dashboard: $$name"
+          existing=$$(gcloud monitoring dashboards list \
+              --project=${PROJECT_ID} \
+              --format='value(name)' \
+              --filter="displayName=\"$$name\"" 2>/dev/null | head -1)
+          if [ -n "$$existing" ]; then
+            echo "  Replacing existing dashboard: $$existing"
+            gcloud monitoring dashboards delete "$$existing" \
+                --project=${PROJECT_ID} --quiet
+          fi
+          echo "  Creating dashboard: $$name"
+          gcloud monitoring dashboards create \
+              --config-from-file="$$f" \
+              --project=${PROJECT_ID}
+        done
+        echo "Dashboard deployment complete."
+    waitFor: ['deploy-agent', 'deploy-handler']
 
 images:
   - 'gcr.io/${PROJECT_ID}/${_SERVICE_NAME}:${_IMAGE_TAG}'

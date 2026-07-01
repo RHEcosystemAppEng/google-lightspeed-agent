@@ -1,0 +1,120 @@
+{
+  "displayName": "Lightspeed — Marketplace",
+  "mosaicLayout": {
+    "columns": 48,
+    "tiles": [
+      {
+        "xPos": 0,
+        "yPos": 0,
+        "width": 24,
+        "height": 16,
+        "widget": {
+          "title": "Subscriptions by State",
+          "timeSeriesTable": {
+            "dataSets": [
+              {
+                "timeSeriesQuery": {
+                  "prometheusQuery": "sum by (account_id) (last_over_time(subscriptions_count{state=\"active\"}[2m]))"
+                }
+              },
+              {
+                "timeSeriesQuery": {
+                  "prometheusQuery": "sum by (account_id) (last_over_time(subscriptions_count{state=\"cancelled\"}[2m]))"
+                }
+              },
+              {
+                "timeSeriesQuery": {
+                  "prometheusQuery": "sum by (account_id) (last_over_time(subscriptions_count{state=\"pending_approval\"}[2m]))"
+                }
+              }
+            ],
+            "metricVisualization": "NUMBER",
+            "columnSettings": [
+              { "column": "Name", "visible": false },
+              { "column": "account_id", "displayName": "Account", "visible": true },
+              { "column": "value", "displayName": "Active", "visible": true },
+              { "column": "value-1", "displayName": "Cancelled", "visible": true },
+              { "column": "value-2", "displayName": "Pending", "visible": true }
+            ]
+          }
+        }
+      },
+      {
+        "xPos": 24,
+        "yPos": 0,
+        "width": 24,
+        "height": 16,
+        "widget": {
+          "title": "Active DCR Clients",
+          "timeSeriesTable": {
+            "dataSets": [
+              {
+                "timeSeriesQuery": {
+                  "prometheusQuery": "sum by (account_id) (last_over_time(dcr_clients_active[2m]))"
+                }
+              }
+            ],
+            "metricVisualization": "BAR",
+            "columnSettings": [
+              { "column": "account_id", "displayName": "Account", "visible": true },
+              { "column": "value", "displayName": "Clients", "visible": true }
+            ]
+          }
+        }
+      },
+      {
+        "xPos": 0,
+        "yPos": 16,
+        "width": 12,
+        "height": 8,
+        "widget": {
+          "title": "Total Subscriptions",
+          "scorecard": {
+            "timeSeriesQuery": {
+              "prometheusQuery": "sum(last_over_time(subscriptions_count[2m]))"
+            }
+          }
+        }
+      },
+      {
+        "xPos": 12,
+        "yPos": 16,
+        "width": 12,
+        "height": 8,
+        "widget": {
+          "title": "Total Active",
+          "scorecard": {
+            "timeSeriesQuery": {
+              "prometheusQuery": "sum(subscriptions_count{state=\"active\"})"
+            }
+          }
+        }
+      },
+      {
+        "xPos": 24,
+        "yPos": 16,
+        "width": 12,
+        "height": 8,
+        "widget": {
+          "title": "Total DCR Clients",
+          "scorecard": {
+            "timeSeriesQuery": {
+              "prometheusQuery": "sum(last_over_time(dcr_clients_active[2m]))"
+            }
+          }
+        }
+      }
+    ]
+  },
+  "dashboardFilters": [
+    {
+      "labelKey": "service_name",
+      "filterType": "METRIC_LABEL",
+      "stringValue": "",
+      "valueType": "STRING"
+    }
+  ],
+  "labels": {
+    "lightspeed-agent": ""
+  }
+}

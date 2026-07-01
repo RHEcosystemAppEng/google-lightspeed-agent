@@ -789,13 +789,293 @@ Deployed only when `deploymentMode: standalone`.
 |---|---|---|
 | `logging.level` | Log level | `INFO` |
 | `logging.format` | Log format (`json` / `text`) | `json` |
-| `otel.enabled` | Enable OpenTelemetry | `false` |
+| `otel.enabled` | Enable OpenTelemetry tracing | `false` |
 | `otel.serviceName` | OTEL service name | `lightspeed_agent` |
-| `otel.exporterType` | Exporter type | `otlp` |
+| `otel.exporterType` | Exporter type (`otlp`, `otlp-http`, `console`, `jaeger`, `zipkin`) | `otlp` |
 | `otel.otlpEndpoint` | OTLP gRPC endpoint | `http://localhost:4317` |
 | `otel.otlpHttpEndpoint` | OTLP HTTP endpoint | `http://localhost:4318` |
 | `otel.tracesSampler` | Traces sampler strategy | `always_on` |
 | `otel.tracesSamplerArg` | Traces sampler argument | `1.0` |
+| `otel.metricsEnabled` | Enable OTel metrics and Prometheus scrape endpoint | `false` |
+| `otel.metricsPrometheusPort` | Port for Prometheus metrics scrape endpoint | `9464` |
+| `otel.metricsCollectionInterval` | DB polling interval in seconds for metrics collection (min 10) | `60` |
+
+### Monitoring
+
+| Value | Description | Default |
+|---|---|---|
+| `monitoring.serviceMonitor.enabled` | Create a ServiceMonitor CR for Prometheus Operator | `false` |
+| `monitoring.serviceMonitor.interval` | Prometheus scrape interval | `60s` |
+| `monitoring.serviceMonitor.namespace` | Namespace for ServiceMonitor (empty = release namespace) | `""` |
+| `monitoring.grafanaDashboard.enabled` | Create a GrafanaDashboard CR for Grafana Operator | `false` |
+| `monitoring.grafanaDashboard.datasource` | Grafana Prometheus datasource UID | `prometheus` |
+| `monitoring.grafanaDashboard.namespace` | Namespace for GrafanaDashboard (empty = release namespace) | `""` |
+
+## Monitoring (Prometheus + Grafana)
+
+The agent exposes OpenTelemetry metrics via a Prometheus scrape endpoint. The
+Helm chart includes templates for Prometheus Operator (ServiceMonitor)
+and Grafana Operator (GrafanaDashboard) to automate discovery and visualization.
+
+> **Important:** Before enabling monitoring in `values.yaml`, verify that all
+> prerequisites (operators, Grafana instance, datasource) are in place. The
+> Helm chart creates ServiceMonitor and GrafanaDashboard CRs that will fail
+> to reconcile if the corresponding operators are not installed.
+
+### Prerequisites
+
+The following must be configured on your OpenShift cluster before enabling
+monitoring in the Helm chart.
+
+#### 1. Prometheus Operator
+
+Included with the built-in OpenShift Monitoring stack — enabled by default on
+most clusters. This provides the ServiceMonitor CRD.
+
+Verify it is running:
+
+```bash
+oc get pods -n openshift-monitoring -l app.kubernetes.io/name=prometheus-operator
+```
+
+By default, the built-in Prometheus only monitors OpenShift system namespaces.
+To scrape ServiceMonitors in application namespaces (like `lightspeed-agent`),
+**user workload monitoring** must be enabled by a cluster admin. Check with your
+cluster admin or see the
+[OpenShift documentation](https://docs.openshift.com/container-platform/latest/observability/monitoring/enabling-monitoring-for-user-defined-projects.html).
+
+```bash
+# Check if user workload monitoring is enabled
+oc get configmap cluster-monitoring-config -n openshift-monitoring -o yaml | grep enableUserWorkload
+```
+
+#### 2. Grafana Operator
+
+Install from OperatorHub:
+
+1. In the OpenShift web console, go to **Operators > OperatorHub**
+2. Search for **"Grafana Operator"** and click **Install**
+3. Set the installation namespace to the agent namespace (e.g., `lightspeed-agent`)
+
+Verify it is running:
+
+```bash
+oc get pods -n lightspeed-agent -l app.kubernetes.io/name=grafana-operator
+```
+
+#### 3. Grafana instance
+
+Create a `Grafana` CR in the agent namespace. The `dashboards: grafana` label
+is required so the operator picks up GrafanaDashboard CRs.
+
+```yaml
+apiVersion: grafana.integreatly.org/v1beta1
+kind: Grafana
+metadata:
+  name: grafana
+  namespace: lightspeed-agent
+  labels:
+    dashboards: grafana
+spec:
+  route:
+    spec:
+      tls:
+        termination: edge
+  config:
+    log:
+      mode: console
+    auth.anonymous:
+      enabled: "true"
+      org_role: "Viewer"
+```
+
+Apply it:
+
+```bash
+oc apply -f grafana.yaml
+```
+
+Verify the Grafana pod is running and the Route is created:
+
+```bash
+oc get pods -n lightspeed-agent -l app=grafana
+oc get route -n lightspeed-agent grafana-route
+```
+
+#### 4. Grafana datasource
+
+Create a `GrafanaDatasource` CR in the agent namespace that connects Grafana
+to the in-cluster Prometheus. The `uid` field must match
+`monitoring.grafanaDashboard.datasource` in `values.yaml` (default: `prometheus`).
+
+The datasource connects Grafana to the built-in OpenShift Prometheus (Thanos
+Querier). This requires a service account with `cluster-monitoring-view`
+permissions.
+
+**a.** Create a service account for Grafana to authenticate with Prometheus:
+
+```yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: grafana-prometheus
+  namespace: lightspeed-agent
+```
+
+```bash
+oc apply -f grafana-sa.yaml
+```
+
+**b.** Bind the `cluster-monitoring-view` cluster role to the service account.
+This requires cluster admin privileges — if you don't have admin access, ask
+your cluster admin to run this command on your behalf:
+
+```bash
+oc adm policy add-cluster-role-to-user cluster-monitoring-view \
+  -z grafana-prometheus -n lightspeed-agent
+```
+
+**c.** Generate a long-lived token for the datasource:
+
+```bash
+oc create token grafana-prometheus -n lightspeed-agent --duration=8760h
+```
+
+**d.** Create the datasource CR, replacing `<SERVICE_ACCOUNT_TOKEN>` with the
+token from the previous step:
+
+```yaml
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaDatasource
+metadata:
+  name: prometheus
+  namespace: lightspeed-agent
+spec:
+  instanceSelector:
+    matchLabels:
+      dashboards: grafana
+  datasource:
+    name: Prometheus
+    type: prometheus
+    uid: prometheus
+    access: proxy
+    url: https://thanos-querier.openshift-monitoring.svc.cluster.local:9091
+    isDefault: true
+    jsonData:
+      httpHeaderName1: Authorization
+      tlsSkipVerify: true
+    secureJsonData:
+      httpHeaderValue1: "Bearer <SERVICE_ACCOUNT_TOKEN>"
+```
+
+> **Note:** Replace `<SERVICE_ACCOUNT_TOKEN>` with the token generated in
+> step c above.
+
+Apply and verify:
+
+```bash
+oc apply -f grafana-datasource.yaml
+oc get grafanadatasources -n lightspeed-agent
+```
+
+#### Prerequisites checklist
+
+Before enabling monitoring in the Helm chart, confirm all of the following:
+
+- [ ] Prometheus Operator is running (built-in or user workload monitoring enabled)
+- [ ] ServiceMonitor CRD exists: `oc get crd servicemonitors.monitoring.coreos.com`
+- [ ] Grafana Operator is installed in the agent namespace
+- [ ] A `Grafana` instance exists in the agent namespace with `dashboards: grafana` label
+- [ ] A `GrafanaDatasource` CR connects Grafana to Prometheus
+- [ ] Note the datasource `uid` — you will need it for `monitoring.grafanaDashboard.datasource`
+
+### Enable monitoring
+
+Add the following to your `my-values.yaml`:
+
+```yaml
+otel:
+  metricsEnabled: true
+  metricsPrometheusPort: 9464       # default — Prometheus scrape port
+  metricsCollectionInterval: 60     # DB polling interval (seconds)
+
+monitoring:
+  serviceMonitor:
+    enabled: true
+    interval: 60s                   # Prometheus scrape interval
+  grafanaDashboard:
+    enabled: true
+    datasource: prometheus          # must match your GrafanaDatasource uid
+```
+
+Then upgrade your release:
+
+```bash
+helm upgrade lightspeed-agent deploy/openshift/ \
+  -f deploy/openshift/my-values.yaml \
+  -f deploy/openshift/secrets.yaml \
+  -n lightspeed-agent
+```
+
+### What gets created
+
+When monitoring is enabled, the chart creates:
+
+| Resource | Purpose |
+|---|---|
+| **ServiceMonitor** | Tells Prometheus Operator to scrape the agent's `/metrics` endpoint on port 9464 |
+| **GrafanaDashboard** | Provisions a Grafana dashboard via Grafana Operator with panels for all agent metrics |
+| **NetworkPolicy rule** | Allows ingress from the `openshift-monitoring` namespace to port 9464 |
+
+The agent Deployment and Service also gain a `metrics` port (9464) when
+`otel.metricsEnabled` is true.
+
+### Exposed metrics
+
+See [docs/telemetry.md — Metric Instruments](../../docs/telemetry.md#metric-instruments)
+for the full list of metrics, their types, labels, and descriptions.
+
+### Verify
+
+```bash
+# Verify the metrics endpoint responds
+AGENT_POD=$(oc get pod -n lightspeed-agent -l app.kubernetes.io/component=agent -o jsonpath='{.items[0].metadata.name}')
+oc exec -n lightspeed-agent "${AGENT_POD}" -c lightspeed-agent -- curl -s http://localhost:9464/metrics | head -20
+
+# Open the Grafana UI
+oc get route -n lightspeed-agent grafana-route
+```
+
+### Multiple agents (umbrella chart)
+
+When deploying multiple agents from a parent Helm chart, each agent is a
+sub-chart dependency with a unique alias. Each sub-chart instance gets its own
+ServiceMonitor, GrafanaDashboard, and NetworkPolicy rule — all with unique
+names derived from the Helm fullname.
+
+To keep metrics distinct, set a unique `otel.serviceName` per agent in the
+parent chart's `values.yaml`:
+
+```yaml
+# Parent chart values.yaml
+insights-agent:
+  otel:
+    serviceName: insights_agent
+
+compliance-agent:
+  otel:
+    serviceName: compliance_agent
+```
+
+Each agent gets its own Grafana dashboard (titled with the agent name) and
+Prometheus scrape target. The `OTEL_SERVICE_NAME` label on all metrics ensures
+they are distinguishable in PromQL queries.
+
+> **Note:** In the parent chart, most metrics values can be set globally and
+> passed down to all sub-charts (`otel.metricsEnabled`,
+> `otel.metricsPrometheusPort`, `otel.metricsCollectionInterval`,
+> `monitoring.serviceMonitor.*`, `monitoring.grafanaDashboard.*`). Only
+> `otel.serviceName` must be set per agent since it must be unique.
 
 ## Authentication
 

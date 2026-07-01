@@ -641,6 +641,21 @@ class Settings(BaseSettings):
         description="Sampler argument (e.g., ratio for traceidratio)",
     )
 
+    # OpenTelemetry Metrics Configuration
+    otel_metrics_enabled: bool = Field(
+        default=False,
+        description="Enable OpenTelemetry metrics (independent of tracing)",
+    )
+    otel_metrics_prometheus_port: int = Field(
+        default=9464,
+        description="Port for Prometheus metrics scrape endpoint",
+    )
+    otel_metrics_collection_interval: int = Field(
+        default=60,
+        ge=10,
+        description="DB polling interval in seconds for metrics collection",
+    )
+
 
 @lru_cache
 def get_settings() -> Settings:

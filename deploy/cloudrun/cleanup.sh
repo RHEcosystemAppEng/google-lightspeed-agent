@@ -95,7 +95,7 @@ echo "  - Pub/Sub topic: $PUBSUB_TOPIC"
 echo "  - Pub/Sub subscription: $PUBSUB_SUBSCRIPTION"
 echo "  - Secrets: redhat-sso-client-id, redhat-sso-client-secret, database-url,"
 echo "             session-database-url, gma-client-id, gma-client-secret, dcr-encryption-key,"
-echo "             rate-limit-redis-url, redis-ca-cert"
+echo "             rate-limit-redis-url, redis-ca-cert, otel-collector-config"
 echo "  - Service accounts: $SERVICE_ACCOUNT"
 echo "                      $PUBSUB_INVOKER_SA"
 if [ "$PURGE_DATA" = true ]; then
@@ -229,6 +229,7 @@ secrets=(
     "dcr-encryption-key"
     "rate-limit-redis-url"
     "redis-ca-cert"
+    "otel-collector-config"
 )
 
 for secret in "${secrets[@]}"; do

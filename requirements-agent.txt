@@ -1420,6 +1420,7 @@ opentelemetry-api==1.41.1 \
     #   google-adk
     #   opentelemetry-exporter-otlp-proto-grpc
     #   opentelemetry-exporter-otlp-proto-http
+    #   opentelemetry-exporter-prometheus
     #   opentelemetry-instrumentation
     #   opentelemetry-instrumentation-asgi
     #   opentelemetry-instrumentation-fastapi
@@ -1445,6 +1446,10 @@ opentelemetry-exporter-otlp-proto-http==1.41.1 \
     --hash=sha256:1a21e8f49c7a946d935551e90947d6c3eb39236723c6624401da0f33d68edcb4 \
     --hash=sha256:4747a9604c8550ab38c6fd6180e2fcb80de3267060bef2c306bad3cb443302bc
     # via opentelemetry-exporter-otlp
+opentelemetry-exporter-prometheus==0.62b1 \
+    --hash=sha256:7a0b8a6402e107e1f93e38f074a668797e1103936b189561959531a67ffeba55 \
+    --hash=sha256:7ecbac9aa76e7abb44082ab0ff2983e0a573e4091c4653f7db483b02bae03506
+    # via lightspeed-agent (pyproject.toml)
 opentelemetry-instrumentation==0.62b1 \
     --hash=sha256:90e92a905ba4f84db06ac3aec96701df6c079b2d66e9379f8739f0a1bdcc7f45 \
     --hash=sha256:976fc6e640f2006599e97429c949e622c108d0c17c2059347d1e6c93c707f257
@@ -1484,6 +1489,7 @@ opentelemetry-sdk==1.41.1 \
     #   google-adk
     #   opentelemetry-exporter-otlp-proto-grpc
     #   opentelemetry-exporter-otlp-proto-http
+    #   opentelemetry-exporter-prometheus
 opentelemetry-semantic-conventions==0.62b1 \
     --hash=sha256:c5cc6e04a7f8c7cdd30be2ed81499fa4e75bfbd52c9cb70d40af1f9cd3619802 \
     --hash=sha256:cf506938103d331fbb78eded0d9788095f7fd59016f2bda813c3324e5a74a93c
@@ -1507,6 +1513,10 @@ packaging==26.2 \
     #   google-adk
     #   huggingface-hub
     #   opentelemetry-instrumentation
+prometheus-client==0.25.0 \
+    --hash=sha256:5e373b75c31afb3c86f1a52fa1ad470c9aace18082d39ec0d2f918d11cc9ba28 \
+    --hash=sha256:d5aec89e349a6ec230805d0df882f3807f74fd6c1a2fa86864e3c2279059fed1
+    # via opentelemetry-exporter-prometheus
 propcache==0.5.2 \
     --hash=sha256:01c4fc7480cd0598bb4b57022df55b9ca296da7fc5a8760bd8451a7e63a7d427 \
     --hash=sha256:04dc2390d9edbbaef7461f33322555976ffddf0b650a038649d026358714e6c5 \

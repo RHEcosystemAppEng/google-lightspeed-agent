@@ -181,6 +181,7 @@ else
         "roles/run.admin"
         "roles/iam.serviceAccountUser"
         "roles/pubsub.editor"
+        "roles/monitoring.dashboardEditor"
     )
 
     if [[ "$ENABLE_LB_AGENT" == "true" || "$ENABLE_LB_HANDLER" == "true" ]]; then

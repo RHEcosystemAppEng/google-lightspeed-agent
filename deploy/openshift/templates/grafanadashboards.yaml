@@ -1,0 +1,406 @@
+{{- if and .Values.otel.metricsEnabled .Values.monitoring.grafanaDashboard.enabled }}
+{{- $job := include "lightspeed-agent.fullname" . }}
+{{- $ds := .Values.monitoring.grafanaDashboard.datasource }}
+{{- $svc := .Values.otel.serviceName }}
+---
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaDashboard
+metadata:
+  name: {{ $job }}-agent-operations
+  {{- if .Values.monitoring.grafanaDashboard.namespace }}
+  namespace: {{ .Values.monitoring.grafanaDashboard.namespace }}
+  {{- end }}
+  labels:
+    {{- include "lightspeed-agent.labels" . | nindent 4 }}
+    app.kubernetes.io/component: monitoring
+spec:
+  folder: "{{ $svc }}"
+  instanceSelector:
+    matchLabels:
+      dashboards: grafana
+  json: |
+    {
+      "editable": true,
+      "graphTooltip": 1,
+      "panels": [
+        {
+          "title": "Tool Calls by Name",
+          "type": "bargauge",
+          "gridPos": { "h": 10, "w": 24, "x": 0, "y": 0 },
+          "datasource": { "type": "prometheus", "uid": "{{ $ds }}" },
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "blue", "value": null }
+                ]
+              },
+              "color": { "mode": "fixed", "fixedColor": "blue" }
+            },
+          },
+          "options": {
+            "displayMode": "gradient",
+            "orientation": "horizontal",
+            "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+            "showUnfilled": true
+          },
+          "targets": [
+            {
+              "expr": "sum by (tool_name) (tool_calls_by_name_total{job=\"{{ $job }}\"})",
+              "legendFormat": "{{`{{tool_name}}`}}",
+              "refId": "A",
+              "instant": true
+            }
+          ]
+        },
+        {
+          "title": "Requests Over Time",
+          "type": "timeseries",
+          "gridPos": { "h": 10, "w": 24, "x": 0, "y": 10 },
+          "datasource": { "type": "prometheus", "uid": "{{ $ds }}" },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "smooth",
+                "fillOpacity": 15,
+                "pointSize": 8,
+                "showPoints": "always",
+                "lineWidth": 2,
+                "spanNulls": true
+              },
+              "color": { "mode": "fixed", "fixedColor": "semi-dark-blue" }
+            },
+          },
+          "options": {
+            "tooltip": { "mode": "single" },
+            "legend": { "displayMode": "list", "placement": "bottom" }
+          },
+          "timeFrom": "7d",
+          "targets": [
+            {
+              "expr": "sum(increase(request_count{job=\"{{ $job }}\"}[1d]))",
+              "legendFormat": "Requests",
+              "refId": "A",
+              "interval": "1d"
+            }
+          ]
+        },
+        {
+          "title": "Token Usage Over Time",
+          "type": "timeseries",
+          "gridPos": { "h": 10, "w": 24, "x": 0, "y": 20 },
+          "datasource": { "type": "prometheus", "uid": "{{ $ds }}" },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "smooth",
+                "fillOpacity": 15,
+                "pointSize": 8,
+                "showPoints": "always",
+                "lineWidth": 2,
+                "spanNulls": true
+              }
+            },
+            "overrides": [
+              {
+                "matcher": { "id": "byName", "options": "Input Tokens" },
+                "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "orange" } }]
+              },
+              {
+                "matcher": { "id": "byName", "options": "Output Tokens" },
+                "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "purple" } }]
+              }
+            ]
+          },
+          "options": {
+            "tooltip": { "mode": "multi" },
+            "legend": { "displayMode": "list", "placement": "bottom" }
+          },
+          "timeFrom": "7d",
+          "targets": [
+            {
+              "expr": "sum(increase(input_tokens{job=\"{{ $job }}\"}[1d]))",
+              "legendFormat": "Input Tokens",
+              "refId": "A",
+              "interval": "1d"
+            },
+            {
+              "expr": "sum(increase(output_tokens{job=\"{{ $job }}\"}[1d]))",
+              "legendFormat": "Output Tokens",
+              "refId": "B",
+              "interval": "1d"
+            }
+          ]
+        }
+      ],
+      "schemaVersion": 39,
+      "tags": ["{{ $svc }}"],
+      "templating": { "list": [] },
+      "time": { "from": "now-7d", "to": "now" },
+      "timepicker": {},
+      "timezone": "browser",
+      "title": "Agent Operations",
+      "uid": "{{ $job }}-agent-ops"
+    }
+---
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaDashboard
+metadata:
+  name: {{ $job }}-marketplace
+  {{- if .Values.monitoring.grafanaDashboard.namespace }}
+  namespace: {{ .Values.monitoring.grafanaDashboard.namespace }}
+  {{- end }}
+  labels:
+    {{- include "lightspeed-agent.labels" . | nindent 4 }}
+    app.kubernetes.io/component: monitoring
+spec:
+  folder: "{{ $svc }}"
+  instanceSelector:
+    matchLabels:
+      dashboards: grafana
+  json: |
+    {
+      "editable": true,
+      "graphTooltip": 1,
+      "panels": [
+        {
+          "title": "Subscriptions by State",
+          "type": "table",
+          "gridPos": { "h": 10, "w": 12, "x": 0, "y": 0 },
+          "datasource": { "type": "prometheus", "uid": "{{ $ds }}" },
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": [
+              {
+                "matcher": { "id": "byName", "options": "account_id" },
+                "properties": [{ "id": "displayName", "value": "Account" }]
+              },
+              {
+                "matcher": { "id": "byName", "options": "Value #Active" },
+                "properties": [{ "id": "displayName", "value": "Active" }]
+              },
+              {
+                "matcher": { "id": "byName", "options": "Value #Cancelled" },
+                "properties": [{ "id": "displayName", "value": "Cancelled" }]
+              },
+              {
+                "matcher": { "id": "byName", "options": "Value #Pending" },
+                "properties": [{ "id": "displayName", "value": "Pending" }]
+              }
+            ]
+          },
+          "options": {
+            "showHeader": true,
+            "footer": { "show": true, "reducer": ["sum"], "countRows": true }
+          },
+          "transformations": [
+            {
+              "id": "merge",
+              "options": {}
+            },
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": { "Time": true, "__name__": true, "job": true },
+                "indexByName": { "account_id": 0, "Value #Active": 1, "Value #Cancelled": 2, "Value #Pending": 3 }
+              }
+            }
+          ],
+          "targets": [
+            {
+              "expr": "sum by (account_id) (subscriptions_count{job=\"{{ $job }}\", state=\"active\"})",
+              "refId": "Active",
+              "format": "table",
+              "instant": true
+            },
+            {
+              "expr": "sum by (account_id) (subscriptions_count{job=\"{{ $job }}\", state=\"cancelled\"})",
+              "refId": "Cancelled",
+              "format": "table",
+              "instant": true
+            },
+            {
+              "expr": "sum by (account_id) (subscriptions_count{job=\"{{ $job }}\", state=\"pending_approval\"})",
+              "refId": "Pending",
+              "format": "table",
+              "instant": true
+            }
+          ]
+        },
+        {
+          "title": "Active DCR Clients",
+          "type": "table",
+          "gridPos": { "h": 10, "w": 12, "x": 12, "y": 0 },
+          "datasource": { "type": "prometheus", "uid": "{{ $ds }}" },
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": [
+              {
+                "matcher": { "id": "byName", "options": "account_id" },
+                "properties": [{ "id": "displayName", "value": "Account" }]
+              },
+              {
+                "matcher": { "id": "byName", "options": "Value" },
+                "properties": [{ "id": "displayName", "value": "Clients" }]
+              }
+            ]
+          },
+          "options": {
+            "showHeader": true,
+            "footer": { "show": true, "reducer": ["sum"], "countRows": true }
+          },
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": { "Time": true, "__name__": true, "job": true }
+              }
+            }
+          ],
+          "targets": [
+            {
+              "expr": "sum by (account_id) (dcr_clients_active{job=\"{{ $job }}\"})",
+              "refId": "A",
+              "format": "table",
+              "instant": true
+            }
+          ]
+        }
+      ],
+      "schemaVersion": 39,
+      "tags": ["{{ $svc }}"],
+      "templating": { "list": [] },
+      "time": { "from": "now-24h", "to": "now" },
+      "timepicker": {},
+      "timezone": "browser",
+      "title": "Marketplace",
+      "uid": "{{ $job }}-marketplace"
+    }
+---
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaDashboard
+metadata:
+  name: {{ $job }}-usage-billing
+  {{- if .Values.monitoring.grafanaDashboard.namespace }}
+  namespace: {{ .Values.monitoring.grafanaDashboard.namespace }}
+  {{- end }}
+  labels:
+    {{- include "lightspeed-agent.labels" . | nindent 4 }}
+    app.kubernetes.io/component: monitoring
+spec:
+  folder: "{{ $svc }}"
+  instanceSelector:
+    matchLabels:
+      dashboards: grafana
+  json: |
+    {
+      "editable": true,
+      "graphTooltip": 1,
+      "panels": [
+        {
+          "title": "Input Tokens by Account",
+          "type": "bargauge",
+          "gridPos": { "h": 10, "w": 12, "x": 0, "y": 0 },
+          "datasource": { "type": "prometheus", "uid": "{{ $ds }}" },
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "orange", "value": null }
+                ]
+              },
+              "color": { "mode": "fixed", "fixedColor": "orange" }
+            },
+          },
+          "options": {
+            "displayMode": "gradient",
+            "orientation": "horizontal",
+            "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+            "showUnfilled": true
+          },
+          "targets": [
+            {
+              "expr": "sum by (account_id) (input_tokens{job=\"{{ $job }}\"})",
+              "legendFormat": "{{`{{account_id}}`}}",
+              "refId": "A",
+              "instant": true
+            }
+          ]
+        },
+        {
+          "title": "Output Tokens by Account",
+          "type": "bargauge",
+          "gridPos": { "h": 10, "w": 12, "x": 12, "y": 0 },
+          "datasource": { "type": "prometheus", "uid": "{{ $ds }}" },
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "purple", "value": null }
+                ]
+              },
+              "color": { "mode": "fixed", "fixedColor": "purple" }
+            },
+          },
+          "options": {
+            "displayMode": "gradient",
+            "orientation": "horizontal",
+            "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+            "showUnfilled": true
+          },
+          "targets": [
+            {
+              "expr": "sum by (account_id) (output_tokens{job=\"{{ $job }}\"})",
+              "legendFormat": "{{`{{account_id}}`}}",
+              "refId": "A",
+              "instant": true
+            }
+          ]
+        },
+        {
+          "title": "Requests by Account",
+          "type": "bargauge",
+          "gridPos": { "h": 10, "w": 24, "x": 0, "y": 10 },
+          "datasource": { "type": "prometheus", "uid": "{{ $ds }}" },
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "semi-dark-blue", "value": null }
+                ]
+              },
+              "color": { "mode": "fixed", "fixedColor": "semi-dark-blue" }
+            },
+          },
+          "options": {
+            "displayMode": "gradient",
+            "orientation": "horizontal",
+            "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+            "showUnfilled": true
+          },
+          "targets": [
+            {
+              "expr": "sum by (account_id) (request_count{job=\"{{ $job }}\"})",
+              "legendFormat": "{{`{{account_id}}`}}",
+              "refId": "A",
+              "instant": true
+            }
+          ]
+        }
+      ],
+      "schemaVersion": 39,
+      "tags": ["{{ $svc }}"],
+      "templating": { "list": [] },
+      "time": { "from": "now-24h", "to": "now" },
+      "timepicker": {},
+      "timezone": "browser",
+      "title": "Usage & Billing",
+      "uid": "{{ $job }}-usage-billing"
+    }
+{{- end }}

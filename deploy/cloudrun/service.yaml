@@ -172,6 +172,16 @@ spec:
               value: "60"
             - name: RATE_LIMIT_REQUESTS_PER_HOUR
               value: "1000"
+            # OpenTelemetry
+            # Service name used as a resource attribute on all metrics/traces.
+            # Defaults to "lightspeed_agent" if not set.
+            # Must be unique per agent in multi-agent deployments.
+            - name: OTEL_SERVICE_NAME
+              value: "lightspeed_agent"
+            # The OTel Collector sidecar receives OTLP on localhost:4317
+            # and exports metrics to Cloud Monitoring.
+            - name: OTEL_METRICS_ENABLED
+              value: "true"
             # Probe server port (health/readiness checks on separate port)
             - name: AGENT_PROBE_PORT
               value: "8002"
@@ -233,6 +243,41 @@ spec:
             limits:
               cpu: "1"
               memory: 512Mi
+
+        # =====================================================================
+        # Google-Built OpenTelemetry Collector (Sidecar)
+        # =====================================================================
+        # Receives OTLP metrics from the agent on localhost:4317 and exports
+        # them to Cloud Monitoring via the googlemanagedprometheus exporter.
+        # Config is loaded from the otel-collector-config Secret Manager secret.
+        #
+        # See: https://cloud.google.com/stackdriver/docs/instrumentation/opentelemetry-collector-cloud-run
+        - name: collector
+          image: us-docker.pkg.dev/cloud-ops-agents-artifacts/google-cloud-opentelemetry-collector/otelcol-google:0.151.0
+          args: ["--config=/etc/otelcol-google/config.yaml"]
+          volumeMounts:
+            - name: otel-collector-config
+              mountPath: /etc/otelcol-google/
+              readOnly: true
+          startupProbe:
+            httpGet:
+              path: /
+              port: 13133
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 13133
+            periodSeconds: 30
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: "100m"
+              memory: 64Mi
+            limits:
+              cpu: "250m"
+              memory: 256Mi
       volumes:
         - name: redis-ca-cert
           secret:
@@ -240,6 +285,12 @@ spec:
             items:
               - key: latest
                 path: latest
+        - name: otel-collector-config
+          secret:
+            secretName: otel-collector-config
+            items:
+              - key: latest
+                path: config.yaml
   traffic:
     - percent: 100
       latestRevision: true
