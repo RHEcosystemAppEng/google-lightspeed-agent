@@ -61,7 +61,7 @@ agent:
   ingressNamespace: openshift-ingress
 
 # ---------------------------------------------------------------------------
-# Red Hat Lightspeed MCP server (runs as sidecar in the agent pod)
+# Red Hat Lightspeed MCP server (sidecar or standalone, see mcpGateway)
 # ---------------------------------------------------------------------------
 mcp:
   image:
@@ -106,10 +106,46 @@ google:
     jitter: 1.0
 
 # ---------------------------------------------------------------------------
+# MCP Gateway (Red Hat Connectivity Link / Kuadrant)
+# ---------------------------------------------------------------------------
+# When enabled, the MCP server runs as a standalone Deployment+Service
+# (instead of a sidecar) and is registered with the MCP Gateway via
+# MCPServerRegistration. The agent connects to the gateway's /mcp endpoint
+# for a federated tool catalog.
+mcpGateway:
+  enabled: false
+  # Name of the existing Gateway API Gateway resource
+  gatewayName: "mcp-gateway"
+  # Namespace where the Gateway resource lives
+  gatewayNamespace: "gateway-system"
+  # URL of the MCP Gateway endpoint (the agent connects here)
+  url: "http://mcp-gateway.gateway-system.svc.cluster.local:8080/mcp"
+  # Tool prefix added to all tools from this server (prevents name collisions)
+  toolPrefix: "redhat_lightspeed_"
+
+# ---------------------------------------------------------------------------
+# Kagenti — Agent Identity & Monitoring (Red Hat AI)
+# ---------------------------------------------------------------------------
+# When enabled, the agent Deployment is labeled for Kagenti discovery and
+# an AgentRuntime CR is created to enroll the agent in the Kagenti platform.
+# The Kagenti operator will inject identity sidecars (SPIFFE, Keycloak, Envoy)
+# and auto-create an AgentCard for A2A discovery.
+kagenti:
+  enabled: false
+  # SPIFFE trust domain for agent identity
+  trustDomain: "example.com"
+  # Agent framework identifier (informational label)
+  framework: "google-adk"
+  # OpenTelemetry trace endpoint (Kagenti's OTEL collector)
+  traceEndpoint: "otel-collector.kagenti-system.svc.cluster.local:4318"
+  traceProtocol: "http"
+  traceSamplingRate: "1.0"
+
+# ---------------------------------------------------------------------------
 # LLM Provider (alternative models via LiteLLM)
 # ---------------------------------------------------------------------------
 llm:
-  # "gemini" (default) — use Google AI Studio / Vertex AI.
+  # "gemini" (default) — use Google AI Studio / Vertex AI directly.
   # "litellm" — use any provider supported by LiteLLM (OpenAI, Anthropic, etc.).
   provider: "gemini"
   # Model name (works with both providers). For litellm, use "provider/model"
@@ -118,6 +154,24 @@ llm:
   model: ""
   # Custom API endpoint URL (litellm only, for self-hosted models).
   apiBase: ""
+
+# ---------------------------------------------------------------------------
+# Model as a Service (OpenShift AI MaaS / external model gateway)
+# ---------------------------------------------------------------------------
+# When enabled, configures the agent to use an external Model as a Service
+# endpoint (e.g., OpenShift AI MaaS, or any OpenAI-compatible gateway like
+# LiteLLM) instead of direct Google AI Studio / Vertex AI access.
+# The MaaS gateway handles model routing, rate limiting, and credential
+# management — the agent just sends requests to the gateway URL.
+modelService:
+  enabled: false
+  # URL of the MaaS gateway endpoint (OpenAI-compatible API)
+  # Examples:
+  #   OpenShift AI MaaS: https://maas.<cluster-domain>/llm/<model-name>/v1
+  #   LiteLLM proxy:     http://litellm-service.ai-gateway.svc.cluster.local:4000
+  url: ""
+  # Model name as the gateway expects it (e.g., "vertex_ai/gemini-2.5-flash")
+  model: "vertex_ai/gemini-2.5-flash"
 
 # ---------------------------------------------------------------------------
 # Red Hat SSO / OAuth 2.0
@@ -392,5 +446,5 @@ secrets:
   # Used by: marketplace handler and/or agent for Vertex AI authentication
   # via LiteLLM or direct Gemini when GOOGLE_API_KEY is not set.
   gcpServiceAccountKey: ""
-  # API key for non-Google LLM providers (litellm only)
+  # API key for non-Google LLM providers (litellm or MaaS gateway)
   llmApiKey: ""

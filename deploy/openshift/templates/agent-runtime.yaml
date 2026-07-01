@@ -1,0 +1,22 @@
+{{- if .Values.kagenti.enabled }}
+apiVersion: agent.kagenti.dev/v1alpha1
+kind: AgentRuntime
+metadata:
+  name: {{ include "lightspeed-agent.fullname" . }}
+  labels:
+    {{- include "lightspeed-agent.labels" . | nindent 4 }}
+spec:
+  type: agent
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "lightspeed-agent.fullname" . }}
+  trace:
+    endpoint: {{ .Values.kagenti.traceEndpoint | quote }}
+    protocol: {{ .Values.kagenti.traceProtocol | quote }}
+    sampling:
+      rate: {{ .Values.kagenti.traceSamplingRate }}
+  identity:
+    spiffe:
+      trustDomain: {{ .Values.kagenti.trustDomain | quote }}
+{{- end }}

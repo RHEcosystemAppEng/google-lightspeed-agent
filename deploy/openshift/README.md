@@ -112,6 +112,30 @@ curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
   (`python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`)
 - A GCP service account key (if Service Control is enabled)
 
+**Red Hat AI Platform Integration (optional):**
+
+The following features are **disabled by default** and require their respective
+platform components to be pre-installed on the cluster. Each can be enabled
+independently.
+
+| Feature | Helm flag | Required Operator / Component | Minimum Version |
+|---|---|---|---|
+| **MCP Gateway** | `mcpGateway.enabled` | Red Hat Connectivity Link Operator (includes Kuadrant + MCP Gateway) | Connectivity Link 1.3+ |
+| | | Istio / OpenShift Service Mesh (for Envoy ext_proc) | — |
+| | | Gateway API CRDs (`gateway.networking.k8s.io/v1`) | OpenShift 4.19+ ships these by default |
+| **Kagenti** | `kagenti.enabled` | Kagenti Operator (`kagenti-operator` Helm chart) | v0.2.0-alpha+ |
+| | | SPIRE server (for SPIFFE workload identity) | — |
+| | | Keycloak (for OAuth2 client registration) | — |
+| | | Istio Ambient mesh (for mTLS) | — |
+| **Model as a Service** | `modelService.enabled` | OpenShift AI with MaaS capability (`modelsAsService: Managed`) | OpenShift AI 3.4+ |
+| | | *or* any external OpenAI-compatible gateway (LiteLLM, Portkey, etc.) | — |
+
+> **Note:** MCP Gateway and Kagenti share underlying infrastructure (Istio,
+> Gateway API, Kuadrant). If you are deploying both, the shared components only
+> need to be installed once. See the
+> [Kagenti installation guide](https://github.com/kagenti/kagenti) for a
+> single-command setup that includes all dependencies.
+
 ## Deployment — Hybrid Mode
 
 ### 1. Create a project
@@ -498,6 +522,258 @@ The interface guides you through the full order lifecycle:
 Use the **Reset** button to clear all state and start over (the entitlement and
 DCR client are cleaned up from the database).
 
+## Red Hat AI Platform Integration
+
+Three optional integrations align the deployment with Red Hat AI best practices.
+Each is disabled by default and can be enabled independently by setting the
+corresponding flag in your values file.
+
+### MCP Gateway (`mcpGateway.enabled: true`)
+
+Replaces the MCP sidecar with a standalone MCP server registered behind the
+[MCP Gateway](https://github.com/Kuadrant/mcp-gateway) (Red Hat Connectivity
+Link). The gateway federates multiple MCP servers behind a single `/mcp`
+endpoint, providing centralized auth, rate limiting, and per-tool metrics.
+
+**What changes:**
+- The MCP sidecar is removed from the agent pod
+- A standalone MCP server Deployment + Service is created
+- An `HTTPRoute` and `MCPServerRegistration` register the server with the gateway
+- The agent's `MCP_SERVER_URL` points to the gateway endpoint instead of `localhost`
+- A NetworkPolicy restricts MCP pod ingress to the agent and the gateway namespace
+
+**Prerequisites:**
+1. Red Hat Connectivity Link 1.3+ installed (includes MCP Gateway capability)
+2. A Gateway API `Gateway` resource with an MCP listener
+3. An `MCPGatewayExtension` CR extending the gateway with MCP capabilities
+
+**Configuration:**
+
+```yaml
+mcpGateway:
+  enabled: true
+  gatewayName: "mcp-gateway"           # name of the existing Gateway resource
+  gatewayNamespace: "gateway-system"   # namespace of the Gateway resource
+  url: "http://mcp-gateway.gateway-system.svc.cluster.local:8080/mcp"
+  toolPrefix: "redhat_lightspeed_"     # prevents tool name collisions
+```
+
+**Verification:**
+
+```bash
+# Verify standalone MCP server is running
+oc get pods -l app.kubernetes.io/component=mcp-server -n lightspeed-agent
+
+# Check MCPServerRegistration status
+oc get mcpserverregistrations -n lightspeed-agent
+
+# List tools via the gateway
+curl -X POST http://<gateway-host>/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+```
+
+#### Authentication with MCP Gateway
+
+When Gemini Enterprise (or any A2A client) calls the agent, the authentication
+flow involves **two separate identity layers** at the MCP Gateway:
+
+| Layer | Identity | Purpose | Mechanism |
+|---|---|---|---|
+| **Agent identity** | "Which agent is calling the MCP Gateway?" | Authorize the agent to invoke MCP tools | SPIFFE mTLS via Istio Ambient (network layer — no HTTP headers consumed) |
+| **User identity** | "Whose Red Hat data is being accessed?" | Authenticate to console.redhat.com Insights APIs | Red Hat SSO JWT in `Authorization` header — passes through the gateway to the MCP server |
+
+```
+Gemini Enterprise
+    │ Bearer: <Red Hat SSO JWT>
+    ▼
+Agent (validates JWT via SSO introspection)
+    │ Authorization: Bearer <Red Hat SSO JWT>    ← user identity
+    │ mTLS (SPIFFE)                              ← agent identity
+    ▼
+MCP Gateway (Envoy)
+    │ 1. Agent authenticated by mTLS peer certificate (Istio)
+    │ 2. Authorization header passes through untouched
+    ▼
+MCP Server (standalone)
+    │ Uses JWT to call console.redhat.com on behalf of the user
+    ▼
+console.redhat.com (Insights APIs)
+```
+
+The `Authorization` header passes through Envoy by default — no chart changes
+are required for this flow to work.
+
+> **Warning — Kuadrant AuthPolicy**: If you add a Kuadrant `AuthPolicy` to the
+> MCP HTTPRoute, ensure it validates Red Hat SSO JWTs (issuer:
+> `sso.redhat.com`), **not** Keycloak/Kagenti tokens. An AuthPolicy configured
+> for the wrong issuer will reject the user's JWT and break MCP tool calls.
+> When Kagenti is enabled, agent identity is already verified by Istio mTLS —
+> a gateway-level AuthPolicy for the user JWT is optional (defense-in-depth),
+> not required.
+
+### Kagenti (`kagenti.enabled: true`)
+
+Enrolls the agent in the [Kagenti](https://github.com/kagenti/kagenti) platform
+for agent identity management, A2A discovery, and observability. The Kagenti
+operator automatically injects sidecars for SPIFFE workload identity, Keycloak
+OAuth2 client registration, and Envoy mTLS — no agent code changes required.
+
+**What changes:**
+- The agent Deployment is labeled with `kagenti.io/type: agent`,
+  `protocol.kagenti.io/a2a: ""`, and `kagenti.io/framework`
+- An `AgentRuntime` CR is created, enrolling the agent in the Kagenti platform
+- OpenTelemetry **tracing** is automatically enabled and pointed at Kagenti's
+  OTEL collector. Note that Prometheus metrics (`otel.metricsEnabled`) remain
+  independent — if you want both Kagenti tracing and Prometheus scraping, set
+  `kagenti.enabled: true` **and** `otel.metricsEnabled: true` in your values.
+- The Kagenti operator will:
+  - Inject 3 sidecars (SPIFFE helper, Keycloak registration, Envoy proxy)
+  - Auto-create an `AgentCard` CR for A2A discovery
+  - Assign a SPIFFE identity: `spiffe://<trustDomain>/ns/<namespace>/sa/<serviceAccount>`
+
+**Prerequisites:**
+1. Kagenti Operator installed (`kagenti-system` namespace)
+2. SPIRE server deployed and configured
+3. Keycloak instance with `keycloak-admin-secret` in the agent namespace
+4. Istio Ambient mesh enabled for mTLS
+
+**Configuration:**
+
+```yaml
+kagenti:
+  enabled: true
+  trustDomain: "cluster.local"                    # SPIFFE trust domain
+  framework: "google-adk"                         # framework identifier (informational)
+  traceEndpoint: "otel-collector.kagenti-system.svc.cluster.local:4318"
+  traceProtocol: "http"
+  traceSamplingRate: "1.0"
+```
+
+**Verification:**
+
+```bash
+# Check AgentRuntime CR
+oc get agentruntime -n lightspeed-agent
+
+# Verify AgentCard was auto-created
+oc get agentcards -n lightspeed-agent
+
+# Confirm sidecars were injected (expect 4+ containers in the agent pod)
+oc get pod -l app.kubernetes.io/component=agent -n lightspeed-agent \
+  -o jsonpath='{.items[0].spec.containers[*].name}'
+
+# Test A2A discovery
+curl -sk https://${AGENT_HOST}/.well-known/agent.json | python -m json.tool
+```
+
+### Model as a Service (`modelService.enabled: true`)
+
+Configures the agent to use an external model gateway instead of direct
+Google AI Studio / Vertex AI access. This is the recommended approach for
+production deployments using [OpenShift AI MaaS](https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/3.3/html/govern_llm_access_with_models-as-a-service/),
+which provides centralized model routing, token-based rate limiting, API key
+management, and usage tracking.
+
+The agent connects to the MaaS endpoint using the OpenAI-compatible chat
+completions protocol (via the `litellm` provider). No LiteLLM proxy is deployed
+in the chart — the MaaS gateway runs as a platform-level service managed by
+OpenShift AI.
+
+**What changes:**
+- `LLM_PROVIDER` is set to `litellm`
+- `LLM_MODEL` is set to the model name as the gateway expects it
+- `LLM_API_BASE` is set to the MaaS gateway URL
+- Direct Gemini configuration (`GOOGLE_API_KEY`, Vertex AI settings) is still
+  present in the ConfigMap but not used when the litellm provider is active
+
+**Prerequisites:**
+1. OpenShift AI 3.4+ with MaaS enabled (`modelsAsService: Managed` in the
+   `DataScienceCluster` CR)
+2. A model deployed and published to MaaS (via `InferenceService` + `MaaSModelRef`)
+3. A MaaS API token (create via `POST /maas-api/v1/tokens`)
+
+*Alternatively*, any OpenAI-compatible gateway works (LiteLLM proxy, Portkey,
+or a direct vLLM/KServe endpoint).
+
+**Configuration:**
+
+```yaml
+modelService:
+  enabled: true
+  url: "https://maas.<cluster-domain>/llm/gemini-2.5-flash/v1"
+  model: "vertex_ai/gemini-2.5-flash"
+
+# The MaaS API token goes in secrets.yaml
+secrets:
+  llmApiKey: "your-maas-api-token"
+```
+
+**Examples for different model backends:**
+
+```yaml
+# OpenShift AI MaaS
+modelService:
+  enabled: true
+  url: "https://maas.apps.ocp.example.com/llm/gemini-2.5-flash/v1"
+  model: "vertex_ai/gemini-2.5-flash"
+
+# External LiteLLM proxy (e.g., routing to Vertex AI with a service account)
+modelService:
+  enabled: true
+  url: "http://litellm-service.ai-gateway.svc.cluster.local:4000"
+  model: "vertex_ai/gemini-2.5-flash"
+
+# Direct vLLM / KServe InferenceService on OpenShift AI
+modelService:
+  enabled: true
+  url: "http://llama-isvc-predictor.ai-models.svc.cluster.local:8080/v1"
+  model: "openai/llama-3.1-8b-instruct"
+```
+
+**Verification:**
+
+```bash
+# Check the agent's LLM configuration
+oc get configmap lightspeed-agent-config -n lightspeed-agent \
+  -o jsonpath='{.data.LLM_PROVIDER} {.data.LLM_API_BASE} {.data.LLM_MODEL}'
+
+# Test model access from the agent pod
+AGENT_POD=$(oc get pod -l app.kubernetes.io/component=agent -n lightspeed-agent \
+  -o jsonpath='{.items[0].metadata.name}')
+oc exec -n lightspeed-agent "${AGENT_POD}" -c lightspeed-agent -- \
+  curl -s "${LLM_API_BASE}/models" -H "Authorization: Bearer ${LLM_API_KEY}"
+```
+
+### Enabling All Three Together
+
+For a full Red Hat AI stack deployment:
+
+```yaml
+# my-values.yaml
+mcpGateway:
+  enabled: true
+  gatewayName: "mcp-gateway"
+  gatewayNamespace: "gateway-system"
+  url: "http://mcp-gateway.gateway-system.svc.cluster.local:8080/mcp"
+
+kagenti:
+  enabled: true
+  trustDomain: "cluster.local"
+
+modelService:
+  enabled: true
+  url: "https://maas.apps.ocp.example.com/llm/gemini-2.5-flash/v1"
+  model: "vertex_ai/gemini-2.5-flash"
+```
+
+```bash
+helm upgrade lightspeed-agent deploy/openshift/ \
+  -f deploy/openshift/my-values.yaml \
+  -f deploy/openshift/secrets.yaml \
+  -n lightspeed-agent
+```
+
 ## Configuration Reference
 
 ### Deployment mode
@@ -566,9 +842,11 @@ agent:
 External skills with the same name as a bundled skill override the bundled
 version.
 
-### MCP Sidecar
+### MCP Server
 
-The MCP server runs as a sidecar container in the agent pod.
+The MCP server runs as a sidecar container in the agent pod by default. When
+`mcpGateway.enabled: true`, it runs as a standalone Deployment registered with
+the MCP Gateway instead (see [MCP Gateway](#mcp-gateway-mcpgatewayenabled-true)).
 
 | Value | Description | Default |
 |---|---|---|
@@ -654,6 +932,35 @@ The service account key is mounted into the agent container and `GOOGLE_APPLICAT
 >   [OpenAI-Compatible Endpoints](https://docs.litellm.ai/docs/providers/openai_compatible)
 >   and [LiteLLM Proxy provider](https://docs.litellm.ai/docs/providers/litellm_proxy)
 >   pages.
+
+### MCP Gateway (Red Hat AI)
+
+| Value | Description | Default |
+|---|---|---|
+| `mcpGateway.enabled` | Deploy MCP as standalone + register with MCP Gateway (replaces sidecar) | `false` |
+| `mcpGateway.gatewayName` | Name of the existing Gateway API `Gateway` resource | `mcp-gateway` |
+| `mcpGateway.gatewayNamespace` | Namespace of the Gateway resource | `gateway-system` |
+| `mcpGateway.url` | MCP Gateway endpoint URL (agent connects here) | `http://mcp-gateway.gateway-system.svc.cluster.local:8080/mcp` |
+| `mcpGateway.toolPrefix` | Prefix added to tool names (prevents collisions when multiple MCP servers are federated) | `redhat_lightspeed_` |
+
+### Kagenti (Red Hat AI)
+
+| Value | Description | Default |
+|---|---|---|
+| `kagenti.enabled` | Enable Kagenti agent identity and monitoring | `false` |
+| `kagenti.trustDomain` | SPIFFE trust domain for agent identity | `example.com` |
+| `kagenti.framework` | Agent framework identifier (informational label) | `google-adk` |
+| `kagenti.traceEndpoint` | Kagenti OTEL collector endpoint (host:port) | `otel-collector.kagenti-system.svc.cluster.local:4318` |
+| `kagenti.traceProtocol` | OTEL export protocol | `http` |
+| `kagenti.traceSamplingRate` | Trace sampling rate (0.0–1.0) | `1.0` |
+
+### Model as a Service (Red Hat AI)
+
+| Value | Description | Default |
+|---|---|---|
+| `modelService.enabled` | Use an external MaaS gateway for model access | `false` |
+| `modelService.url` | MaaS gateway endpoint URL (OpenAI-compatible API) | `""` |
+| `modelService.model` | Model name as the gateway expects it | `vertex_ai/gemini-2.5-flash` |
 
 ### Authentication
 
