@@ -587,7 +587,7 @@ The MCP server runs as a sidecar container in the agent pod.
 
 | Value | Description | Default |
 |---|---|---|
-| `google.geminiModel` | Gemini model name | `gemini-2.5-flash` |
+| `google.geminiModel` | Default Gemini model (used when `llm.model` is not set) | `gemini-2.5-flash` |
 | `google.useVertexAI` | Use Vertex AI instead of AI Studio | `false` |
 | `google.cloudLocation` | Vertex AI region (use `global` for pay-as-you-go) | `global` |
 | `secrets.gcpServiceAccountKey` | GCP service account key JSON for Vertex AI authentication via ADC (alternative to `secrets.googleApiKey`) | `""` |
@@ -602,7 +602,7 @@ The MCP server runs as a sidecar container in the agent pod.
 | Value | Description | Default |
 |---|---|---|
 | `llm.provider` | `"gemini"` (default) or `"litellm"` for alternative providers | `"gemini"` |
-| `llm.model` | Model name in `provider/model` format (e.g., `"openai/my-model"`) | `""` |
+| `llm.model` | Model name (works with both providers). For `litellm`, use `provider/model` format. For `gemini`, any `provider/` prefix is stripped automatically. Falls back to `google.geminiModel` when empty. | `""` |
 | `llm.apiBase` | Custom API endpoint URL for self-hosted models | `""` |
 | `secrets.llmApiKey` | API key for non-Google LLM providers | `""` |
 
@@ -620,12 +620,10 @@ secrets:
 
 The `openai/` prefix tells LiteLLM to use the OpenAI-compatible chat completions protocol, which is the standard API exposed by vLLM, text-generation-inference, and most model serving frameworks.
 
-To use a Vertex AI model via LiteLLM with service account authentication, set in
-`my-values.yaml`:
+To use Vertex AI with service account authentication, set in `my-values.yaml`:
 
 ```yaml
 llm:
-  provider: "litellm"
   model: "vertex_ai/gemini-2.5-flash"
 
 google:
@@ -642,7 +640,7 @@ secrets:
     { ... service account JSON ... }
 ```
 
-The service account key is mounted into the agent container and `GOOGLE_APPLICATION_CREDENTIALS` is set automatically. Both LiteLLM with `vertex_ai/*` models and the direct Gemini SDK use `google.auth.default()`, which respects this variable.
+The service account key is mounted into the agent container and `GOOGLE_APPLICATION_CREDENTIALS` is set automatically. The `llm.model` value works with both providers — for the `gemini` provider (default), the `vertex_ai/` prefix is stripped automatically; for the `litellm` provider, it's passed through to LiteLLM. You can switch `llm.provider` between `gemini` and `litellm` without changing `llm.model`.
 
 > **Notes:**
 > - Gemini HTTP retry settings (`google.httpRetry.*`) do not apply to `litellm` providers.

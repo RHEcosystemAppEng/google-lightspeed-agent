@@ -96,6 +96,17 @@ def test_gemini_provider_with_llm_model_override():
     assert model.model == "gemini-2.0-flash"
 
 
+def test_gemini_provider_strips_litellm_prefix():
+    s = Settings(
+        google_api_key="test-key",
+        gemini_model="gemini-2.5-flash",
+        llm_model="vertex_ai/gemini-2.5-flash",
+    )
+    model = _create_model(s)
+    assert isinstance(model, Gemini)
+    assert model.model == "gemini-2.5-flash"
+
+
 def test_gemini_provider_includes_retry_options():
     s = Settings(
         google_api_key="test-key",
@@ -304,6 +315,26 @@ def test_setup_environment_skips_google_application_credentials_when_not_set(mon
         _setup_environment()
         assert "GOOGLE_APPLICATION_CREDENTIALS" not in os.environ
     finally:
+        get_settings.cache_clear()
+
+
+def test_setup_environment_sets_vertexai_env_vars(monkeypatch):
+    """Test that VERTEXAI_PROJECT and VERTEXAI_LOCATION are set for LiteLLM."""
+    from lightspeed_agent.core.agent import _setup_environment
+
+    monkeypatch.setenv("GOOGLE_GENAI_USE_VERTEXAI", "TRUE")
+    monkeypatch.setenv("GOOGLE_CLOUD_PROJECT", "my-project")
+    monkeypatch.setenv("GOOGLE_CLOUD_LOCATION", "global")
+    get_settings.cache_clear()
+    try:
+        _setup_environment()
+        assert os.environ["VERTEXAI_PROJECT"] == "my-project"
+        assert os.environ["VERTEXAI_LOCATION"] == "global"
+    finally:
+        os.environ.pop("VERTEXAI_PROJECT", None)
+        os.environ.pop("VERTEXAI_LOCATION", None)
+        os.environ.pop("GOOGLE_CLOUD_PROJECT", None)
+        os.environ.pop("GOOGLE_CLOUD_LOCATION", None)
         get_settings.cache_clear()
 
 

@@ -112,7 +112,9 @@ llm:
   # "gemini" (default) — use Google AI Studio / Vertex AI.
   # "litellm" — use any provider supported by LiteLLM (OpenAI, Anthropic, etc.).
   provider: "gemini"
-  # Model name override. For litellm, required and uses "provider/model" format.
+  # Model name (works with both providers). For litellm, use "provider/model"
+  # format (e.g., "vertex_ai/gemini-2.5-flash"). For gemini, any provider/
+  # prefix is stripped automatically. Falls back to google.geminiModel when empty.
   model: ""
   # Custom API endpoint URL (litellm only, for self-hosted models).
   apiBase: ""

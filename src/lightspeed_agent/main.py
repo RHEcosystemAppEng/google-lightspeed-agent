@@ -62,7 +62,7 @@ def main() -> None:
         "Starting Lightspeed Agent",
         extra={
             "agent_name": settings.agent_name,
-            "model": settings.gemini_model,
+            "model": settings.llm_model or settings.gemini_model,
             "host": settings.agent_host,
             "port": settings.agent_port,
             "probe_port": settings.agent_probe_port,

@@ -481,6 +481,8 @@ class ProcurementService:
             return event.account.id
 
         # 2. Fall back to the Procurement API
+        if self._settings.skip_pubsub_oidc_verification:
+            return None
         if not self._settings.google_cloud_project:
             return None
 
@@ -562,6 +564,9 @@ class ProcurementService:
             RuntimeError: If the Procurement API returns a non-200 response.
             httpx.RequestError: On network errors.
         """
+        if self._settings.skip_pubsub_oidc_verification:
+            logger.info("Standalone mode: skipping account approval for %s", account_id)
+            return
         if not self._settings.google_cloud_project:
             logger.warning("GOOGLE_CLOUD_PROJECT not set, skipping account approval")
             return
@@ -608,6 +613,9 @@ class ProcurementService:
             RuntimeError: If the Procurement API returns a non-200 response.
             httpx.RequestError: On network errors.
         """
+        if self._settings.skip_pubsub_oidc_verification:
+            logger.info("Standalone mode: skipping entitlement approval for %s", entitlement_id)
+            return
         if not self._settings.google_cloud_project:
             logger.warning("GOOGLE_CLOUD_PROJECT not set, skipping approval")
             return
@@ -657,6 +665,8 @@ class ProcurementService:
             Account state string (e.g., "ACCOUNT_ACTIVE") or None on error.
         """
         try:
+            if self._settings.skip_pubsub_oidc_verification:
+                return "ACCOUNT_ACTIVE"
             if not self._settings.google_cloud_project:
                 logger.warning("GOOGLE_CLOUD_PROJECT not set, skipping account check")
                 return "ACCOUNT_ACTIVE"  # Allow for development
@@ -705,6 +715,9 @@ class ProcurementService:
             RuntimeError: If the Procurement API returns a non-200 response.
             httpx.RequestError: On network errors.
         """
+        if self._settings.skip_pubsub_oidc_verification:
+            logger.info("Standalone mode: skipping plan change approval for %s", entitlement_id)
+            return
         if not self._settings.google_cloud_project:
             logger.warning("GOOGLE_CLOUD_PROJECT not set, skipping plan change approval")
             return

@@ -137,7 +137,9 @@ def _setup_environment() -> None:
     if settings.google_genai_use_vertexai:
         if settings.google_cloud_project:
             os.environ["GOOGLE_CLOUD_PROJECT"] = settings.google_cloud_project
+            os.environ["VERTEXAI_PROJECT"] = settings.google_cloud_project
         os.environ["GOOGLE_CLOUD_LOCATION"] = settings.google_cloud_location
+        os.environ["VERTEXAI_LOCATION"] = settings.google_cloud_location
     elif settings.google_api_key:
         os.environ["GOOGLE_API_KEY"] = settings.google_api_key
 
@@ -196,6 +198,9 @@ def _create_model(settings: Settings) -> BaseLlm:
         return LiteLlm(**kwargs)
 
     model_name = settings.llm_model or settings.gemini_model
+    # Strip LiteLLM provider prefix (e.g. "vertex_ai/gemini-2.5-flash" -> "gemini-2.5-flash")
+    if "/" in model_name:
+        model_name = model_name.split("/", 1)[1]
     retry_opts = http_retry_options_from_settings(settings)
     logger.info(
         "Gemini model: model=%s retry_attempts=%s initial_delay=%ss "

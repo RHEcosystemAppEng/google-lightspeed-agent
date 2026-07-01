@@ -33,9 +33,9 @@ class Settings(BaseSettings):
     llm_model: str | None = Field(
         default=None,
         description=(
-            "Model name override. For gemini provider, overrides GEMINI_MODEL if set. "
-            "For litellm provider, this is required and uses 'provider/model' format "
-            "(e.g., 'openai/gpt-4o', 'anthropic/claude-sonnet-4-20250514')."
+            "Model name. Works with both providers: for gemini, any 'provider/' prefix "
+            "is stripped automatically; for litellm, the full 'provider/model' format is "
+            "passed through. Falls back to GEMINI_MODEL when not set."
         ),
     )
     llm_api_key: str | None = Field(
