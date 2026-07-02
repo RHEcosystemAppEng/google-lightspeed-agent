@@ -147,7 +147,7 @@ CORS → body size limits → security headers → rate limiting (60 req/min, 10
 ### A2UI (Agent-to-UI)
 
 Optional rich UI rendering for Gemini Enterprise, controlled by `A2UI_ENABLED` (default `false`).
-When enabled, the agent adds a `SendA2uiToClientToolset` (from `a2ui-agent-sdk`) with the A2UI Basic Catalog v0.8 schema and domain-specific Insights examples. The Agent Card declares the A2UI extension and adds `application/json+a2ui` to input and output modes. Code is in `a2ui/prompt.py` (schema manager, catalog access) and `a2ui/examples.py` (Insights-specific A2UI examples).
+When enabled, the agent adds a `SendA2uiToClientToolset` (from `a2ui-agent-sdk`) with the A2UI Basic Catalog v0.9 schema and domain-specific Insights examples. The Agent Card declares the A2UI extension and adds `application/json+a2ui` to input and output modes. Code is in `a2ui/prompt.py` (schema manager, catalog access) and `a2ui/examples.py` (Insights-specific A2UI examples).
 
 ## GitOps Companion Repository
 

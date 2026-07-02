@@ -1,84 +1,145 @@
-"""Domain-specific A2UI v0.8 examples for Red Hat Insights data.
+"""Domain-specific A2UI v0.9 examples for Red Hat Insights data.
 
 These examples teach the LLM how to format Insights responses using
-A2UI Basic Catalog v0.8 components. Each example is a complete, valid
-A2UI payload with surfaceUpdate, dataModelUpdate, and beginRendering.
+A2UI Basic Catalog v0.9 components. Each example is a complete, valid
+A2UI payload with createSurface, updateComponents, and updateDataModel.
 """
 
 INSIGHTS_A2UI_EXAMPLES = """
 ## Red Hat Insights A2UI Examples
 
 Use these examples as templates when rendering Red Hat Insights data.
-Each shows the correct A2UI v0.8 flat adjacency-list structure with
-surfaceUpdate, dataModelUpdate, and beginRendering.
+Each shows the correct A2UI v0.9 flat component structure with
+createSurface, updateComponents, and updateDataModel.
 
-### Example 1: CVE Vulnerability Table
+### Example 1: CVE Vulnerability List
 
 Use this pattern when displaying lists of CVEs from the Vulnerability service.
-Columns: CVE ID, Severity, CVSS Score, Affected Systems, Status.
+Each CVE is rendered as a Card within a List, showing ID, severity, CVSS score,
+affected systems, and status.
 
 ```json
 {
   "a2ui": [
     {
-      "surfaceUpdate": {
+      "version": "v0.9",
+      "createSurface": {
+        "surfaceId": "main",
+        "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+      }
+    },
+    {
+      "version": "v0.9",
+      "updateComponents": {
+        "surfaceId": "main",
         "components": [
           {
-            "column": {
-              "id": "vuln_root",
-              "children": {
-                "explicitList": ["vuln_title", "vuln_table"]
-              }
-            }
+            "component": "Column",
+            "id": "vuln_root",
+            "children": ["vuln_title", "vuln_list"]
           },
           {
-            "text": {
-              "id": "vuln_title",
-              "text": "Critical & Important Vulnerabilities",
-              "style": "headline"
-            }
+            "component": "Text",
+            "id": "vuln_title",
+            "text": "Critical & Important Vulnerabilities",
+            "usageHint": "h1"
           },
           {
-            "table": {
-              "id": "vuln_table",
-              "columns": [
-                {"header": "CVE ID", "field": "cve_id"},
-                {"header": "Severity", "field": "severity"},
-                {"header": "CVSS Score", "field": "cvss_score"},
-                {"header": "Affected Systems", "field": "affected_systems"},
-                {"header": "Status", "field": "status"}
-              ]
-            }
+            "component": "List",
+            "id": "vuln_list",
+            "children": ["vuln_card_1", "vuln_card_2"]
+          },
+          {
+            "component": "Card",
+            "id": "vuln_card_1",
+            "children": ["vuln_col_1"]
+          },
+          {
+            "component": "Column",
+            "id": "vuln_col_1",
+            "children": ["vuln_1_id", "vuln_1_details"]
+          },
+          {
+            "component": "Text",
+            "id": "vuln_1_id",
+            "text": "CVE-2024-1234",
+            "usageHint": "h2"
+          },
+          {
+            "component": "Row",
+            "id": "vuln_1_details",
+            "children": ["vuln_1_severity", "vuln_1_cvss", "vuln_1_systems", "vuln_1_status"]
+          },
+          {
+            "component": "Text",
+            "id": "vuln_1_severity",
+            "text": "Severity: Critical"
+          },
+          {
+            "component": "Text",
+            "id": "vuln_1_cvss",
+            "text": "CVSS: 9.8"
+          },
+          {
+            "component": "Text",
+            "id": "vuln_1_systems",
+            "text": "Affected: 12 systems"
+          },
+          {
+            "component": "Text",
+            "id": "vuln_1_status",
+            "text": "Status: Applicable"
+          },
+          {
+            "component": "Card",
+            "id": "vuln_card_2",
+            "children": ["vuln_col_2"]
+          },
+          {
+            "component": "Column",
+            "id": "vuln_col_2",
+            "children": ["vuln_2_id", "vuln_2_details"]
+          },
+          {
+            "component": "Text",
+            "id": "vuln_2_id",
+            "text": "CVE-2024-5678",
+            "usageHint": "h2"
+          },
+          {
+            "component": "Row",
+            "id": "vuln_2_details",
+            "children": ["vuln_2_severity", "vuln_2_cvss", "vuln_2_systems", "vuln_2_status"]
+          },
+          {
+            "component": "Text",
+            "id": "vuln_2_severity",
+            "text": "Severity: Important"
+          },
+          {
+            "component": "Text",
+            "id": "vuln_2_cvss",
+            "text": "CVSS: 7.5"
+          },
+          {
+            "component": "Text",
+            "id": "vuln_2_systems",
+            "text": "Affected: 8 systems"
+          },
+          {
+            "component": "Text",
+            "id": "vuln_2_status",
+            "text": "Status: Applicable"
           }
         ]
       }
     },
     {
-      "dataModelUpdate": {
-        "data": {
-          "vuln_table": {
-            "rows": [
-              {
-                "cve_id": "CVE-2024-1234",
-                "severity": "Critical",
-                "cvss_score": "9.8",
-                "affected_systems": "12",
-                "status": "Applicable"
-              },
-              {
-                "cve_id": "CVE-2024-5678",
-                "severity": "Important",
-                "cvss_score": "7.5",
-                "affected_systems": "8",
-                "status": "Applicable"
-              }
-            ]
-          }
-        }
+      "version": "v0.9",
+      "updateDataModel": {
+        "surfaceId": "main",
+        "value": {}
       }
-    },
-    {
-      "beginRendering": {}
     }
   ]
 }
@@ -93,178 +154,276 @@ description, affected systems count, and remediation guidance.
 {
   "a2ui": [
     {
-      "surfaceUpdate": {
+      "version": "v0.9",
+      "createSurface": {
+        "surfaceId": "main",
+        "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+      }
+    },
+    {
+      "version": "v0.9",
+      "updateComponents": {
+        "surfaceId": "main",
         "components": [
           {
-            "card": {
-              "id": "rec_card",
-              "child": "rec_content"
-            }
+            "component": "Card",
+            "id": "rec_card",
+            "children": ["rec_content"]
           },
           {
-            "column": {
-              "id": "rec_content",
-              "children": {
-                "explicitList": [
-                  "rec_title",
-                  "rec_risk_row",
-                  "rec_desc",
-                  "rec_remediation_title",
-                  "rec_remediation_text",
-                  "rec_action_btn"
-                ]
-              }
-            }
+            "component": "Column",
+            "id": "rec_content",
+            "children": [
+              "rec_title",
+              "rec_risk_row",
+              "rec_desc",
+              "rec_remediation_title",
+              "rec_remediation_text",
+              "rec_action_btn"
+            ]
           },
           {
-            "text": {
-              "id": "rec_title",
-              "text": "Recommendation: Update OpenSSL packages",
-              "style": "headline"
-            }
+            "component": "Text",
+            "id": "rec_title",
+            "text": "Recommendation: Update OpenSSL packages",
+            "usageHint": "h1"
           },
           {
-            "row": {
-              "id": "rec_risk_row",
-              "children": {
-                "explicitList": ["rec_risk_label", "rec_systems_label"]
-              }
-            }
+            "component": "Row",
+            "id": "rec_risk_row",
+            "children": ["rec_risk_label", "rec_systems_label"]
           },
           {
-            "text": {
-              "id": "rec_risk_label",
-              "text": "Risk: Critical"
-            }
+            "component": "Text",
+            "id": "rec_risk_label",
+            "text": "Risk: Critical"
           },
           {
-            "text": {
-              "id": "rec_systems_label",
-              "text": "Affected Systems: 15"
-            }
+            "component": "Text",
+            "id": "rec_systems_label",
+            "text": "Affected Systems: 15"
           },
           {
-            "text": {
-              "id": "rec_desc",
-              "text": "OpenSSL < 3.0.13 is vulnerable to CVE-2024-0727. Update to fix."
-            }
+            "component": "Text",
+            "id": "rec_desc",
+            "text": "OpenSSL < 3.0.13 is vulnerable to CVE-2024-0727. Update to fix."
           },
           {
-            "text": {
-              "id": "rec_remediation_title",
-              "text": "Remediation Steps",
-              "style": "subheadline"
-            }
+            "component": "Text",
+            "id": "rec_remediation_title",
+            "text": "Remediation Steps",
+            "usageHint": "h2"
           },
           {
-            "text": {
-              "id": "rec_remediation_text",
-              "text": "1. Review affected systems\\n2. Create playbook\\n3. Execute"
-            }
+            "component": "Text",
+            "id": "rec_remediation_text",
+            "text": "1. Review affected systems\\n2. Create playbook\\n3. Execute"
           },
           {
-            "button": {
-              "id": "rec_action_btn",
-              "child": "rec_action_btn_text"
-            }
+            "component": "Button",
+            "id": "rec_action_btn",
+            "children": ["rec_action_btn_text"]
           },
           {
-            "text": {
-              "id": "rec_action_btn_text",
-              "text": "Create Remediation Playbook"
-            }
+            "component": "Text",
+            "id": "rec_action_btn_text",
+            "text": "Create Remediation Playbook"
           }
         ]
       }
     },
     {
-      "dataModelUpdate": {
-        "data": {}
+      "version": "v0.9",
+      "updateDataModel": {
+        "surfaceId": "main",
+        "value": {}
       }
-    },
-    {
-      "beginRendering": {}
     }
   ]
 }
 ```
 
-### Example 3: System Inventory Table
+### Example 3: System Inventory List
 
 Use this pattern when listing registered systems from the Inventory service.
-Columns: Display Name, OS, Last Check-in, Stale Status.
+Each system is rendered as a Card showing display name, OS, last check-in,
+and stale status. Uses data binding to populate values from the data model.
 
 ```json
 {
   "a2ui": [
     {
-      "surfaceUpdate": {
+      "version": "v0.9",
+      "createSurface": {
+        "surfaceId": "main",
+        "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+      }
+    },
+    {
+      "version": "v0.9",
+      "updateComponents": {
+        "surfaceId": "main",
         "components": [
           {
-            "column": {
-              "id": "inv_root",
-              "children": {
-                "explicitList": ["inv_title", "inv_summary", "inv_table"]
-              }
-            }
+            "component": "Column",
+            "id": "inv_root",
+            "children": ["inv_title", "inv_summary", "inv_list"]
           },
           {
-            "text": {
-              "id": "inv_title",
-              "text": "Registered Systems",
-              "style": "headline"
-            }
+            "component": "Text",
+            "id": "inv_title",
+            "text": "Registered Systems",
+            "usageHint": "h1"
           },
           {
-            "text": {
-              "id": "inv_summary",
-              "text": "Showing 3 of 142 systems"
-            }
+            "component": "Text",
+            "id": "inv_summary",
+            "text": {"$data": "/summary"}
           },
           {
-            "table": {
-              "id": "inv_table",
-              "columns": [
-                {"header": "Display Name", "field": "display_name"},
-                {"header": "Operating System", "field": "os"},
-                {"header": "Last Check-in", "field": "last_seen"},
-                {"header": "Status", "field": "stale_status"}
-              ]
-            }
+            "component": "List",
+            "id": "inv_list",
+            "children": ["inv_card_1", "inv_card_2", "inv_card_3"]
+          },
+          {
+            "component": "Card",
+            "id": "inv_card_1",
+            "children": ["inv_col_1"]
+          },
+          {
+            "component": "Column",
+            "id": "inv_col_1",
+            "children": ["inv_1_name", "inv_1_details"]
+          },
+          {
+            "component": "Text",
+            "id": "inv_1_name",
+            "text": {"$data": "/systems/0/display_name"},
+            "usageHint": "h2"
+          },
+          {
+            "component": "Row",
+            "id": "inv_1_details",
+            "children": ["inv_1_os", "inv_1_checkin", "inv_1_status"]
+          },
+          {
+            "component": "Text",
+            "id": "inv_1_os",
+            "text": {"$data": "/systems/0/os"}
+          },
+          {
+            "component": "Text",
+            "id": "inv_1_checkin",
+            "text": {"$data": "/systems/0/last_seen"}
+          },
+          {
+            "component": "Text",
+            "id": "inv_1_status",
+            "text": {"$data": "/systems/0/stale_status"}
+          },
+          {
+            "component": "Card",
+            "id": "inv_card_2",
+            "children": ["inv_col_2"]
+          },
+          {
+            "component": "Column",
+            "id": "inv_col_2",
+            "children": ["inv_2_name", "inv_2_details"]
+          },
+          {
+            "component": "Text",
+            "id": "inv_2_name",
+            "text": {"$data": "/systems/1/display_name"},
+            "usageHint": "h2"
+          },
+          {
+            "component": "Row",
+            "id": "inv_2_details",
+            "children": ["inv_2_os", "inv_2_checkin", "inv_2_status"]
+          },
+          {
+            "component": "Text",
+            "id": "inv_2_os",
+            "text": {"$data": "/systems/1/os"}
+          },
+          {
+            "component": "Text",
+            "id": "inv_2_checkin",
+            "text": {"$data": "/systems/1/last_seen"}
+          },
+          {
+            "component": "Text",
+            "id": "inv_2_status",
+            "text": {"$data": "/systems/1/stale_status"}
+          },
+          {
+            "component": "Card",
+            "id": "inv_card_3",
+            "children": ["inv_col_3"]
+          },
+          {
+            "component": "Column",
+            "id": "inv_col_3",
+            "children": ["inv_3_name", "inv_3_details"]
+          },
+          {
+            "component": "Text",
+            "id": "inv_3_name",
+            "text": {"$data": "/systems/2/display_name"},
+            "usageHint": "h2"
+          },
+          {
+            "component": "Row",
+            "id": "inv_3_details",
+            "children": ["inv_3_os", "inv_3_checkin", "inv_3_status"]
+          },
+          {
+            "component": "Text",
+            "id": "inv_3_os",
+            "text": {"$data": "/systems/2/os"}
+          },
+          {
+            "component": "Text",
+            "id": "inv_3_checkin",
+            "text": {"$data": "/systems/2/last_seen"}
+          },
+          {
+            "component": "Text",
+            "id": "inv_3_status",
+            "text": {"$data": "/systems/2/stale_status"}
           }
         ]
       }
     },
     {
-      "dataModelUpdate": {
-        "data": {
-          "inv_table": {
-            "rows": [
-              {
-                "display_name": "prod-web-01.example.com",
-                "os": "RHEL 9.4",
-                "last_seen": "2024-12-01T10:30:00Z",
-                "stale_status": "Fresh"
-              },
-              {
-                "display_name": "db-primary.example.com",
-                "os": "RHEL 8.10",
-                "last_seen": "2024-11-30T22:15:00Z",
-                "stale_status": "Fresh"
-              },
-              {
-                "display_name": "legacy-app.example.com",
-                "os": "RHEL 7.9",
-                "last_seen": "2024-11-15T08:00:00Z",
-                "stale_status": "Stale"
-              }
-            ]
-          }
+      "version": "v0.9",
+      "updateDataModel": {
+        "surfaceId": "main",
+        "value": {
+          "summary": "Showing 3 of 142 systems",
+          "systems": [
+            {
+              "display_name": "prod-web-01.example.com",
+              "os": "RHEL 9.4",
+              "last_seen": "2024-12-01T10:30:00Z",
+              "stale_status": "Fresh"
+            },
+            {
+              "display_name": "db-primary.example.com",
+              "os": "RHEL 8.10",
+              "last_seen": "2024-11-30T22:15:00Z",
+              "stale_status": "Fresh"
+            },
+            {
+              "display_name": "legacy-app.example.com",
+              "os": "RHEL 7.9",
+              "last_seen": "2024-11-15T08:00:00Z",
+              "stale_status": "Stale"
+            }
+          ]
         }
       }
-    },
-    {
-      "beginRendering": {}
     }
   ]
 }
@@ -279,114 +438,159 @@ it covers and an action button to execute.
 {
   "a2ui": [
     {
-      "surfaceUpdate": {
+      "version": "v0.9",
+      "createSurface": {
+        "surfaceId": "main",
+        "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+      }
+    },
+    {
+      "version": "v0.9",
+      "updateComponents": {
+        "surfaceId": "main",
         "components": [
           {
-            "card": {
-              "id": "remed_card",
-              "child": "remed_content"
-            }
+            "component": "Card",
+            "id": "remed_card",
+            "children": ["remed_content"]
           },
           {
-            "column": {
-              "id": "remed_content",
-              "children": {
-                "explicitList": [
-                  "remed_title",
-                  "remed_info_row",
-                  "remed_systems_title",
-                  "remed_systems_table",
-                  "remed_execute_btn"
-                ]
-              }
-            }
+            "component": "Column",
+            "id": "remed_content",
+            "children": [
+              "remed_title",
+              "remed_info_row",
+              "remed_systems_title",
+              "remed_systems_list",
+              "remed_execute_btn"
+            ]
           },
           {
-            "text": {
-              "id": "remed_title",
-              "text": "Remediation Playbook: Fix OpenSSL CVEs",
-              "style": "headline"
-            }
+            "component": "Text",
+            "id": "remed_title",
+            "text": "Remediation Playbook: Fix OpenSSL CVEs",
+            "usageHint": "h1"
           },
           {
-            "row": {
-              "id": "remed_info_row",
-              "children": {
-                "explicitList": ["remed_created", "remed_actions_count"]
-              }
-            }
+            "component": "Row",
+            "id": "remed_info_row",
+            "children": ["remed_created", "remed_actions_count"]
           },
           {
-            "text": {
-              "id": "remed_created",
-              "text": "Created: 2024-12-01"
-            }
+            "component": "Text",
+            "id": "remed_created",
+            "text": "Created: 2024-12-01"
           },
           {
-            "text": {
-              "id": "remed_actions_count",
-              "text": "Actions: 3"
-            }
+            "component": "Text",
+            "id": "remed_actions_count",
+            "text": "Actions: 3"
           },
           {
-            "text": {
-              "id": "remed_systems_title",
-              "text": "Systems Covered",
-              "style": "subheadline"
-            }
+            "component": "Text",
+            "id": "remed_systems_title",
+            "text": "Systems Covered",
+            "usageHint": "h2"
           },
           {
-            "table": {
-              "id": "remed_systems_table",
-              "columns": [
-                {"header": "System", "field": "system_name"},
-                {"header": "Issue", "field": "issue"},
-                {"header": "Action", "field": "action"}
-              ]
-            }
+            "component": "List",
+            "id": "remed_systems_list",
+            "children": ["remed_sys_card_1", "remed_sys_card_2", "remed_sys_card_3"]
           },
           {
-            "button": {
-              "id": "remed_execute_btn",
-              "child": "remed_execute_btn_text"
-            }
+            "component": "Card",
+            "id": "remed_sys_card_1",
+            "children": ["remed_sys_row_1"]
           },
           {
-            "text": {
-              "id": "remed_execute_btn_text",
-              "text": "Execute Playbook"
-            }
+            "component": "Row",
+            "id": "remed_sys_row_1",
+            "children": ["remed_sys_1_name", "remed_sys_1_issue", "remed_sys_1_action"]
+          },
+          {
+            "component": "Text",
+            "id": "remed_sys_1_name",
+            "text": "prod-web-01.example.com"
+          },
+          {
+            "component": "Text",
+            "id": "remed_sys_1_issue",
+            "text": "CVE-2024-1234"
+          },
+          {
+            "component": "Text",
+            "id": "remed_sys_1_action",
+            "text": "Update openssl to 3.0.13"
+          },
+          {
+            "component": "Card",
+            "id": "remed_sys_card_2",
+            "children": ["remed_sys_row_2"]
+          },
+          {
+            "component": "Row",
+            "id": "remed_sys_row_2",
+            "children": ["remed_sys_2_name", "remed_sys_2_issue", "remed_sys_2_action"]
+          },
+          {
+            "component": "Text",
+            "id": "remed_sys_2_name",
+            "text": "prod-web-02.example.com"
+          },
+          {
+            "component": "Text",
+            "id": "remed_sys_2_issue",
+            "text": "CVE-2024-1234"
+          },
+          {
+            "component": "Text",
+            "id": "remed_sys_2_action",
+            "text": "Update openssl to 3.0.13"
+          },
+          {
+            "component": "Card",
+            "id": "remed_sys_card_3",
+            "children": ["remed_sys_row_3"]
+          },
+          {
+            "component": "Row",
+            "id": "remed_sys_row_3",
+            "children": ["remed_sys_3_name", "remed_sys_3_issue", "remed_sys_3_action"]
+          },
+          {
+            "component": "Text",
+            "id": "remed_sys_3_name",
+            "text": "db-primary.example.com"
+          },
+          {
+            "component": "Text",
+            "id": "remed_sys_3_issue",
+            "text": "CVE-2024-5678"
+          },
+          {
+            "component": "Text",
+            "id": "remed_sys_3_action",
+            "text": "Update kernel to 5.14.0-362.24.1"
+          },
+          {
+            "component": "Button",
+            "id": "remed_execute_btn",
+            "children": ["remed_execute_btn_text"]
+          },
+          {
+            "component": "Text",
+            "id": "remed_execute_btn_text",
+            "text": "Execute Playbook"
           }
         ]
       }
     },
     {
-      "dataModelUpdate": {
-        "data": {
-          "remed_systems_table": {
-            "rows": [
-              {
-                "system_name": "prod-web-01.example.com",
-                "issue": "CVE-2024-1234",
-                "action": "Update openssl to 3.0.13"
-              },
-              {
-                "system_name": "prod-web-02.example.com",
-                "issue": "CVE-2024-1234",
-                "action": "Update openssl to 3.0.13"
-              },
-              {
-                "system_name": "db-primary.example.com",
-                "issue": "CVE-2024-5678",
-                "action": "Update kernel to 5.14.0-362.24.1"
-              }
-            ]
-          }
-        }
+      "version": "v0.9",
+      "updateDataModel": {
+        "surfaceId": "main",
+        "value": {}
       }
-    },
-    {
-      "beginRendering": {}
     }
   ]
 }

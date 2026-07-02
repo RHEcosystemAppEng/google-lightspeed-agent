@@ -497,9 +497,17 @@
   }
 
   function renderA2UIComponent(comp, componentsById) {
-    var wrapper = comp.component;
-    var type = Object.keys(wrapper)[0];
-    var props = wrapper[type];
+    var type, props;
+    if (typeof comp.component === "string") {
+      // v0.9 flat format: {component: "Text", id: "foo", text: "bar"}
+      type = comp.component;
+      props = comp;
+    } else {
+      // v0.8 wrapped format: {component: {Text: {id: "foo", text: "bar"}}}
+      var wrapper = comp.component;
+      type = Object.keys(wrapper)[0];
+      props = wrapper[type];
+    }
 
     if (type === "Text") {
       var el = document.createElement("div");
@@ -626,7 +634,8 @@
 
   function renderChildren(children, container, componentsById) {
     if (!children) return;
-    var ids = children.explicitList || [];
+    // v0.9: direct array; v0.8: {explicitList: [...]}
+    var ids = Array.isArray(children) ? children : (children.explicitList || []);
     ids.forEach(function (childId) {
       if (componentsById[childId]) {
         var childEl = renderA2UIComponent(componentsById[childId], componentsById);
@@ -655,13 +664,33 @@
     var rootId = null;
 
     messages.forEach(function (msg) {
+      // v0.8: surfaceUpdate.components
       if (msg.surfaceUpdate && msg.surfaceUpdate.components) {
         msg.surfaceUpdate.components.forEach(function (c) {
           componentsById[c.id] = c;
         });
       }
+      // v0.9: updateComponents.components
+      if (msg.updateComponents && msg.updateComponents.components) {
+        msg.updateComponents.components.forEach(function (c) {
+          componentsById[c.id] = c;
+        });
+      }
+      // v0.8: beginRendering.root
       if (msg.beginRendering) {
         rootId = msg.beginRendering.root;
+      }
+      // v0.9: createSurface (root is the component with id "root")
+      if (msg.createSurface) {
+        rootId = "root";
+      }
+      // v0.9: updateDataModel — store data for potential binding
+      if (msg.updateDataModel && msg.updateDataModel.value) {
+        container.dataset.a2uiData = JSON.stringify(msg.updateDataModel.value);
+      }
+      // v0.8: dataModelUpdate — store data for potential binding
+      if (msg.dataModelUpdate && msg.dataModelUpdate.data) {
+        container.dataset.a2uiData = JSON.stringify(msg.dataModelUpdate.data);
       }
     });
 

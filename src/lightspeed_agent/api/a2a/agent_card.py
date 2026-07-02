@@ -134,10 +134,10 @@ def _build_rate_limit_extension() -> AgentExtension:
 def _build_a2ui_extension() -> AgentExtension:
     """Build A2UI extension for Gemini Enterprise rich UI rendering."""
     return AgentExtension(
-        uri="https://a2ui.org/a2a-extension/a2ui/v0.8",
+        uri="https://a2ui.org/a2a-extension/a2ui/v0.9",
         params={
             "supportedCatalogIds": [
-                "https://a2ui.org/specification/v0_8/standard_catalog_definition.json"
+                "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
             ],
             "acceptsInlineCatalogs": True,
         },

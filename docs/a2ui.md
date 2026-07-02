@@ -76,7 +76,7 @@ The Google Cloud AI Agent Marketplace / Gemini Enterprise expects registered age
 
 ### Key Concepts
 
-**Component Catalog** — A JSON Schema file defining the set of available UI component types. The agent uses the A2UI **Basic Catalog** (v0.8), which includes standard components like Text, Card, Button, Table, TextField, DateTimeInput, Image, Row, and Column. Agents can only generate components present in the catalog.
+**Component Catalog** — A JSON Schema file defining the set of available UI component types. The agent uses the A2UI **Basic Catalog** (v0.9), which includes standard components like Text, Card, Button, Row, Column, List, Tabs, TextField, DateTimeInput, and Image. Agents can only generate components present in the catalog.
 
 **SendA2uiToClientToolset** — The agent uses the SDK's `SendA2uiToClientToolset` which automatically injects the A2UI schema and domain-specific examples into LLM requests. The LLM calls the `send_a2ui_json_to_client` tool, which validates JSON against the catalog schema before delivering it to the client. This replaces manual system prompt augmentation with server-side validation.
 
@@ -86,7 +86,7 @@ The Google Cloud AI Agent Marketplace / Gemini Enterprise expects registered age
 
 ### Spec Version
 
-The agent targets **A2UI v0.8**, which is the version currently supported by Gemini Enterprise. The `a2ui-agent-sdk` supports both v0.8 and v0.9, but we pin to v0.8 for marketplace compatibility.
+The agent targets **A2UI v0.9**, the current stable version supported by Gemini Enterprise. The `a2ui-agent-sdk` supports v0.8 through v0.9.1.
 
 ## Configuration
 
@@ -101,7 +101,7 @@ When `A2UI_ENABLED=false` (the default), the agent behaves exactly as before —
 When `A2UI_ENABLED=true`:
 
 1. The `SendA2uiToClientToolset` is added to the agent's tools, injecting the A2UI catalog schema and domain-specific Insights examples into LLM requests (the LLM validates JSON via the `send_a2ui_json_to_client` tool)
-2. The Agent Card declares the A2UI extension (`https://a2ui.org/a2a-extension/a2ui/v0.8`)
+2. The Agent Card declares the A2UI extension (`https://a2ui.org/a2a-extension/a2ui/v0.9`)
 3. The Agent Card's `defaultOutputModes` includes `application/json+a2ui`
 4. The Agent Card's `defaultInputModes` includes `application/json+a2ui` (for receiving A2UI action payloads like button clicks)
 
@@ -135,10 +135,10 @@ Added to `capabilities.extensions`:
 
 ```json
 {
-  "uri": "https://a2ui.org/a2a-extension/a2ui/v0.8",
+  "uri": "https://a2ui.org/a2a-extension/a2ui/v0.9",
   "params": {
     "supportedCatalogIds": [
-      "https://a2ui.org/specification/v0_8/standard_catalog_definition.json"
+      "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
     ],
     "acceptsInlineCatalogs": true
   }
@@ -169,8 +169,8 @@ src/lightspeed_agent/
 
 | Function | File | Purpose |
 |----------|------|---------|
-| `get_a2ui_schema_manager()` | `a2ui/prompt.py` | Creates and caches the A2UI schema manager with Basic Catalog v0.8 |
-| `get_a2ui_catalog()` | `a2ui/prompt.py` | Returns the A2uiCatalog for the Basic Catalog v0.8 |
+| `get_a2ui_schema_manager()` | `a2ui/prompt.py` | Creates and caches the A2UI schema manager with Basic Catalog v0.9 |
+| `get_a2ui_catalog()` | `a2ui/prompt.py` | Returns the A2uiCatalog for the Basic Catalog v0.9 |
 | `get_insights_a2ui_examples()` | `a2ui/prompt.py` | Returns domain-specific A2UI examples for Insights data |
 | `_build_a2ui_extension()` | `api/a2a/agent_card.py` | Builds the A2UI AgentCard extension |
 
@@ -180,11 +180,11 @@ A2UI is particularly valuable for Insights data because structured UI makes comp
 
 | Insights Service | A2UI Components | Benefit |
 |-----------------|-----------------|---------|
-| **Vulnerability** | Tables, Cards | CVE lists with severity badges, sortable columns |
+| **Vulnerability** | Lists, Cards | CVE lists with severity badges, structured detail cards |
 | **Advisor** | Cards, Text | Recommendation cards with risk levels and remediation steps |
-| **Inventory** | Tables | System lists with filterable attributes |
+| **Inventory** | Lists, Cards | System lists with structured attributes |
 | **Remediations** | Cards, Buttons | Playbook summaries with action buttons |
-| **Planning** | Tables, Text | Upgrade readiness matrices |
+| **Planning** | Lists, Text | Upgrade readiness views |
 
 ## Testing
 
@@ -199,7 +199,7 @@ python -m pytest tests/test_a2ui.py -v
 
 Tests cover:
 - Schema manager initialization and caching
-- System prompt augmentation (contains both base instruction and A2UI schema)
+- A2UI catalog and Insights examples retrieval
 - Agent Card extension presence/absence based on `A2UI_ENABLED`
 - Agent Card output modes based on `A2UI_ENABLED`
 - Agent Card input modes based on `A2UI_ENABLED`
@@ -224,7 +224,7 @@ curl -s http://localhost:8000/.well-known/agent.json | jq '.capabilities.extensi
 #   "https://cloud.google.com/marketplace/docs/partners/ai-agents/setup-dcr"
 #   "urn:redhat:lightspeed:access-mode"
 #   "urn:redhat:lightspeed:rate-limiting"
-#   "https://a2ui.org/a2a-extension/a2ui/v0.8"
+#   "https://a2ui.org/a2a-extension/a2ui/v0.9"
 
 # Verify output modes include A2UI
 curl -s http://localhost:8000/.well-known/agent.json | jq '.defaultOutputModes'
@@ -352,8 +352,8 @@ curl -s http://localhost:8000/.well-known/agent.json | jq '.capabilities.extensi
 ## References
 
 - [A2UI Official Site](https://a2ui.org/)
-- [A2UI v0.8 Specification](https://a2ui.org/specification/v0.8-a2ui/)
-- [A2UI A2A Extension Specification](https://a2ui.org/specification/v0.8-a2a-extension/)
+- [A2UI v0.9 Specification](https://a2ui.org/specification/v0.9-a2ui/)
+- [A2UI A2A Extension Specification](https://a2ui.org/specification/v0.9-a2a-extension/)
 - [A2UI Agent Development Guide](https://a2ui.org/guides/agent-development/)
 - [ADK A2UI Integration](https://adk.dev/integrations/a2ui/)
 - [Register A2UI Agents in Gemini Enterprise](https://docs.cloud.google.com/gemini/enterprise/docs/a2ui-agents/register-and-manage-an-a2ui-agent)
