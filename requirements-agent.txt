@@ -3,6 +3,12 @@
 a2a-sdk==0.3.26 \
     --hash=sha256:44068e2d037afbb07ab899267439e9bc7eaa7ac2af94f1e8b239933c993ad52d \
     --hash=sha256:754e0573f6d33b225c1d8d51f640efa69cbbed7bdfb06ce9c3540ea9f58d4a91
+    # via
+    #   lightspeed-agent (pyproject.toml)
+    #   a2ui-agent-sdk
+a2ui-agent-sdk==0.2.2 \
+    --hash=sha256:1f512432d27164ecd22659a63e550dbe7e85fd1dbbc4c12f7b4fef63606539fe \
+    --hash=sha256:7da826c70a51a0d118a8c24c95c58b24b5a6b5c48df17ef8ef24e9144b8540d6
     # via lightspeed-agent (pyproject.toml)
 aiohappyeyeballs==2.6.2 \
     --hash=sha256:4708045e2d7a6c6bdf8aafa8ed39649eaf926a4543b54560659129e3365953c4 \
@@ -760,7 +766,9 @@ fsspec==2026.4.0 \
 google-adk==2.4.0 \
     --hash=sha256:5a2996b288d591deefcb277eeeeb7da838d72056675763bfef52ad3b36975dde \
     --hash=sha256:fba91f1a693e5fc2fd13dc40d625562bd52e44a7baaeecedb01811a68063d847
-    # via lightspeed-agent (pyproject.toml)
+    # via
+    #   lightspeed-agent (pyproject.toml)
+    #   a2ui-agent-sdk
 google-api-core==2.30.3 \
     --hash=sha256:a85761ba72c444dad5d611c2220633480b2b6be2521eca69cca2dbb3ffd6bfe8 \
     --hash=sha256:e601a37f148585319b26db36e219df68c5d07b6382cff2d580e83404e44d641b
@@ -783,7 +791,9 @@ google-cloud-service-control==1.19.0 \
 google-genai==2.10.0 \
     --hash=sha256:77912cd558cd7dfd5b75c25fd1c609e78d7954dde583331104022a46ea90f9ee \
     --hash=sha256:d5350311567ae660c24cbc1752aee4b3d660f89c0106d2dcd2a69978c35afe1e
-    # via google-adk
+    # via
+    #   a2ui-agent-sdk
+    #   google-adk
 googleapis-common-protos==1.75.0 \
     --hash=sha256:53a062ff3c32552fbd62c11fe23768b78e4ddf0494d5e5fd97d3f4689c75fbbd \
     --hash=sha256:961ed60399c457ceb0ee8f285a84c870aabc9c6a832b9d37bb281b5bebde43ed
@@ -1144,6 +1154,7 @@ jsonschema==4.26.0 \
     --hash=sha256:0c26707e2efad8aa1bfc5b7ce170f3fccc2e4918ff85989ba9ffa9facb2be326 \
     --hash=sha256:d489f15263b8d200f8387e64b4c3a75f06629559fb73deb8fdfb525f2dab50ce
     # via
+    #   a2ui-agent-sdk
     #   google-adk
     #   litellm
     #   mcp
