@@ -308,16 +308,19 @@ steps:
           READY=$$(gcloud run services describe ${_HANDLER_SERVICE_NAME} \
               --region=${_REGION} \
               --project=${PROJECT_ID} \
-              --format=json | python3 << 'PYEOF'
+              --format=json | python3 -c '
         import json, sys
-        svc = json.load(sys.stdin)
+        raw = sys.stdin.read()
+        if not raw.strip():
+            print("Unknown")
+            sys.exit(0)
+        svc = json.loads(raw)
         for c in svc.get("status", {}).get("conditions", []):
             if c["type"] == "Ready":
                 print(c["status"])
                 sys.exit(0)
         print("Unknown")
-        PYEOF
-          )
+        ')
           if [ "$$READY" = "True" ]; then
             echo "${_HANDLER_SERVICE_NAME} is healthy and serving traffic."
             exit 0
@@ -345,16 +348,19 @@ steps:
           READY=$$(gcloud run services describe ${_SERVICE_NAME} \
               --region=${_REGION} \
               --project=${PROJECT_ID} \
-              --format=json | python3 << 'PYEOF'
+              --format=json | python3 -c '
         import json, sys
-        svc = json.load(sys.stdin)
+        raw = sys.stdin.read()
+        if not raw.strip():
+            print("Unknown")
+            sys.exit(0)
+        svc = json.loads(raw)
         for c in svc.get("status", {}).get("conditions", []):
             if c["type"] == "Ready":
                 print(c["status"])
                 sys.exit(0)
         print("Unknown")
-        PYEOF
-          )
+        ')
           if [ "$$READY" = "True" ]; then
             echo "${_SERVICE_NAME} is healthy and serving traffic."
             exit 0
