@@ -237,6 +237,7 @@ teardown() {
     [[ "$status" -eq 0 ]]
     [[ "$output" == *"[DRY-RUN] gcloud compute security-policies create"* ]]
     [[ "$output" == *"[DRY-RUN] gcloud compute security-policies rules create"* ]]
+    [[ "$output" == *"[DRY-RUN] gcloud compute security-policies rules add-preconfig-waf-exclusion"* ]]
 }
 
 @test "configure_pubsub_push skips when ENABLE_MARKETPLACE is not true" {

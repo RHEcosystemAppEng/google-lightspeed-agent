@@ -511,6 +511,9 @@ setup_service_lb() {
         fi
 
         # Add preconfigured WAF rules (OWASP ModSecurity CRS)
+        # Cookie values are excluded from WAF inspection because browsers send
+        # third-party .redhat.com cookies (analytics, bot-detection) whose
+        # encoded values trigger false positives across multiple rule sets.
         declare -A WAF_RULES=(
             [900]="methodenforcement-v422-stable"
             [1000]="sqli-v422-stable"
@@ -542,6 +545,13 @@ setup_service_lb() {
             else
                 log_info "WAF rule at priority $priority already exists"
             fi
+
+            # Exclude cookie values from WAF inspection for this rule
+            gcloud compute security-policies rules add-preconfig-waf-exclusion "$priority" \
+                --security-policy="$policy_name" \
+                --target-rule-set="${waf_rule_name}" \
+                --request-cookie-to-exclude="op=EQUALS_ANY" \
+                --project="$PROJECT_ID" 2>/dev/null || true
         done
 
         log_info "Attaching security policy to backend service..."
