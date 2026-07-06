@@ -65,6 +65,32 @@
       {
         "xPos": 0,
         "yPos": 16,
+        "width": 48,
+        "height": 16,
+        "widget": {
+          "title": "DCR Client Mapping",
+          "timeSeriesTable": {
+            "dataSets": [
+              {
+                "timeSeriesQuery": {
+                  "prometheusQuery": "last_over_time(dcr_client_info[2m])"
+                }
+              }
+            ],
+            "metricVisualization": "NUMBER",
+            "columnSettings": [
+              { "column": "Name", "visible": false },
+              { "column": "value", "visible": false },
+              { "column": "account_id", "displayName": "Account", "visible": true },
+              { "column": "order_id", "displayName": "Order ID", "visible": true },
+              { "column": "client_id", "displayName": "Client ID", "visible": true }
+            ]
+          }
+        }
+      },
+      {
+        "xPos": 0,
+        "yPos": 32,
         "width": 12,
         "height": 8,
         "widget": {
@@ -78,7 +104,7 @@
       },
       {
         "xPos": 12,
-        "yPos": 16,
+        "yPos": 32,
         "width": 12,
         "height": 8,
         "widget": {
@@ -92,7 +118,7 @@
       },
       {
         "xPos": 24,
-        "yPos": 16,
+        "yPos": 32,
         "width": 12,
         "height": 8,
         "widget": {

@@ -268,6 +268,50 @@ spec:
               "instant": true
             }
           ]
+        },
+        {
+          "title": "DCR Client Mapping",
+          "type": "table",
+          "gridPos": { "h": 10, "w": 24, "x": 0, "y": 10 },
+          "datasource": { "type": "prometheus", "uid": "{{ $ds }}" },
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": [
+              {
+                "matcher": { "id": "byName", "options": "account_id" },
+                "properties": [{ "id": "displayName", "value": "Account" }]
+              },
+              {
+                "matcher": { "id": "byName", "options": "order_id" },
+                "properties": [{ "id": "displayName", "value": "Order ID" }]
+              },
+              {
+                "matcher": { "id": "byName", "options": "client_id" },
+                "properties": [{ "id": "displayName", "value": "Client ID" }]
+              }
+            ]
+          },
+          "options": {
+            "showHeader": true,
+            "footer": { "show": true, "countRows": true }
+          },
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": { "Time": true, "__name__": true, "job": true, "Value": true },
+                "indexByName": { "account_id": 0, "order_id": 1, "client_id": 2 }
+              }
+            }
+          ],
+          "targets": [
+            {
+              "expr": "dcr_client_info{job=\"{{ $job }}\"}",
+              "refId": "A",
+              "format": "table",
+              "instant": true
+            }
+          ]
         }
       ],
       "schemaVersion": 39,

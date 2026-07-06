@@ -37,6 +37,13 @@ class DCRClientSnapshot:
 
 
 @dataclass
+class DCRClientInfoSnapshot:
+    account_id: str
+    order_id: str
+    client_id: str
+
+
+@dataclass
 class UsageSnapshot:
     account_id: str
     input_tokens: int
@@ -48,6 +55,7 @@ class UsageSnapshot:
 class MetricsCache:
     subscriptions: list[SubscriptionSnapshot] = field(default_factory=list)
     dcr_clients: list[DCRClientSnapshot] = field(default_factory=list)
+    dcr_client_info: list[DCRClientInfoSnapshot] = field(default_factory=list)
     usage_by_order: list[UsageSnapshot] = field(default_factory=list)
     last_updated: datetime | None = None
 
@@ -73,15 +81,17 @@ class MetricsCollector:
     async def _collect_once(self) -> None:
         """Run one collection cycle."""
         try:
-            subscriptions, dcr_clients, usage = await asyncio.gather(
+            subscriptions, dcr_clients, dcr_client_info, usage = await asyncio.gather(
                 self._query_subscriptions(),
                 self._query_dcr_clients(),
+                self._query_dcr_client_info(),
                 self._query_usage(),
             )
 
             self._cache = MetricsCache(
                 subscriptions=subscriptions,
                 dcr_clients=dcr_clients,
+                dcr_client_info=dcr_client_info,
                 usage_by_order=usage,
                 last_updated=datetime.now(UTC),
             )
@@ -124,6 +134,23 @@ class MetricsCollector:
                 DCRClientSnapshot(
                     account_id=r.account_id,
                     count=int(r.client_count),
+                )
+                for r in result.all()
+            ]
+
+    async def _query_dcr_client_info(self) -> list[DCRClientInfoSnapshot]:
+        async with get_session() as session:
+            stmt = select(
+                DCRClientModel.account_id,
+                DCRClientModel.order_id,
+                DCRClientModel.client_id,
+            )
+            result = await session.execute(stmt)
+            return [
+                DCRClientInfoSnapshot(
+                    account_id=r.account_id,
+                    order_id=r.order_id,
+                    client_id=r.client_id,
                 )
                 for r in result.all()
             ]
@@ -220,6 +247,21 @@ def _observe_dcr_clients(collector: MetricsCollector) -> list[Observation]:
     ]
 
 
+def _observe_dcr_client_info(collector: MetricsCollector) -> list[Observation]:
+    cache = collector.cache
+    return [
+        Observation(
+            value=1,
+            attributes={
+                "account_id": c.account_id,
+                "order_id": c.order_id,
+                "client_id": c.client_id,
+            },
+        )
+        for c in cache.dcr_client_info
+    ]
+
+
 def _observe_tokens_input(collector: MetricsCollector) -> list[Observation]:
     cache = collector.cache
     return [
@@ -299,6 +341,16 @@ def _register_instruments(collector: MetricsCollector) -> None:
             lambda _options: [
                 otel_metrics.Observation(o.value, o.attributes)
                 for o in _observe_dcr_clients(collector)
+            ]
+        ],
+    )
+    meter.create_observable_gauge(
+        name="dcr_client_info",
+        description="DCR client to subscription mapping",
+        callbacks=[
+            lambda _options: [
+                otel_metrics.Observation(o.value, o.attributes)
+                for o in _observe_dcr_client_info(collector)
             ]
         ],
     )
