@@ -273,8 +273,8 @@ def create_agent() -> LlmAgent:
             )
             tools.append(a2ui_toolset)
             logger.info("A2UI enabled: SendA2uiToClientToolset added with Insights examples")
-        except Exception:
-            logger.warning("Failed to initialize A2UI toolset", exc_info=True)
+        except ImportError:
+            logger.warning("a2ui-agent-sdk not installed; A2UI toolset not available")
 
     return LlmAgent(
         name=settings.agent_name,

@@ -133,13 +133,6 @@ affected systems, and status.
           }
         ]
       }
-    },
-    {
-      "version": "v0.9",
-      "updateDataModel": {
-        "surfaceId": "main",
-        "value": {}
-      }
     }
   ]
 }
@@ -230,13 +223,6 @@ description, affected systems count, and remediation guidance.
             "text": "Create Remediation Playbook"
           }
         ]
-      }
-    },
-    {
-      "version": "v0.9",
-      "updateDataModel": {
-        "surfaceId": "main",
-        "value": {}
       }
     }
   ]
@@ -583,13 +569,6 @@ it covers and an action button to execute.
             "text": "Execute Playbook"
           }
         ]
-      }
-    },
-    {
-      "version": "v0.9",
-      "updateDataModel": {
-        "surfaceId": "main",
-        "value": {}
       }
     }
   ]
