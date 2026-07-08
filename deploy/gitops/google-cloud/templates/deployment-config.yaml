@@ -1,0 +1,37 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "chart.fullname" . }}-deploy-config
+  namespace: {{ include "chart.namespace" . }}
+  labels:
+    {{- include "chart.labels" . | nindent 4 }}
+data:
+  GOOGLE_CLOUD_PROJECT: {{ required "project.id is required" .Values.project.id | quote }}
+  _REGION: {{ .Values.project.region | quote }}
+  _VERTEXAI_LOCATION: {{ .Values.project.vertexaiLocation | quote }}
+  _IMAGE_TAG: {{ .Values.images.agent.tag | quote }}
+  _AGENT_SOURCE_IMAGE: {{ printf "%s:%s" .Values.images.agent.source .Values.images.agent.tag | quote }}
+  _HANDLER_SOURCE_IMAGE: {{ printf "%s:%s" .Values.images.handler.source .Values.images.handler.tag | quote }}
+  _MCP_SOURCE_IMAGE: {{ printf "%s:%s" .Values.images.mcp.source .Values.images.mcp.tag | quote }}
+  _SERVICE_NAME: {{ .Values.services.agent.name | quote }}
+  _HANDLER_SERVICE_NAME: {{ .Values.services.handler.name | quote }}
+  _SERVICE_ACCOUNT_NAME: {{ .Values.services.serviceAccountName | quote }}
+  _DB_INSTANCE_NAME: {{ .Values.infrastructure.dbInstanceName | quote }}
+  _VPC_CONNECTOR_NAME: {{ .Values.infrastructure.vpcConnectorName | quote }}
+  _PUBSUB_TOPIC: {{ .Values.pubsub.topic | quote }}
+  _PUBSUB_SUBSCRIPTION: {{ .Values.pubsub.subscription | quote }}
+  _PUBSUB_INVOKER_NAME: {{ .Values.pubsub.invokerName | quote }}
+  _SERVICE_CONTROL_SERVICE_NAME: {{ .Values.pubsub.serviceControlServiceName | quote }}
+  _ENABLE_LB_AGENT: {{ .Values.loadBalancer.agent.enabled | quote }}
+  _ENABLE_LB_HANDLER: {{ .Values.loadBalancer.handler.enabled | quote }}
+  _AGENT_DOMAIN_NAME: {{ .Values.loadBalancer.agent.domain | quote }}
+  _HANDLER_DOMAIN_NAME: {{ .Values.loadBalancer.handler.domain | quote }}
+  _LB_NAME: {{ .Values.loadBalancer.name | quote }}
+  _ENABLE_CLOUD_ARMOR_AGENT: {{ .Values.loadBalancer.agent.cloudArmor.enabled | quote }}
+  _ENABLE_CLOUD_ARMOR_HANDLER: {{ .Values.loadBalancer.handler.cloudArmor.enabled | quote }}
+  _CLOUD_ARMOR_SENSITIVITY_AGENT: {{ .Values.loadBalancer.agent.cloudArmor.sensitivity | quote }}
+  _CLOUD_ARMOR_SENSITIVITY_HANDLER: {{ .Values.loadBalancer.handler.cloudArmor.sensitivity | quote }}
+  _ALLOW_UNAUTHENTICATED: {{ .Values.security.allowUnauthenticated | quote }}
+  _SCAN_SEVERITY: {{ .Values.security.scanSeverity | quote }}
+  GIT_REPO: {{ .Values.deploy.gitRepo | quote }}
+  GIT_BRANCH: {{ .Values.deploy.gitBranch | quote }}

@@ -1,0 +1,38 @@
+Red Hat Lightspeed Agent - Google Cloud GitOps
+================================================
+
+Chart: {{ .Chart.Name }} v{{ .Chart.Version }}
+Release: {{ .Release.Name }}
+Namespace: {{ include "chart.namespace" . }}
+GCP Project: {{ .Values.project.id }}
+Region: {{ .Values.project.region }}
+
+Resources created:
+  - ConfigMap: {{ include "chart.fullname" . }}-deploy-config (Cloud Build substitutions)
+  - ServiceAccount: {{ .Values.deploy.serviceAccount.name }} (RBAC for Jobs)
+{{- if .Values.externalSecrets.enabled }}
+  - SecretStore: {{ include "chart.fullname" . }}-gcp-sm (GCP Secret Manager)
+  - ExternalSecret: {{ include "chart.fullname" . }}-gcp-secrets
+{{- end }}
+
+ArgoCD hooks:
+  - PostSync Job: Submits Cloud Build pipeline to deploy Cloud Run services
+
+Images:
+  Agent:   {{ .Values.images.agent.source }}:{{ .Values.images.agent.tag }}
+  Handler: {{ .Values.images.handler.source }}:{{ .Values.images.handler.tag }}
+  MCP:     {{ .Values.images.mcp.source }}:{{ .Values.images.mcp.tag }}
+
+Prerequisites:
+  1. External Secrets Operator installed (OperatorHub > "external-secrets-operator")
+  2. Bootstrap secret created:
+       oc create secret generic {{ .Values.externalSecrets.auth.secretName }} \
+         --from-file={{ .Values.externalSecrets.auth.secretKey }}=sa-key.json \
+         -n {{ include "chart.namespace" . }}
+  3. GCP secrets exist in Secret Manager (run setup.sh once)
+
+Next steps:
+  1. Configure your ArgoCD Application to point at this chart
+  2. Push changes to git -- ArgoCD will sync automatically
+  3. Monitor the Cloud Build pipeline:
+       gcloud builds list --project={{ .Values.project.id }} --limit=5

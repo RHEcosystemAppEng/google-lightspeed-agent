@@ -1,0 +1,139 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "chart.fullname" . }}-deploy-{{ .Release.Revision }}
+  namespace: {{ include "chart.namespace" . }}
+  labels:
+    {{- include "chart.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  ttlSecondsAfterFinished: 3600
+  backoffLimit: 1
+  template:
+    metadata:
+      labels:
+        {{- include "chart.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: deploy
+    spec:
+      serviceAccountName: {{ .Values.deploy.serviceAccount.name }}
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: deploy
+          image: {{ .Values.deploy.image }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          resources:
+            {{- toYaml .Values.deploy.resources | nindent 12 }}
+          env:
+            - name: HOME
+              value: /tmp
+            {{- if .Values.deploy.gitTokenSecret }}
+            - name: GIT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.deploy.gitTokenSecret }}
+                  key: {{ .Values.deploy.gitTokenKey }}
+            {{- end }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "chart.fullname" . }}-deploy-config
+          volumeMounts:
+            - name: gcp-sa-key
+              mountPath: /var/run/secrets/gcp
+              readOnly: true
+          command:
+            - bash
+            - -euo
+            - pipefail
+            - -c
+            - |
+              gcloud auth activate-service-account \
+                --key-file=/var/run/secrets/gcp/gcp-service-account-key \
+                --project="${GOOGLE_CLOUD_PROJECT}"
+
+              WORK_DIR=$(mktemp -d)
+              {{- if .Values.deploy.gitTokenSecret }}
+              git clone --depth 1 --branch "${GIT_BRANCH}" \
+                "https://x-access-token:${GIT_TOKEN}@${GIT_REPO#https://}" "${WORK_DIR}"
+              {{- else }}
+              git clone --depth 1 --branch "${GIT_BRANCH}" "${GIT_REPO}" "${WORK_DIR}"
+              {{- end }}
+              cd "${WORK_DIR}"
+
+              SUBSTITUTIONS="_REGION=${_REGION}"
+              SUBSTITUTIONS="${SUBSTITUTIONS},_VERTEXAI_LOCATION=${_VERTEXAI_LOCATION}"
+              SUBSTITUTIONS="${SUBSTITUTIONS},_IMAGE_TAG=${_IMAGE_TAG}"
+              SUBSTITUTIONS="${SUBSTITUTIONS},_AGENT_SOURCE_IMAGE=${_AGENT_SOURCE_IMAGE}"
+              SUBSTITUTIONS="${SUBSTITUTIONS},_HANDLER_SOURCE_IMAGE=${_HANDLER_SOURCE_IMAGE}"
+              SUBSTITUTIONS="${SUBSTITUTIONS},_MCP_SOURCE_IMAGE=${_MCP_SOURCE_IMAGE}"
+              SUBSTITUTIONS="${SUBSTITUTIONS},_SERVICE_NAME=${_SERVICE_NAME}"
+              SUBSTITUTIONS="${SUBSTITUTIONS},_HANDLER_SERVICE_NAME=${_HANDLER_SERVICE_NAME}"
+              SUBSTITUTIONS="${SUBSTITUTIONS},_SERVICE_ACCOUNT_NAME=${_SERVICE_ACCOUNT_NAME}"
+              SUBSTITUTIONS="${SUBSTITUTIONS},_DB_INSTANCE_NAME=${_DB_INSTANCE_NAME}"
+              SUBSTITUTIONS="${SUBSTITUTIONS},_VPC_CONNECTOR_NAME=${_VPC_CONNECTOR_NAME}"
+              SUBSTITUTIONS="${SUBSTITUTIONS},_PUBSUB_TOPIC=${_PUBSUB_TOPIC}"
+              SUBSTITUTIONS="${SUBSTITUTIONS},_PUBSUB_INVOKER_NAME=${_PUBSUB_INVOKER_NAME}"
+              SUBSTITUTIONS="${SUBSTITUTIONS},_ENABLE_LB_AGENT=${_ENABLE_LB_AGENT}"
+              SUBSTITUTIONS="${SUBSTITUTIONS},_ENABLE_LB_HANDLER=${_ENABLE_LB_HANDLER}"
+              SUBSTITUTIONS="${SUBSTITUTIONS},_LB_NAME=${_LB_NAME}"
+              SUBSTITUTIONS="${SUBSTITUTIONS},_ENABLE_CLOUD_ARMOR_AGENT=${_ENABLE_CLOUD_ARMOR_AGENT}"
+              SUBSTITUTIONS="${SUBSTITUTIONS},_ENABLE_CLOUD_ARMOR_HANDLER=${_ENABLE_CLOUD_ARMOR_HANDLER}"
+              SUBSTITUTIONS="${SUBSTITUTIONS},_CLOUD_ARMOR_SENSITIVITY_AGENT=${_CLOUD_ARMOR_SENSITIVITY_AGENT}"
+              SUBSTITUTIONS="${SUBSTITUTIONS},_CLOUD_ARMOR_SENSITIVITY_HANDLER=${_CLOUD_ARMOR_SENSITIVITY_HANDLER}"
+              SUBSTITUTIONS="${SUBSTITUTIONS},_ALLOW_UNAUTHENTICATED=${_ALLOW_UNAUTHENTICATED}"
+
+              # _SCAN_SEVERITY may contain commas (e.g., "CRITICAL,HIGH") which
+              # conflict with gcloud --substitutions delimiter. Patch the
+              # cloudbuild.yaml defaults directly instead.
+              sed -i "s|_SCAN_SEVERITY: .*|_SCAN_SEVERITY: '${_SCAN_SEVERITY}'|" cloudbuild.yaml
+
+              if [ -n "${_PUBSUB_SUBSCRIPTION}" ]; then
+                SUBSTITUTIONS="${SUBSTITUTIONS},_PUBSUB_SUBSCRIPTION=${_PUBSUB_SUBSCRIPTION}"
+              fi
+              if [ -n "${_SERVICE_CONTROL_SERVICE_NAME}" ]; then
+                SUBSTITUTIONS="${SUBSTITUTIONS},_SERVICE_CONTROL_SERVICE_NAME=${_SERVICE_CONTROL_SERVICE_NAME}"
+              fi
+              if [ -n "${_AGENT_DOMAIN_NAME}" ]; then
+                SUBSTITUTIONS="${SUBSTITUTIONS},_AGENT_DOMAIN_NAME=${_AGENT_DOMAIN_NAME}"
+              fi
+              if [ -n "${_HANDLER_DOMAIN_NAME}" ]; then
+                SUBSTITUTIONS="${SUBSTITUTIONS},_HANDLER_DOMAIN_NAME=${_HANDLER_DOMAIN_NAME}"
+              fi
+
+              # Inject a git clone step as the first Cloud Build step so
+              # the build fetches source directly. This uses --no-source to
+              # avoid uploading to GCS, which fails when VPC Service Controls
+              # block access to the default Cloud Build bucket.
+              {{- if .Values.deploy.gitTokenSecret }}
+              CLONE_URL="https://x-access-token:${GIT_TOKEN}@${GIT_REPO#https://}"
+              {{- else }}
+              CLONE_URL="${GIT_REPO}"
+              {{- end }}
+              printf '%s\n' \
+                "  - name: 'gcr.io/cloud-builders/git'" \
+                "    args: ['clone', '--depth', '1', '--branch', '${GIT_BRANCH}', '${CLONE_URL}', '.']" \
+                "    waitFor: ['-']" \
+                "" \
+                > /tmp/clone-step.yaml
+              sed -i '/^steps:$/r /tmp/clone-step.yaml' cloudbuild.yaml
+
+              gcloud builds submit \
+                --no-source \
+                --config=cloudbuild.yaml \
+                --project="${GOOGLE_CLOUD_PROJECT}" \
+                --substitutions="${SUBSTITUTIONS}"
+      volumes:
+        - name: gcp-sa-key
+          secret:
+            secretName: {{ .Values.deploy.gcpSecretName | default (printf "%s-secrets" (include "chart.fullname" .)) }}
+            items:
+              - key: gcp-service-account-key
+                path: gcp-service-account-key

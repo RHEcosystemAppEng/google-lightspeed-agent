@@ -1,0 +1,109 @@
+# -- GCP project configuration
+project:
+  id: ""
+  region: us-central1
+  vertexaiLocation: global
+
+# -- Container images pulled from Quay.io, scanned, and pushed to GCR by Cloud Build
+images:
+  agent:
+    source: quay.io/ecosystem-appeng/google-lightspeed-agent
+    tag: latest
+  handler:
+    source: quay.io/ecosystem-appeng/google-marketplace-handler
+    tag: latest
+  mcp:
+    source: quay.io/redhat-services-prod/insights-management-tenant/insights-mcp/red-hat-lightspeed-mcp
+    tag: latest
+
+# -- Cloud Run service configuration
+services:
+  agent:
+    name: lightspeed-agent
+  handler:
+    name: marketplace-handler
+  serviceAccountName: lightspeed-agent
+
+# -- GCP infrastructure resource names
+infrastructure:
+  dbInstanceName: lightspeed-agent-db
+  vpcConnectorName: lightspeed-redis-conn
+
+# -- Pub/Sub configuration
+pubsub:
+  topic: marketplace-entitlements
+  subscription: ""
+  invokerName: pubsub-invoker
+  serviceControlServiceName: ""
+
+# -- Google Cloud Load Balancer and Cloud Armor
+# Values are strings (not booleans) because they pass through to Cloud Build
+# substitutions which are always string-typed.
+loadBalancer:
+  name: lightspeed-lb
+  agent:
+    enabled: "false"
+    domain: ""
+    cloudArmor:
+      enabled: "true"
+      sensitivity: "1"
+  handler:
+    enabled: "false"
+    domain: ""
+    cloudArmor:
+      enabled: "true"
+      sensitivity: "2"
+
+# -- Security settings
+security:
+  allowUnauthenticated: "false"
+  scanSeverity: CRITICAL,HIGH
+
+# -- External Secrets Operator (ESO) — Red Hat's supported approach for
+# GitOps secrets management on OpenShift. ESO pulls secrets from GCP
+# Secret Manager into K8s Secrets automatically.
+# Requires: ESO operator installed via OperatorHub on OpenShift.
+externalSecrets:
+  enabled: true
+  refreshInterval: 1h
+  # Bootstrap authentication — a manually-created K8s Secret containing the
+  # GCP service account key JSON. ESO uses this to authenticate to GCP SM.
+  # Create once:
+  #   oc create secret generic gcp-sa-bootstrap \
+  #     --from-file=gcp-service-account-key=sa-key.json \
+  #     -n <namespace>
+  auth:
+    secretName: gcp-sa-bootstrap
+    secretKey: gcp-service-account-key
+  # GCP Secret Manager secrets to pull into K8s.
+  # The deploy Job needs the GCP SA key; other app secrets are read by
+  # Cloud Run directly from GCP SM (no need to replicate them to K8s).
+  secrets:
+    - secretKey: gcp-service-account-key
+      remoteKey: gcp-service-account-key
+
+# -- Deploy Job configuration
+deploy:
+  # For production, pin by digest: google/cloud-sdk:slim@sha256:<hash>
+  image: google/cloud-sdk:slim
+  # K8s Secret name containing the GCP SA key for the deploy Job.
+  # When empty, defaults to <release>-<chart>-gcp-secrets (created by ESO).
+  # When externalSecrets.enabled=false, set this to a manually-created secret.
+  gcpSecretName: ""
+  gitRepo: https://github.com/RHEcosystemAppEng/google-lightspeed-agent.git
+  gitBranch: main
+  # Git access token secret for private repositories.
+  # Create: oc create secret generic git-credentials --from-literal=token=<PAT> -n <namespace>
+  # Leave empty for public repositories.
+  gitTokenSecret: ""
+  gitTokenKey: token
+  serviceAccount:
+    name: lightspeed-deploy
+  namespace: ""
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi

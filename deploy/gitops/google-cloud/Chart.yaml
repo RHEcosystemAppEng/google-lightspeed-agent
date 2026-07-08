@@ -1,0 +1,12 @@
+apiVersion: v2
+name: lightspeed-agent-gcp
+description: GitOps Helm chart for deploying Red Hat Lightspeed Agent to Google Cloud Run via ArgoCD and Cloud Build
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - lightspeed
+  - google-cloud
+  - cloud-run
+  - gitops
+  - argocd
