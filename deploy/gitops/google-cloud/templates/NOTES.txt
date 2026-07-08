@@ -10,10 +10,7 @@ Region: {{ .Values.project.region }}
 Resources created:
   - ConfigMap: {{ include "chart.fullname" . }}-deploy-config (Cloud Build substitutions)
   - ServiceAccount: {{ .Values.deploy.serviceAccount.name }} (RBAC for Jobs)
-{{- if .Values.externalSecrets.enabled }}
-  - SecretStore: {{ include "chart.fullname" . }}-gcp-sm (GCP Secret Manager)
-  - ExternalSecret: {{ include "chart.fullname" . }}-gcp-secrets
-{{- end }}
+  - Secret: {{ .Values.deploy.gcpSecretName }} (GCP SA key for deploy Job)
 
 ArgoCD hooks:
   - PostSync Job: Submits Cloud Build pipeline to deploy Cloud Run services
@@ -24,12 +21,12 @@ Images:
   MCP:     {{ .Values.images.mcp.source }}:{{ .Values.images.mcp.tag }}
 
 Prerequisites:
-  1. External Secrets Operator installed (OperatorHub > "external-secrets-operator")
-  2. Bootstrap secret created:
-       oc create secret generic {{ .Values.externalSecrets.auth.secretName }} \
-         --from-file={{ .Values.externalSecrets.auth.secretKey }}=sa-key.json \
+  1. Bootstrap secret created:
+       oc create secret generic {{ .Values.deploy.gcpSecretName }} \
+         --from-file=gcp-service-account-key=sa-key.json \
          -n {{ include "chart.namespace" . }}
-  3. GCP secrets exist in Secret Manager (run setup.sh once)
+     Or use: bash deploy/gitops/setup/setup-gcp-sa.sh
+  2. GCP secrets exist in Secret Manager (run setup.sh once)
 
 Next steps:
   1. Configure your ArgoCD Application to point at this chart

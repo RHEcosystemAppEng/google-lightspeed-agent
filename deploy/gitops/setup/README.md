@@ -7,17 +7,15 @@ Scripts to install and configure the prerequisites for ArgoCD-managed deployment
 | Script | What it does |
 |--------|-------------|
 | `install-gitops-operator.sh` | Installs the OpenShift GitOps (ArgoCD) operator from OperatorHub |
-| `install-eso-operator.sh` | Installs the External Secrets Operator (ESO) from OperatorHub |
-| `setup-gcp-sa.sh` | Creates a GCP service account, grants IAM roles, stores the key in GCP Secret Manager and as a K8s bootstrap secret |
+| `setup-gcp-sa.sh` | Creates a GCP service account, grants IAM roles, and creates the K8s secret for the deploy Job |
 
 All scripts are idempotent — safe to re-run without side effects.
 
 ## Quick Start
 
 ```bash
-# 1. Install operators (cluster-admin required)
+# 1. Install the GitOps operator (cluster-admin required)
 bash deploy/gitops/setup/install-gitops-operator.sh
-bash deploy/gitops/setup/install-eso-operator.sh
 
 # 2. Set up GCP service account (for Google Cloud target only)
 export GOOGLE_CLOUD_PROJECT=my-project-id
@@ -30,7 +28,7 @@ oc apply -f deploy/gitops/google-cloud/application.yaml
 
 ## Manual Alternatives
 
-If you cannot run the scripts (e.g., no cluster-admin access), install the operators manually via the OpenShift web console:
+If you cannot run the scripts (e.g., no cluster-admin access), install the operator manually via the OpenShift web console:
 
 ### OpenShift GitOps Operator
 
@@ -40,15 +38,6 @@ If you cannot run the scripts (e.g., no cluster-admin access), install the opera
 4. Click **Install**, select **All namespaces**, and click **Install**
 5. Wait for the operator to show **Succeeded** in **Installed Operators**
 6. Verify: `oc get argocd -n openshift-gitops`
-
-### External Secrets Operator
-
-1. Open the OpenShift web console
-2. Navigate to **Operators > OperatorHub**
-3. Search for **"external secrets operator"** (select the Red Hat-supported version)
-4. Click **Install**, select the `openshift-external-secrets` namespace, channel `stable-v1`, and click **Install**
-5. Wait for the operator to show **Succeeded** in **Installed Operators**
-6. Verify: `oc get csv -n openshift-external-secrets`
 
 ### GCP Service Account (Manual)
 
@@ -68,17 +57,12 @@ gcloud iam service-accounts create ${SA_NAME} \
 # Grant project-level IAM roles
 gcloud projects add-iam-policy-binding ${PROJECT_ID} \
   --member="serviceAccount:${SA_EMAIL}" \
-  --role="roles/secretmanager.secretAccessor"
-
-gcloud projects add-iam-policy-binding ${PROJECT_ID} \
-  --member="serviceAccount:${SA_EMAIL}" \
   --role="roles/cloudbuild.builds.editor"
 
 gcloud projects add-iam-policy-binding ${PROJECT_ID} \
   --member="serviceAccount:${SA_EMAIL}" \
   --role="roles/run.admin"
 
-# Grant API access
 gcloud projects add-iam-policy-binding ${PROJECT_ID} \
   --member="serviceAccount:${SA_EMAIL}" \
   --role="roles/serviceusage.serviceUsageConsumer"
@@ -95,12 +79,7 @@ gcloud iam service-accounts keys create sa-key.json \
   --iam-account="${SA_EMAIL}" \
   --project="${PROJECT_ID}"
 
-# Store the key in GCP Secret Manager (for ESO)
-gcloud secrets create gcp-service-account-key \
-  --data-file=sa-key.json \
-  --project="${PROJECT_ID}"
-
-# Create the bootstrap secret on OpenShift
+# Create the secret on OpenShift
 oc create secret generic gcp-sa-bootstrap \
   --from-file=gcp-service-account-key=sa-key.json \
   -n rh-lightspeed-agent
@@ -109,26 +88,12 @@ oc create secret generic gcp-sa-bootstrap \
 rm sa-key.json
 ```
 
-## SA Key: Dual Storage
-
-The GCP SA key is stored in **two places**, each serving a different purpose:
-
-| Location | Name | Purpose |
-|----------|------|---------|
-| GCP Secret Manager | `gcp-service-account-key` | Source of truth. ESO pulls from here to create the K8s Secret used by the deploy Job. |
-| K8s Secret (OpenShift) | `gcp-sa-bootstrap` | Bootstrap credential. The SecretStore uses this to authenticate ESO to GCP Secret Manager. |
-
-**With ESO enabled** (default): ESO authenticates to GCP SM using `gcp-sa-bootstrap`, pulls `gcp-service-account-key` from GCP SM, and creates a managed K8s Secret (`{release}-secrets`) that the deploy Job mounts. Key rotation in GCP SM is picked up automatically on the next ESO refresh cycle.
-
-**With ESO disabled** (`externalSecrets.enabled: false`): Set `deploy.gcpSecretName: gcp-sa-bootstrap` so the deploy Job mounts the bootstrap secret directly. The GCP SM copy is unused but can be kept for future ESO enablement.
-
 ## GCP Service Account Permissions
 
 The GitOps deploy Job service account requires the following IAM roles:
 
 | Role | Scope | Purpose |
 |------|-------|---------|
-| `roles/secretmanager.secretAccessor` | Project | ESO reads secrets from GCP Secret Manager |
 | `roles/cloudbuild.builds.editor` | Project | Deploy Job submits Cloud Build pipelines |
 | `roles/run.admin` | Project | Cloud Build deploys Cloud Run services |
 | `roles/serviceusage.serviceUsageConsumer` | Project | `gcloud builds submit` API access |
@@ -165,10 +130,6 @@ After running all setup scripts, verify the prerequisites are ready:
 # OpenShift GitOps operator
 oc get argocd openshift-gitops -n openshift-gitops -o jsonpath='{.status.phase}'
 # Expected: Available
-
-# External Secrets Operator
-oc get csv -n openshift-external-secrets -o jsonpath='{.items[0].status.phase}'
-# Expected: Succeeded
 
 # GCP bootstrap secret
 oc get secret gcp-sa-bootstrap -n rh-lightspeed-agent

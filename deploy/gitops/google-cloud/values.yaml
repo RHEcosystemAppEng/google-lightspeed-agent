@@ -59,37 +59,13 @@ security:
   allowUnauthenticated: "false"
   scanSeverity: CRITICAL,HIGH
 
-# -- External Secrets Operator (ESO) — Red Hat's supported approach for
-# GitOps secrets management on OpenShift. ESO pulls secrets from GCP
-# Secret Manager into K8s Secrets automatically.
-# Requires: ESO operator installed via OperatorHub on OpenShift.
-externalSecrets:
-  enabled: true
-  refreshInterval: 1h
-  # Bootstrap authentication — a manually-created K8s Secret containing the
-  # GCP service account key JSON. ESO uses this to authenticate to GCP SM.
-  # Create once:
-  #   oc create secret generic gcp-sa-bootstrap \
-  #     --from-file=gcp-service-account-key=sa-key.json \
-  #     -n <namespace>
-  auth:
-    secretName: gcp-sa-bootstrap
-    secretKey: gcp-service-account-key
-  # GCP Secret Manager secrets to pull into K8s.
-  # The deploy Job needs the GCP SA key; other app secrets are read by
-  # Cloud Run directly from GCP SM (no need to replicate them to K8s).
-  secrets:
-    - secretKey: gcp-service-account-key
-      remoteKey: gcp-service-account-key
-
 # -- Deploy Job configuration
 deploy:
   # For production, pin by digest: google/cloud-sdk:slim@sha256:<hash>
   image: google/cloud-sdk:slim
-  # K8s Secret name containing the GCP SA key for the deploy Job.
-  # When empty, defaults to <release>-<chart>-gcp-secrets (created by ESO).
-  # When externalSecrets.enabled=false, set this to a manually-created secret.
-  gcpSecretName: ""
+  # K8s Secret containing the GCP SA key for the deploy Job.
+  # Created by setup-gcp-sa.sh or manually (see secrets.yaml.example).
+  gcpSecretName: gcp-sa-bootstrap
   gitRepo: https://github.com/RHEcosystemAppEng/google-lightspeed-agent.git
   gitBranch: main
   # Git access token secret for private repositories.

@@ -15,7 +15,6 @@ deploy/gitops/                   # This repo (app repo)
 ├── setup/                       # Prerequisite installation scripts
 │   ├── README.md
 │   ├── install-gitops-operator.sh
-│   ├── install-eso-operator.sh
 │   └── setup-gcp-sa.sh
 └── google-cloud/
     ├── Chart.yaml
@@ -24,8 +23,6 @@ deploy/gitops/                   # This repo (app repo)
     └── templates/
         ├── _helpers.tpl
         ├── deployment-config.yaml
-        ├── secret-store.yaml
-        ├── external-secret.yaml
         ├── serviceaccount.yaml
         ├── deploy-job.yaml
         └── NOTES.txt
@@ -43,8 +40,7 @@ google-lightspeed-agent-gitops/  # Separate GitOps repo
 ## Prerequisites
 
 - OpenShift cluster with ArgoCD (OpenShift GitOps operator) installed
-- External Secrets Operator installed (OperatorHub > "external-secrets-operator") — for the Google Cloud target
-- For Google Cloud target: a GCP service account key with Cloud Build, Secret Manager, and Cloud Run permissions
+- For Google Cloud target: a GCP service account key with Cloud Build and Cloud Run permissions
 
 Setup scripts are provided in `setup/` to automate these prerequisites. See [`setup/README.md`](setup/README.md) for details, environment variables, and manual alternatives.
 
@@ -72,14 +68,14 @@ Change image tags or configuration in `openshift/values-override.yaml` in the Gi
 
 ## Google Cloud Target
 
-The Google Cloud target deploys Cloud Run services through Cloud Build. ArgoCD manages Kubernetes resources on OpenShift (ConfigMap, ExternalSecret, Jobs), and the PostSync hook Job calls out to GCP.
+The Google Cloud target deploys Cloud Run services through Cloud Build. ArgoCD manages Kubernetes resources on OpenShift (ConfigMap, Secret, Jobs), and the PostSync hook Job calls out to GCP.
 
 ### How It Works
 
 1. A PR changes image tags or config in `google-cloud/values-override.yaml` in the GitOps repo
 2. PR merges to `main` in the GitOps repo
 3. ArgoCD detects the change and begins sync
-4. ESO's **ExternalSecret** pulls the GCP SA key from GCP Secret Manager into a K8s Secret
+4. ArgoCD creates/updates K8s resources on OpenShift (ConfigMap, ServiceAccount, RBAC)
 5. **PostSync** — `deploy-job` clones the repo and runs `gcloud builds submit` with substitutions from the ConfigMap
 6. Cloud Build pulls images from Quay.io, scans them, pushes to GCR, and deploys Cloud Run services
 
@@ -90,12 +86,12 @@ The Google Cloud target deploys Cloud Run services through Cloud Build. ArgoCD m
    ./deploy/cloudrun/setup.sh
    ```
 
-2. Create the GCP service account and bootstrap secret for ESO. Use the setup script:
+2. Create the GCP service account and K8s secret for the deploy Job:
    ```bash
    export GOOGLE_CLOUD_PROJECT=my-project-id
    bash deploy/gitops/setup/setup-gcp-sa.sh
    ```
-   Or manually create the bootstrap secret (see [`setup/README.md`](setup/README.md) for details):
+   Or manually create the secret (see [`setup/README.md`](setup/README.md) for details):
    ```bash
    oc create secret generic gcp-sa-bootstrap \
      --from-file=gcp-service-account-key=sa-key.json \
@@ -133,31 +129,7 @@ Commit and push. ArgoCD syncs the ConfigMap change, then the PostSync Job trigge
 
 ### Secrets Management
 
-Secrets are managed using the **External Secrets Operator** (ESO), Red Hat's supported approach for GitOps secrets management on OpenShift.
-
-**How it works:**
-1. Application secrets (SSO credentials, database URLs, etc.) are stored in **GCP Secret Manager** — created by `setup.sh` or managed directly
-2. A **SecretStore** CR configures ESO to connect to GCP Secret Manager using a bootstrap GCP SA key
-3. An **ExternalSecret** CR tells ESO which GCP SM secrets to pull into K8s Secrets
-4. ESO automatically refreshes secrets based on `externalSecrets.refreshInterval` (default: 1 hour)
-5. Cloud Run services read directly from GCP Secret Manager — no need to replicate all secrets to K8s
-
-**Bootstrap credential:** The GCP SA key is the only secret managed manually. Create it once per cluster as described in setup step 2.
-
-To disable ESO (use manually-created K8s Secrets instead):
-```yaml
-externalSecrets:
-  enabled: false
-deploy:
-  gcpSecretName: my-gcp-secret
-```
-
-When ESO is disabled, you must manually create a K8s Secret containing the GCP SA key:
-```bash
-oc create secret generic my-gcp-secret \
-  --from-file=gcp-service-account-key=sa-key.json \
-  -n rh-lightspeed-agent
-```
+Application secrets (SSO credentials, database URLs, etc.) are stored in **GCP Secret Manager** and read directly by Cloud Run services at runtime. The only secret on the OpenShift cluster is the GCP SA key (`gcp-sa-bootstrap`), used by the deploy Job to authenticate with `gcloud`.
 
 ### Cloud Build Substitutions
 
@@ -181,7 +153,6 @@ The GCP service account used for the deploy Job needs the following IAM roles:
 
 | Role | Scope | Purpose |
 |---|---|---|
-| `roles/secretmanager.secretAccessor` | Project | ESO reads secrets from GCP SM |
 | `roles/cloudbuild.builds.editor` | Project | Submit Cloud Build pipelines |
 | `roles/run.admin` | Project | Deploy Cloud Run services (via Cloud Build) |
 | `roles/serviceusage.serviceUsageConsumer` | Project | `gcloud builds submit` API access |
@@ -265,16 +236,11 @@ The OpenShift target does not require any operators on Cluster 2. ArgoCD pushes 
 - **App secrets** (SSO, DB, Redis, etc.) must exist on Cluster 2 in the target namespace — managed via SealedSecrets, Vault, or manually (the chart has `secrets.create: false` by default)
 - **Network access** — Cluster 1 must reach Cluster 2's API server (port 6443)
 
-### Where ESO Is Needed
-
-The **External Secrets Operator is only needed on the ArgoCD cluster**, for the Google Cloud target only. It pulls the GCP SA key from GCP Secret Manager into a K8s Secret that the PostSync deploy Job mounts. Since the Google Cloud target always runs on the ArgoCD cluster (it triggers Cloud Build, not a workload on a remote cluster), ESO never needs to be installed on Cluster 2.
-
 ### Credential Rotation
 
 | Credential | Rotation method |
 |---|---|
 | ArgoCD cluster token | Re-register via `argocd cluster add` or update the cluster Secret |
-| GCP SA key (bootstrap) | Re-run `setup-gcp-sa.sh` (every 90 days recommended) |
-| ESO-managed secrets | Auto-refreshed per `externalSecrets.refreshInterval` (default: 1h) |
+| GCP SA key | Re-run `setup-gcp-sa.sh` (every 90 days recommended) |
 
 For production, consider **Workload Identity Federation** to eliminate GCP SA key rotation, or the **ArgoCD Agent model** (pull-based sync, eliminates long-lived tokens to spoke clusters).

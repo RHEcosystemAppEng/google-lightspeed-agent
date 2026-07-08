@@ -133,7 +133,7 @@ spec:
       volumes:
         - name: gcp-sa-key
           secret:
-            secretName: {{ .Values.deploy.gcpSecretName | default (printf "%s-secrets" (include "chart.fullname" .)) }}
+            secretName: {{ .Values.deploy.gcpSecretName }}
             items:
               - key: gcp-service-account-key
                 path: gcp-service-account-key
