@@ -8,7 +8,7 @@ Scripts to install and configure the prerequisites for ArgoCD-managed deployment
 |--------|-------------|
 | `install-gitops-operator.sh` | Installs the OpenShift GitOps (ArgoCD) operator from OperatorHub |
 | `install-eso-operator.sh` | Installs the External Secrets Operator (ESO) from OperatorHub |
-| `setup-gcp-sa.sh` | Creates a GCP service account, grants IAM roles, and creates the bootstrap K8s secret |
+| `setup-gcp-sa.sh` | Creates a GCP service account, grants IAM roles, stores the key in GCP Secret Manager and as a K8s bootstrap secret |
 
 All scripts are idempotent — safe to re-run without side effects.
 
@@ -95,6 +95,11 @@ gcloud iam service-accounts keys create sa-key.json \
   --iam-account="${SA_EMAIL}" \
   --project="${PROJECT_ID}"
 
+# Store the key in GCP Secret Manager (for ESO)
+gcloud secrets create gcp-service-account-key \
+  --data-file=sa-key.json \
+  --project="${PROJECT_ID}"
+
 # Create the bootstrap secret on OpenShift
 oc create secret generic gcp-sa-bootstrap \
   --from-file=gcp-service-account-key=sa-key.json \
@@ -103,6 +108,19 @@ oc create secret generic gcp-sa-bootstrap \
 # Delete the local key file
 rm sa-key.json
 ```
+
+## SA Key: Dual Storage
+
+The GCP SA key is stored in **two places**, each serving a different purpose:
+
+| Location | Name | Purpose |
+|----------|------|---------|
+| GCP Secret Manager | `gcp-service-account-key` | Source of truth. ESO pulls from here to create the K8s Secret used by the deploy Job. |
+| K8s Secret (OpenShift) | `gcp-sa-bootstrap` | Bootstrap credential. The SecretStore uses this to authenticate ESO to GCP Secret Manager. |
+
+**With ESO enabled** (default): ESO authenticates to GCP SM using `gcp-sa-bootstrap`, pulls `gcp-service-account-key` from GCP SM, and creates a managed K8s Secret (`{release}-secrets`) that the deploy Job mounts. Key rotation in GCP SM is picked up automatically on the next ESO refresh cycle.
+
+**With ESO disabled** (`externalSecrets.enabled: false`): Set `deploy.gcpSecretName: gcp-sa-bootstrap` so the deploy Job mounts the bootstrap secret directly. The GCP SM copy is unused but can be kept for future ESO enablement.
 
 ## GCP Service Account Permissions
 

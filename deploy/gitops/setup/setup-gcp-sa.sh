@@ -171,7 +171,29 @@ else
 fi
 
 # =============================================================================
-# Step 5: Cleanup Key File
+# Step 5: Store SA Key in GCP Secret Manager (for ESO)
+# =============================================================================
+# ESO pulls secrets from GCP Secret Manager. Store the SA key there so that
+# when externalSecrets.enabled=true, the ExternalSecret can sync it into a
+# K8s Secret automatically.
+
+GCP_SM_SECRET="gcp-service-account-key"
+if gcloud secrets describe "${GCP_SM_SECRET}" --project="${PROJECT_ID}" &>/dev/null; then
+    log_info "GCP SM secret ${GCP_SM_SECRET} already exists. Adding new version..."
+    gcloud secrets versions add "${GCP_SM_SECRET}" \
+        --data-file="${KEY_FILE}" \
+        --project="${PROJECT_ID}" \
+        --quiet
+else
+    log_info "Creating GCP SM secret: ${GCP_SM_SECRET}..."
+    gcloud secrets create "${GCP_SM_SECRET}" \
+        --data-file="${KEY_FILE}" \
+        --project="${PROJECT_ID}" \
+        --quiet
+fi
+
+# =============================================================================
+# Step 6: Cleanup Key File
 # =============================================================================
 
 if oc get secret "${SECRET_NAME}" -n "${NAMESPACE}" &>/dev/null && [[ -f "${KEY_FILE}" ]]; then
@@ -196,6 +218,7 @@ for role in "${PROJECT_ROLES[@]}"; do
 done
 log_info "  Roles (SA-level on ${CLOUD_RUN_SA_EMAIL}):"
 log_info "    - roles/iam.serviceAccountUser"
+log_info "  GCP SM Secret:   ${GCP_SM_SECRET} (for ESO)"
 log_info "  K8s Secret:      ${SECRET_NAME} (namespace: ${NAMESPACE})"
 echo ""
 log_info "Next steps:"
