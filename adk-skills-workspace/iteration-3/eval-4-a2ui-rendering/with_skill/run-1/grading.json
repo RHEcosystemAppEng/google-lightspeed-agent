@@ -1,0 +1,30 @@
+{
+  "expectations": [
+    {
+      "text": "Plans to use send_a2ui_json_to_client tool to render results as A2UI components instead of a markdown table",
+      "passed": true,
+      "evidence": "Explicitly states: 'I would use A2UI rendering, not markdown tables.' Shows the send_a2ui_json_to_client tool call with a full JSON payload. References the response-formatting skill: 'When the send_a2ui_json_to_client tool is available, prefer rendering structured data as A2UI components instead of markdown tables.'"
+    },
+    {
+      "text": "Uses vulnerability__get_cves with appropriate filter and sort parameters",
+      "passed": true,
+      "evidence": "Step 1 shows: tool: vulnerability__get_cves, args: {limit: 10, severity: 'Critical', sort: '-cvss_score', affecting: true}. All parameters are appropriate for the 'top 10 critical CVEs sorted by CVSS score' request."
+    },
+    {
+      "text": "References specific A2UI components (Card, List, Text, Column, Row, or similar) when describing the rendering",
+      "passed": true,
+      "evidence": "The A2UI payload uses Column (cve_root, cve_col_1), Text (cve_title with usageHint h1, cve_summary, severity/cvss/systems/exploit fields), List (cve_list), Card (cve_card_1), and Row (cve_1_details). Response also explains the pattern: 'Card wraps each CVE entry for visual separation', 'Column stacks the CVE ID heading and details row vertically', 'Row arranges the metadata fields horizontally.'"
+    },
+    {
+      "text": "Keeps explanatory or conversational text as plain text, not inside A2UI components",
+      "passed": true,
+      "evidence": "Step 5 explicitly states: 'Per the response-formatting skill: When the response mixes structured data with explanatory text, render the data portion as A2UI and include the explanation as plain text in the same response.' Shows the plain text accompaniment separately from the A2UI payload."
+    }
+  ],
+  "summary": {
+    "pass_rate": 1.0,
+    "passed": 4,
+    "failed": 0,
+    "total": 4
+  }
+}

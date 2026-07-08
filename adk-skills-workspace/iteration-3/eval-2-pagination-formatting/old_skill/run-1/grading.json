@@ -1,0 +1,30 @@
+{
+  "expectations": [
+    {
+      "text": "Recognizes that remediatable CVEs need full pagination \u2014 not just the first page",
+      "passed": true,
+      "evidence": "Explicitly references the pagination-handling skill's exception rule: 'Per the pagination-handling skill's exception rule for remediatable CVE queries, we fetch ALL pages automatically for each system. If meta.total_items > 20, continue.' Shows paginating with advancing offset until stop condition met."
+    },
+    {
+      "text": "References at least one pagination stop condition (links.next null, offset >= total_items, empty data, etc.)",
+      "passed": true,
+      "evidence": "Lists three stop conditions: '1. links.next is null, or 2. The next offset would be >= meta.total_items, or 3. data has fewer elements than limit (last partial page) or is empty.' Referenced in Step 2, the Pagination Handling Summary, and the Key pagination decisions section."
+    },
+    {
+      "text": "Uses remediation=Applicable parameter when querying system CVEs",
+      "passed": true,
+      "evidence": "Step 3 shows tool call args: {\"limit\": 20, \"offset\": 0, \"remediation\": \"Applicable\", \"sort\": \"-cvss_score\"}. Uses the exact parameter value."
+    },
+    {
+      "text": "Plans to present results in a table format (host name, OS, CVE count, etc.)",
+      "passed": true,
+      "evidence": "Step 4 shows two tables: a prioritized table of systems with columns Host, OS, Critical, Important, Moderate, Low, Total Remediatable; and a top CVEs table with columns CVE ID, Severity, CVSS, Known Exploit, Affected Systems, Remediation Available."
+    }
+  ],
+  "summary": {
+    "pass_rate": 1.0,
+    "passed": 4,
+    "failed": 0,
+    "total": 4
+  }
+}

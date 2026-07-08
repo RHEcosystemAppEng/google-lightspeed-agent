@@ -105,6 +105,21 @@ GOOGLE_CLOUD_PROJECT=your-project-id
 GOOGLE_CLOUD_LOCATION=global
 ```
 
+### A2UI (Agent-to-UI)
+
+A2UI enables rich, interactive UI rendering in Gemini Enterprise. When enabled, the agent generates declarative JSON UI components (tables, cards, buttons) alongside text responses. See [A2UI Integration](a2ui.md) for details.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `A2UI_ENABLED` | `false` | Enable A2UI rich UI rendering in agent responses |
+
+**Example:**
+
+```bash
+# Enable A2UI for Gemini Enterprise
+A2UI_ENABLED=true
+```
+
 ### Red Hat SSO / OAuth 2.0
 
 | Variable | Default | Description |
@@ -392,8 +407,8 @@ The `TOOL_RESULT_MAX_CHARS` setting controls a size guard that detects oversized
 # Default: 200K characters
 TOOL_RESULT_MAX_CHARS=204800
 
-# Allow larger results if you have higher TPM quotas
-TOOL_RESULT_MAX_CHARS=100000
+# Lower limit if you have tight TPM quotas
+TOOL_RESULT_MAX_CHARS=51200
 
 # Disable the guard entirely (not recommended — may cause 429 errors)
 TOOL_RESULT_MAX_CHARS=0

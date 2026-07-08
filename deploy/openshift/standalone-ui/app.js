@@ -486,20 +486,40 @@
 
   // --- A2UI rendering ---
 
-  function resolveA2UIValue(val) {
+  function resolveA2UIValue(val, dataModel) {
     if (!val) return "";
     if (typeof val === "string") return val;
+    if (typeof val === "number") return String(val);
+    if (typeof val === "boolean") return String(val);
     if (val.literalString) return val.literalString;
     if (val.literalNumber !== undefined) return String(val.literalNumber);
     if (val.literalBoolean !== undefined) return String(val.literalBoolean);
+    if (val.$data && dataModel) {
+      var parts = val.$data.replace(/^\//, "").split("/");
+      var result = dataModel;
+      for (var i = 0; i < parts.length; i++) {
+        if (result == null) return "(data: " + val.$data + ")";
+        result = result[parts[i]];
+      }
+      return result != null ? String(result) : "";
+    }
+    if (val.$data) return "(data: " + val.$data + ")";
     if (val.path) return "(data: " + val.path + ")";
     return "";
   }
 
-  function renderA2UIComponent(comp, componentsById) {
-    var wrapper = comp.component;
-    var type = Object.keys(wrapper)[0];
-    var props = wrapper[type];
+  function renderA2UIComponent(comp, componentsById, dataModel) {
+    var type, props;
+    if (typeof comp.component === "string") {
+      // v0.9 flat format: {component: "Text", id: "foo", text: "bar"}
+      type = comp.component;
+      props = comp;
+    } else {
+      // v0.8 wrapped format: {component: {Text: {id: "foo", text: "bar"}}}
+      var wrapper = comp.component;
+      type = Object.keys(wrapper)[0];
+      props = wrapper[type];
+    }
 
     if (type === "Text") {
       var el = document.createElement("div");
@@ -511,7 +531,7 @@
       } else if (hint === "caption") {
         el.classList.add("a2ui-caption");
       }
-      var textContent = resolveA2UIValue(props.text);
+      var textContent = resolveA2UIValue(props.text, dataModel);
       if (typeof marked !== "undefined" && marked.parse) {
         el.innerHTML = sanitizeHtml(marked.parse(textContent));
       } else {
@@ -524,7 +544,9 @@
       var card = document.createElement("div");
       card.className = "a2ui-card";
       if (props.child && componentsById[props.child]) {
-        card.appendChild(renderA2UIComponent(componentsById[props.child], componentsById));
+        card.appendChild(renderA2UIComponent(componentsById[props.child], componentsById, dataModel));
+      } else {
+        renderChildren(props.children, card, componentsById, dataModel);
       }
       return card;
     }
@@ -534,7 +556,7 @@
       row.className = "a2ui-row";
       if (props.distribution) row.style.justifyContent = cssJustify(props.distribution);
       if (props.alignment) row.style.alignItems = cssAlign(props.alignment);
-      renderChildren(props.children, row, componentsById);
+      renderChildren(props.children, row, componentsById, dataModel);
       return row;
     }
 
@@ -543,7 +565,7 @@
       col.className = "a2ui-column";
       if (props.distribution) col.style.justifyContent = cssJustify(props.distribution);
       if (props.alignment) col.style.alignItems = cssAlign(props.alignment);
-      renderChildren(props.children, col, componentsById);
+      renderChildren(props.children, col, componentsById, dataModel);
       return col;
     }
 
@@ -551,7 +573,7 @@
       var list = document.createElement("div");
       list.className = "a2ui-list";
       if (props.direction === "horizontal") list.classList.add("a2ui-list-horizontal");
-      renderChildren(props.children, list, componentsById);
+      renderChildren(props.children, list, componentsById, dataModel);
       return list;
     }
 
@@ -560,7 +582,9 @@
       btn.className = "a2ui-button";
       if (props.primary) btn.classList.add("a2ui-button-primary");
       if (props.child && componentsById[props.child]) {
-        btn.appendChild(renderA2UIComponent(componentsById[props.child], componentsById));
+        btn.appendChild(renderA2UIComponent(componentsById[props.child], componentsById, dataModel));
+      } else {
+        renderChildren(props.children, btn, componentsById, dataModel);
       }
       btn.disabled = true;
       return btn;
@@ -569,8 +593,8 @@
     if (type === "Image") {
       var img = document.createElement("img");
       img.className = "a2ui-image";
-      img.src = resolveA2UIValue(props.url);
-      img.alt = resolveA2UIValue(props.altText) || "";
+      img.src = resolveA2UIValue(props.url, dataModel);
+      img.alt = resolveA2UIValue(props.altText, dataModel) || "";
       return img;
     }
 
@@ -592,14 +616,14 @@
         props.tabItems.forEach(function (item, idx) {
           var tabBtn = document.createElement("button");
           tabBtn.className = "a2ui-tab-btn" + (idx === 0 ? " active" : "");
-          tabBtn.textContent = resolveA2UIValue(item.title);
+          tabBtn.textContent = resolveA2UIValue(item.title, dataModel);
           tabBtn.dataset.tabIdx = idx;
           tabBar.appendChild(tabBtn);
           var pane = document.createElement("div");
           pane.className = "a2ui-tab-pane" + (idx === 0 ? " active" : "");
           pane.dataset.tabIdx = idx;
           if (item.child && componentsById[item.child]) {
-            pane.appendChild(renderA2UIComponent(componentsById[item.child], componentsById));
+            pane.appendChild(renderA2UIComponent(componentsById[item.child], componentsById, dataModel));
           }
           tabContent.appendChild(pane);
         });
@@ -624,12 +648,13 @@
     return fallback;
   }
 
-  function renderChildren(children, container, componentsById) {
+  function renderChildren(children, container, componentsById, dataModel) {
     if (!children) return;
-    var ids = children.explicitList || [];
+    // v0.9: direct array; v0.8: {explicitList: [...]}
+    var ids = Array.isArray(children) ? children : (children.explicitList || []);
     ids.forEach(function (childId) {
       if (componentsById[childId]) {
-        var childEl = renderA2UIComponent(componentsById[childId], componentsById);
+        var childEl = renderA2UIComponent(componentsById[childId], componentsById, dataModel);
         if (componentsById[childId].weight) {
           childEl.style.flexGrow = componentsById[childId].weight;
         }
@@ -653,24 +678,65 @@
     container.className = "a2ui-surface";
     var componentsById = {};
     var rootId = null;
+    var dataModel = null;
+    var isV09 = false;
 
     messages.forEach(function (msg) {
+      // v0.8: surfaceUpdate.components
       if (msg.surfaceUpdate && msg.surfaceUpdate.components) {
         msg.surfaceUpdate.components.forEach(function (c) {
           componentsById[c.id] = c;
         });
       }
+      // v0.9: updateComponents.components
+      if (msg.updateComponents && msg.updateComponents.components) {
+        msg.updateComponents.components.forEach(function (c) {
+          componentsById[c.id] = c;
+        });
+      }
+      // v0.8: beginRendering.root
       if (msg.beginRendering) {
         rootId = msg.beginRendering.root;
       }
+      // v0.9: createSurface
+      if (msg.createSurface) {
+        isV09 = true;
+      }
+      // v0.9: updateDataModel — parse data for binding
+      if (msg.updateDataModel && msg.updateDataModel.value) {
+        dataModel = msg.updateDataModel.value;
+        container.dataset.a2uiData = JSON.stringify(dataModel);
+      }
+      // v0.8: dataModelUpdate — parse data for binding
+      if (msg.dataModelUpdate && msg.dataModelUpdate.data) {
+        dataModel = msg.dataModelUpdate.data;
+        container.dataset.a2uiData = JSON.stringify(dataModel);
+      }
     });
 
+    // v0.9: find root by tree analysis (component not referenced as child of any other)
+    if (isV09 && !rootId) {
+      var referencedIds = {};
+      Object.keys(componentsById).forEach(function (id) {
+        var c = componentsById[id];
+        var kids = c.children;
+        if (Array.isArray(kids)) {
+          kids.forEach(function (kid) { referencedIds[kid] = true; });
+        }
+        if (c.child) referencedIds[c.child] = true;
+      });
+      var roots = Object.keys(componentsById).filter(function (id) {
+        return !referencedIds[id];
+      });
+      if (roots.length > 0) rootId = roots[0];
+    }
+
     if (rootId && componentsById[rootId]) {
-      container.appendChild(renderA2UIComponent(componentsById[rootId], componentsById));
+      container.appendChild(renderA2UIComponent(componentsById[rootId], componentsById, dataModel));
     } else {
       var ids = Object.keys(componentsById);
       if (ids.length > 0) {
-        container.appendChild(renderA2UIComponent(componentsById[ids[0]], componentsById));
+        container.appendChild(renderA2UIComponent(componentsById[ids[0]], componentsById, dataModel));
       }
     }
     return container;

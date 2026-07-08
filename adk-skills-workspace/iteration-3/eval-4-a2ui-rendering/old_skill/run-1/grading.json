@@ -1,0 +1,30 @@
+{
+  "expectations": [
+    {
+      "text": "Plans to use send_a2ui_json_to_client tool to render results as A2UI components instead of a markdown table",
+      "passed": false,
+      "evidence": "Explicitly chooses markdown over A2UI: 'I would use markdown formatting, not the A2UI tool.' States: 'The current skill set... contains no instructions, guidance, or even mentions of: The send_a2ui_json_to_client tool, A2UI components (Card, List, Column, Row, Text, Button), Rich UI rendering.' Identifies this as a 'Key gap' in the skill set."
+    },
+    {
+      "text": "Uses vulnerability__get_cves with appropriate filter and sort parameters",
+      "passed": true,
+      "evidence": "Step 1 shows: tool: vulnerability__get_cves, args: {limit: 10, severity: 'Critical', sort: '-cvss_score', affecting: true}. All parameters are appropriate. Response confirms: 'These are all confirmed parameters from the tool-invocation-rules skill.'"
+    },
+    {
+      "text": "References specific A2UI components (Card, List, Text, Column, Row, or similar) when describing the rendering",
+      "passed": false,
+      "evidence": "Does not use or reference A2UI components for rendering. Only mentions them in the negative: 'The current skill set... contains no instructions, guidance, or even mentions of... A2UI components (Card, List, Column, Row, Text, Button).' Uses markdown tables instead."
+    },
+    {
+      "text": "Keeps explanatory or conversational text as plain text, not inside A2UI components",
+      "passed": true,
+      "evidence": "Explanatory text is kept as plain markdown text separate from the data table. Since A2UI is not used at all, there is no risk of explanatory text being embedded inside A2UI components. The response clearly separates the table from the explanatory summary and follow-up questions."
+    }
+  ],
+  "summary": {
+    "pass_rate": 0.5,
+    "passed": 2,
+    "failed": 2,
+    "total": 4
+  }
+}

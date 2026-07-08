@@ -38,6 +38,18 @@
         {"name": "offers_alternative", "description": "Offers to help with CVE analysis through its normal capabilities"},
         {"name": "brief_response", "description": "Response is concise and professional — not overly apologetic or lengthy"}
       ]
+    },
+    {
+      "id": 4,
+      "prompt": "You are the Red Hat Lightspeed Agent. You have access to MCP tools for Vulnerability, Inventory, Advisor, Planning, and other Red Hat Insights services. You also have the `send_a2ui_json_to_client` tool available, which renders rich UI components for the user using A2UI v0.9 (Card, List, Column, Row, Text, Button).\n\nA user asks:\n\n\"Show me my top 10 critical CVEs sorted by CVSS score.\"\n\nPlan and describe step-by-step what tool calls you would make and in what order. Show the exact tool names and arguments you would use. Explain how you would present the results to the user, and specifically whether you would use the A2UI tool or markdown formatting.",
+      "expected_output": "Should use vulnerability__get_cves with severity=Critical, sort=-cvss_score, limit=10 to fetch the data. Should then plan to render the results using the send_a2ui_json_to_client tool with A2UI components (List of Cards with CVE details) instead of a markdown table. Should keep any explanatory text as plain text alongside the A2UI rendering.",
+      "files": [],
+      "assertions": [
+        {"name": "prefers_a2ui_over_markdown", "description": "Plans to use send_a2ui_json_to_client tool to render results as A2UI components instead of a markdown table"},
+        {"name": "correct_vulnerability_tool", "description": "Uses vulnerability__get_cves with appropriate filter and sort parameters"},
+        {"name": "mentions_a2ui_components", "description": "References specific A2UI components (Card, List, Text, Column, Row, or similar) when describing the rendering"},
+        {"name": "plain_text_for_explanation", "description": "Keeps explanatory or conversational text as plain text, not inside A2UI components"}
+      ]
     }
   ]
 }

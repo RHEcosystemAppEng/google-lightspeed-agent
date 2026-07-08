@@ -257,6 +257,25 @@ def create_agent() -> LlmAgent:
     if skill_toolset:
         tools.append(skill_toolset)
 
+    if settings.a2ui_enabled:
+        try:
+            from a2ui.adk.send_a2ui_to_client_toolset import SendA2uiToClientToolset
+
+            from lightspeed_agent.a2ui.prompt import (
+                get_a2ui_catalog,
+                get_insights_a2ui_examples,
+            )
+
+            a2ui_toolset = SendA2uiToClientToolset(
+                a2ui_enabled=True,
+                a2ui_catalog=get_a2ui_catalog(),
+                a2ui_examples=get_insights_a2ui_examples(),
+            )
+            tools.append(a2ui_toolset)
+            logger.info("A2UI enabled: SendA2uiToClientToolset added with Insights examples")
+        except ImportError:
+            logger.warning("a2ui-agent-sdk not installed; A2UI toolset not available")
+
     return LlmAgent(
         name=settings.agent_name,
         model=model,

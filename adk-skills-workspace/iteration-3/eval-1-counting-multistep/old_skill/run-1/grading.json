@@ -1,0 +1,35 @@
+{
+  "expectations": [
+    {
+      "text": "Uses limit=1 to get count from response metadata instead of fetching all pages",
+      "passed": true,
+      "evidence": "Step 1 uses inventory__list_hosts with limit=1 and reads 'total' field. Step 3 uses vulnerability__get_system_cves with limit=1 per system and reads 'meta.total_items'. Response states: 'I start with limit=1 per the efficient-counting skill because I only need the count first.'"
+    },
+    {
+      "text": "Uses inventory__list_hosts first to find RHEL 8 systems, then vulnerability tools for CVE data",
+      "passed": true,
+      "evidence": "Step 1 calls inventory__list_hosts with operating_system='RHEL 8'. Step 2 fetches RHEL 8 system IDs. Steps 3-4 use vulnerability__get_system_cves for CVE data. Correct tool chain order."
+    },
+    {
+      "text": "Arguments use correct JSON types \u2014 numbers as numbers, booleans as booleans, not strings",
+      "passed": true,
+      "evidence": "Tool call args use correct types: limit=1 and limit=20 (numbers), known_exploit=true (boolean), severity='Critical' (string). No string-wrapped numbers or booleans."
+    },
+    {
+      "text": "Applies known_exploit=true (or equivalent) filter parameter",
+      "passed": true,
+      "evidence": "Step 3 includes known_exploit: true in vulnerability__get_system_cves args. Step 4 also uses known_exploit: true when fetching details."
+    },
+    {
+      "text": "Applies severity=Critical filter parameter",
+      "passed": true,
+      "evidence": "Step 3 includes severity: 'Critical' in vulnerability__get_system_cves args. Step 4 also includes severity: 'Critical'."
+    }
+  ],
+  "summary": {
+    "pass_rate": 1.0,
+    "passed": 5,
+    "failed": 0,
+    "total": 5
+  }
+}

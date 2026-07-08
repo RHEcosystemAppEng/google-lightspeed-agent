@@ -1,0 +1,35 @@
+{
+  "expectations": [
+    {
+      "text": "Uses limit=1 to get count from response metadata instead of fetching all pages",
+      "passed": true,
+      "evidence": "Step 1 uses inventory__list_hosts with limit=1, Step 2 uses vulnerability__get_cves with limit=1. Response explicitly states: 'for \"how many\" questions, call the tool with limit=1 and read meta.total_items from the response.' Also notes the optimization that Steps 2 and 3 can be collapsed since Step 3 already returns meta.total_items."
+    },
+    {
+      "text": "Uses inventory__list_hosts first to find RHEL 8 systems, then vulnerability tools for CVE data",
+      "passed": true,
+      "evidence": "Step 1 calls inventory__list_hosts with operating_system='RHEL 8', limit=1. Steps 2-3 call vulnerability__get_cves with severity/known_exploit filters. Step 4 calls vulnerability__get_cve_systems per CVE. Correct tool chain order."
+    },
+    {
+      "text": "Arguments use correct JSON types \u2014 numbers as numbers, booleans as booleans, not strings",
+      "passed": true,
+      "evidence": "All tool call args use correct types: limit=1 and limit=5 (numbers, not '1' or '5'), known_exploit=true (boolean, not 'true'), severity='Critical' (string). The response explicitly notes: 'known_exploit as boolean true (not string \"true\"), limit as integer 5 (not string \"5\")'"
+    },
+    {
+      "text": "Applies known_exploit=true (or equivalent) filter parameter",
+      "passed": true,
+      "evidence": "Steps 2 and 3 both include 'known_exploit': true in their args. The response states: 'The tool-invocation-rules skill confirms that vulnerability__get_cves supports severity, known_exploit, and affecting as filter parameters.'"
+    },
+    {
+      "text": "Applies severity=Critical filter parameter",
+      "passed": true,
+      "evidence": "Steps 2 and 3 both include 'severity': 'Critical' in their args."
+    }
+  ],
+  "summary": {
+    "pass_rate": 1.0,
+    "passed": 5,
+    "failed": 0,
+    "total": 5
+  }
+}

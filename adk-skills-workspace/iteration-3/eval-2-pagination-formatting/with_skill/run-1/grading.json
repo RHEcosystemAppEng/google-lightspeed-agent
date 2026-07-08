@@ -1,0 +1,30 @@
+{
+  "expectations": [
+    {
+      "text": "Recognizes that remediatable CVEs need full pagination \u2014 not just the first page",
+      "passed": true,
+      "evidence": "Explicitly references the pagination-handling skill exception rule: 'When the user asks for remediatable CVEs on a specific system, fetch all pages automatically. Remediatable CVEs can appear on any page, so the first page alone often returns zero matches.' Shows paginating through all pages with advancing offset in Step 2."
+    },
+    {
+      "text": "References at least one pagination stop condition (links.next null, offset >= total_items, empty data, etc.)",
+      "passed": true,
+      "evidence": "Lists three stop conditions explicitly: '1. links.next is null, OR 2. Next offset >= meta.total_items, OR 3. data has fewer elements than limit (last partial page) or is empty.' These are referenced both in Step 1 and in the Pagination Handling Summary section."
+    },
+    {
+      "text": "Uses remediation=Applicable parameter when querying system CVEs",
+      "passed": true,
+      "evidence": "Step 2 shows tool call args: {\"limit\": 20, \"offset\": 0, \"remediation\": \"Applicable\", \"sort\": \"-cvss_score\"}. Uses the exact 'remediation': 'Applicable' parameter value."
+    },
+    {
+      "text": "Plans to present results in a table format (host name, OS, CVE count, etc.)",
+      "passed": true,
+      "evidence": "Step 3 shows two tables: a prioritized host table with columns Host, OS, Critical, Important, Moderate, Low, Total Remediatable CVEs; and a top critical CVEs table with columns CVE ID, Severity, CVSS, Affected Systems, Known Exploit."
+    }
+  ],
+  "summary": {
+    "pass_rate": 1.0,
+    "passed": 4,
+    "failed": 0,
+    "total": 4
+  }
+}
