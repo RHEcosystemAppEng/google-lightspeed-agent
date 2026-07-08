@@ -574,4 +574,208 @@ it covers and an action button to execute.
   ]
 }
 ```
+
+### Example 5: RHEL Lifecycle & Upcoming Changes
+
+Use this pattern when showing RHEL version lifecycle dates or upcoming changes
+from the Planning service. Each lifecycle entry is a Card with version, phase,
+and key dates. Uses data binding to populate values from the data model.
+
+```json
+{
+  "a2ui": [
+    {
+      "version": "v0.9",
+      "createSurface": {
+        "surfaceId": "main",
+        "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+      }
+    },
+    {
+      "version": "v0.9",
+      "updateComponents": {
+        "surfaceId": "main",
+        "components": [
+          {
+            "component": "Column",
+            "id": "plan_root",
+            "children": ["plan_title", "plan_summary", "plan_list"]
+          },
+          {
+            "component": "Text",
+            "id": "plan_title",
+            "text": "RHEL Lifecycle Overview",
+            "usageHint": "h1"
+          },
+          {
+            "component": "Text",
+            "id": "plan_summary",
+            "text": {"$data": "/summary"}
+          },
+          {
+            "component": "List",
+            "id": "plan_list",
+            "children": ["plan_card_1", "plan_card_2", "plan_card_3"]
+          },
+          {
+            "component": "Card",
+            "id": "plan_card_1",
+            "children": ["plan_col_1"]
+          },
+          {
+            "component": "Column",
+            "id": "plan_col_1",
+            "children": ["plan_1_version", "plan_1_dates", "plan_1_status"]
+          },
+          {
+            "component": "Text",
+            "id": "plan_1_version",
+            "text": {"$data": "/versions/0/name"},
+            "usageHint": "h2"
+          },
+          {
+            "component": "Row",
+            "id": "plan_1_dates",
+            "children": ["plan_1_ga", "plan_1_eus", "plan_1_eol"]
+          },
+          {
+            "component": "Text",
+            "id": "plan_1_ga",
+            "text": {"$data": "/versions/0/ga_date"}
+          },
+          {
+            "component": "Text",
+            "id": "plan_1_eus",
+            "text": {"$data": "/versions/0/eus_end"}
+          },
+          {
+            "component": "Text",
+            "id": "plan_1_eol",
+            "text": {"$data": "/versions/0/eol_date"}
+          },
+          {
+            "component": "Text",
+            "id": "plan_1_status",
+            "text": {"$data": "/versions/0/phase"}
+          },
+          {
+            "component": "Card",
+            "id": "plan_card_2",
+            "children": ["plan_col_2"]
+          },
+          {
+            "component": "Column",
+            "id": "plan_col_2",
+            "children": ["plan_2_version", "plan_2_dates", "plan_2_status"]
+          },
+          {
+            "component": "Text",
+            "id": "plan_2_version",
+            "text": {"$data": "/versions/1/name"},
+            "usageHint": "h2"
+          },
+          {
+            "component": "Row",
+            "id": "plan_2_dates",
+            "children": ["plan_2_ga", "plan_2_eus", "plan_2_eol"]
+          },
+          {
+            "component": "Text",
+            "id": "plan_2_ga",
+            "text": {"$data": "/versions/1/ga_date"}
+          },
+          {
+            "component": "Text",
+            "id": "plan_2_eus",
+            "text": {"$data": "/versions/1/eus_end"}
+          },
+          {
+            "component": "Text",
+            "id": "plan_2_eol",
+            "text": {"$data": "/versions/1/eol_date"}
+          },
+          {
+            "component": "Text",
+            "id": "plan_2_status",
+            "text": {"$data": "/versions/1/phase"}
+          },
+          {
+            "component": "Card",
+            "id": "plan_card_3",
+            "children": ["plan_col_3"]
+          },
+          {
+            "component": "Column",
+            "id": "plan_col_3",
+            "children": ["plan_3_version", "plan_3_dates", "plan_3_status"]
+          },
+          {
+            "component": "Text",
+            "id": "plan_3_version",
+            "text": {"$data": "/versions/2/name"},
+            "usageHint": "h2"
+          },
+          {
+            "component": "Row",
+            "id": "plan_3_dates",
+            "children": ["plan_3_ga", "plan_3_eus", "plan_3_eol"]
+          },
+          {
+            "component": "Text",
+            "id": "plan_3_ga",
+            "text": {"$data": "/versions/2/ga_date"}
+          },
+          {
+            "component": "Text",
+            "id": "plan_3_eus",
+            "text": {"$data": "/versions/2/eus_end"}
+          },
+          {
+            "component": "Text",
+            "id": "plan_3_eol",
+            "text": {"$data": "/versions/2/eol_date"}
+          },
+          {
+            "component": "Text",
+            "id": "plan_3_status",
+            "text": {"$data": "/versions/2/phase"}
+          }
+        ]
+      }
+    },
+    {
+      "version": "v0.9",
+      "updateDataModel": {
+        "surfaceId": "main",
+        "value": {
+          "summary": "RHEL lifecycle status for your deployed versions",
+          "versions": [
+            {
+              "name": "RHEL 9",
+              "ga_date": "GA: 2022-05-18",
+              "eus_end": "EUS ends: 2027-05-31",
+              "eol_date": "EOL: 2032-05-31",
+              "phase": "Phase: Full Support"
+            },
+            {
+              "name": "RHEL 8",
+              "ga_date": "GA: 2019-05-07",
+              "eus_end": "EUS ends: 2024-05-31",
+              "eol_date": "EOL: 2029-05-31",
+              "phase": "Phase: Maintenance Support"
+            },
+            {
+              "name": "RHEL 7",
+              "ga_date": "GA: 2014-06-10",
+              "eus_end": "EUS ended: 2021-08-30",
+              "eol_date": "EOL: 2024-06-30",
+              "phase": "Phase: End of Life"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}
+```
 """
