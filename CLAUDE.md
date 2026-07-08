@@ -71,7 +71,7 @@ make help                              # List all available targets
 PR-based deployments via OpenShift GitOps (ArgoCD). Helm charts and setup scripts are here; ArgoCD Application CRs and environment overrides are in a separate [GitOps repo](https://github.com/RHEcosystemAppEng/google-lightspeed-agent-gitops).
 
 - `deploy/gitops/google-cloud/` — Helm chart that triggers Cloud Build for Cloud Run deployment
-- `deploy/gitops/setup/` — Prerequisite install scripts (ArgoCD, ESO, GCP SA)
+- `deploy/gitops/setup/` — Prerequisite install scripts (ArgoCD operator, GCP SA)
 - See `deploy/gitops/README.md` for setup, prerequisites, and workflows
 
 ### Shell Tests (deploy.sh)
@@ -146,7 +146,7 @@ CORS → body size limits → security headers → rate limiting (60 req/min, 10
 
 ## GitOps Companion Repository
 
-Deployments are managed via ArgoCD using a separate GitOps repo: `git@github.com:luis5tb/google-lightspeed-agent-gitops.git`.
+Deployments are managed via ArgoCD using a separate GitOps repo: `https://github.com/RHEcosystemAppEng/google-lightspeed-agent-gitops`.
 
 ### How it works
 

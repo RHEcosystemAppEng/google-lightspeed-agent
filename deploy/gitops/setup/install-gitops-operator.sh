@@ -28,7 +28,7 @@ log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
 show_help() {
-    sed -n '2,/^# =====/{ /^# /s/^# //p; /^# *$/s/^# *$//p }' "$0"
+    sed -n '5,/^# =====/{ /^# =====/d; s/^# \{0,1\}//p }' "$0"
     exit 0
 }
 

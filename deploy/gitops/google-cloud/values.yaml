@@ -1,3 +1,6 @@
+nameOverride: ""
+fullnameOverride: ""
+
 # -- GCP project configuration
 project:
   id: ""

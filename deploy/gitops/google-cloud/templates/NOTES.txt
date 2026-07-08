@@ -10,7 +10,6 @@ Region: {{ .Values.project.region }}
 Resources created:
   - ConfigMap: {{ include "chart.fullname" . }}-deploy-config (Cloud Build substitutions)
   - ServiceAccount: {{ .Values.deploy.serviceAccount.name }} (RBAC for Jobs)
-  - Secret: {{ .Values.deploy.gcpSecretName }} (GCP SA key for deploy Job)
 
 ArgoCD hooks:
   - PostSync Job: Submits Cloud Build pipeline to deploy Cloud Run services
@@ -20,8 +19,8 @@ Images:
   Handler: {{ .Values.images.handler.source }}:{{ .Values.images.handler.tag }}
   MCP:     {{ .Values.images.mcp.source }}:{{ .Values.images.mcp.tag }}
 
-Prerequisites:
-  1. Bootstrap secret created:
+Prerequisites (not managed by this chart):
+  1. Bootstrap secret {{ .Values.deploy.gcpSecretName }} must exist:
        oc create secret generic {{ .Values.deploy.gcpSecretName }} \
          --from-file=gcp-service-account-key=sa-key.json \
          -n {{ include "chart.namespace" . }}

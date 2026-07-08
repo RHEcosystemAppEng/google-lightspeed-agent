@@ -21,9 +21,10 @@ bash deploy/gitops/setup/install-gitops-operator.sh
 export GOOGLE_CLOUD_PROJECT=my-project-id
 bash deploy/gitops/setup/setup-gcp-sa.sh
 
-# 3. Deploy the ArgoCD Applications
-oc apply -f deploy/gitops/openshift/application.yaml
-oc apply -f deploy/gitops/google-cloud/application.yaml
+# 3. Deploy the ArgoCD Applications (from the GitOps repo clone)
+# See https://github.com/RHEcosystemAppEng/google-lightspeed-agent-gitops
+oc apply -f openshift/application.yaml
+oc apply -f google-cloud/application.yaml
 ```
 
 ## Manual Alternatives
