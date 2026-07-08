@@ -244,3 +244,183 @@ The OpenShift target does not require any operators on Cluster 2. ArgoCD pushes 
 | GCP SA key | Re-run `setup-gcp-sa.sh` (every 90 days recommended) |
 
 For production, consider **Workload Identity Federation** to eliminate GCP SA key rotation, or the **ArgoCD Agent model** (pull-based sync, eliminates long-lived tokens to spoke clusters).
+
+## Multiple Instances on the Same GCP Project
+
+The chart supports deploying multiple agent instances to the same GCP project (e.g., staging + production, or multi-tenant). All GCP resource names are configurable via `values.yaml`, so each instance needs unique names to avoid collisions.
+
+### What Collides with Default Values
+
+If two instances use the same `project.id` without overriding resource names, these GCP resources collide:
+
+| Resource | Default Name | Override Key |
+|----------|-------------|-------------|
+| Cloud Run agent service | `lightspeed-agent` | `services.agent.name` |
+| Cloud Run handler service | `marketplace-handler` | `services.handler.name` |
+| GCP runtime service account | `lightspeed-agent` | `services.serviceAccountName` |
+| Cloud SQL instance | `lightspeed-agent-db` | `infrastructure.dbInstanceName` |
+| VPC connector | `lightspeed-redis-conn` | `infrastructure.vpcConnectorName` |
+| Pub/Sub topic | `marketplace-entitlements` | `pubsub.topic` |
+| Pub/Sub invoker | `pubsub-invoker` | `pubsub.invokerName` |
+| Load balancer | `lightspeed-lb` | `loadBalancer.name` |
+
+On the OpenShift side, K8s resources are scoped by Helm release name and namespace, so they don't collide as long as each instance uses a different release name or namespace.
+
+### What Is Shared by Design
+
+These resources are shared across instances on the same project and generally don't need to be separated:
+
+- **GCR images** — Cloud Build pushes scanned images to `gcr.io/<project>/`. All instances on the same project reuse the same GCR images (tagged by `_IMAGE_TAG`), which is typically desired.
+- **GCP Secret Manager secrets** — Runtime secrets (`database-url`, `redhat-sso-client-id`, etc.) are referenced by fixed names in the Cloud Run service templates (`deploy/cloudrun/service.yaml`). If instances need different credentials, the service templates must be modified to parameterize secret names.
+
+### Shared vs Separate Infrastructure
+
+| Component | Shared | Separate |
+|-----------|--------|----------|
+| Cloud SQL | Same instance, different databases (configure via `DATABASE_URL` secret) | Different `infrastructure.dbInstanceName` per instance + separate `setup.sh` run |
+| Redis / VPC connector | Same connector and Redis instance | Different `infrastructure.vpcConnectorName` per instance |
+| Pub/Sub | Not recommended — each instance needs its own topic/subscription for independent marketplace events | Different `pubsub.topic` per instance |
+
+### Step-by-Step: Deploy Two Instances (staging + prod)
+
+#### 1. Run `setup.sh` for Each Instance
+
+Each instance needs its own Cloud Run services, Cloud SQL, and Pub/Sub resources. Run `setup.sh` with different service names:
+
+```bash
+# Instance A (staging)
+export SERVICE_ACCOUNT_NAME=lightspeed-staging
+export SERVICE_NAME=lightspeed-agent-staging
+export HANDLER_SERVICE_NAME=marketplace-handler-staging
+export DB_INSTANCE_NAME=lightspeed-db-staging
+./deploy/cloudrun/setup.sh
+
+# Instance B (prod)
+export SERVICE_ACCOUNT_NAME=lightspeed-prod
+export SERVICE_NAME=lightspeed-agent-prod
+export HANDLER_SERVICE_NAME=marketplace-handler-prod
+export DB_INSTANCE_NAME=lightspeed-db-prod
+./deploy/cloudrun/setup.sh
+```
+
+#### 2. Create Per-Instance GCP Deploy Service Accounts
+
+```bash
+# Staging deploy SA
+export GOOGLE_CLOUD_PROJECT=my-project-id
+SA_NAME=lightspeed-gitops-staging CLOUD_RUN_SA=lightspeed-staging \
+  SECRET_NAME=gcp-sa-staging NAMESPACE=rh-lightspeed-staging \
+  bash deploy/gitops/setup/setup-gcp-sa.sh
+
+# Prod deploy SA
+SA_NAME=lightspeed-gitops-prod CLOUD_RUN_SA=lightspeed-prod \
+  SECRET_NAME=gcp-sa-prod NAMESPACE=rh-lightspeed-prod \
+  bash deploy/gitops/setup/setup-gcp-sa.sh
+```
+
+#### 3. Structure the GitOps Repo
+
+Create per-instance directories in the GitOps repo:
+
+```
+google-lightspeed-agent-gitops/
+├── google-cloud/
+│   ├── staging/
+│   │   ├── application.yaml
+│   │   └── values-override.yaml
+│   └── prod/
+│       ├── application.yaml
+│       └── values-override.yaml
+└── openshift/
+    └── ...
+```
+
+#### 4. Configure Instance-Specific Values
+
+Each `values-override.yaml` must override all resource names to avoid collisions:
+
+**`staging/values-override.yaml`:**
+```yaml
+project:
+  id: my-project-id
+
+images:
+  agent:
+    tag: v1.2.3-rc1
+
+services:
+  agent:
+    name: lightspeed-agent-staging
+  handler:
+    name: marketplace-handler-staging
+  serviceAccountName: lightspeed-staging
+
+infrastructure:
+  dbInstanceName: lightspeed-db-staging
+  vpcConnectorName: lightspeed-redis-staging
+
+pubsub:
+  topic: marketplace-entitlements-staging
+  invokerName: pubsub-invoker-staging
+
+loadBalancer:
+  name: lightspeed-lb-staging
+  agent:
+    domain: staging-agent.example.com
+  handler:
+    domain: staging-handler.example.com
+
+deploy:
+  gcpSecretName: gcp-sa-staging
+```
+
+**`prod/values-override.yaml`:**
+```yaml
+project:
+  id: my-project-id
+
+images:
+  agent:
+    tag: v1.2.3
+
+services:
+  agent:
+    name: lightspeed-agent-prod
+  handler:
+    name: marketplace-handler-prod
+  serviceAccountName: lightspeed-prod
+
+infrastructure:
+  dbInstanceName: lightspeed-db-prod
+  vpcConnectorName: lightspeed-redis-prod
+
+pubsub:
+  topic: marketplace-entitlements-prod
+  invokerName: pubsub-invoker-prod
+
+loadBalancer:
+  name: lightspeed-lb-prod
+  agent:
+    domain: agent.example.com
+  handler:
+    domain: handler.example.com
+
+deploy:
+  gcpSecretName: gcp-sa-prod
+```
+
+#### 5. Create ArgoCD Applications
+
+Each `application.yaml` should use:
+- A unique Application name (e.g., `lightspeed-staging`, `lightspeed-prod`)
+- A unique target namespace (e.g., `rh-lightspeed-staging`, `rh-lightspeed-prod`)
+- The corresponding `values-override.yaml` path in the multi-source configuration
+
+#### 6. Apply Both Applications
+
+```bash
+oc apply -f staging/application.yaml
+oc apply -f prod/application.yaml
+```
+
+ArgoCD manages each instance independently. Updating staging's `values-override.yaml` only triggers a staging deployment.
