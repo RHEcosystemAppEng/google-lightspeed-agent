@@ -82,6 +82,24 @@ include `system_profile`.
 `offset` (integer), `sort` (string), `filter_` (string — filter on system
 display name), `system_uuid` (string — check a specific system).
 
+**`advisor__get_active_rules`**: `limit` (integer), `offset` (integer),
+`sort` (string, e.g., `"-total_risk"` for highest-risk first),
+`impacting` (string: `"true"` or `"false"` — **not boolean**, pass as string),
+`incident` (string: `"true"` or `"false"`),
+`has_automatic_remediation` (string: `"true"` or `"false"`),
+`impact` (string — numeric risk level), `likelihood` (string — numeric),
+`category` (string), `reboot` (string: `"true"` or `"false"`),
+`groups` (string), `tags` (string).
+
+**`advisor__get_recommendations_stats`**: `groups` (string), `tags` (string).
+
+### String-typed booleans
+
+Several MCP tools use **string** type for boolean-like parameters (e.g.,
+`impacting`, `known_exploit`, `advisory_available`, `incident`). Always pass
+these as the string `"true"` or `"false"` — never as JSON boolean `true`/`false`.
+Passing a boolean instead of a string will cause the MCP server to reject the call.
+
 ### Multi-impact queries
 
 The `impact` parameter accepts comma-separated numeric IDs, so you can request
