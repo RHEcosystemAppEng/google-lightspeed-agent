@@ -1,0 +1,118 @@
+{
+  "skill_name": "adk-bundled-skills",
+  "iteration": 3,
+  "configurations": [
+    {
+      "name": "with_skill",
+      "label": "Improved Skills (multi-severity guidance + CVE disambiguation + stale-data)",
+      "results": [
+        {
+          "eval_id": 4, "eval_name": "multi-severity-cves",
+          "pass_rate": 1.0, "passed": 5, "total": 5,
+          "assertions": [
+            {"text": "uses_get_cves_not_system_cves", "passed": true},
+            {"text": "single_call_omitting_severity", "passed": true},
+            {"text": "cites_multi_severity_strategy", "passed": true},
+            {"text": "uses_affecting_filter", "passed": true},
+            {"text": "uses_cvss_sort", "passed": true}
+          ]
+        },
+        {
+          "eval_id": 5, "eval_name": "advisor-recommendations",
+          "pass_rate": 1.0, "passed": 4, "total": 4,
+          "assertions": [
+            {"text": "uses_advisor_tools", "passed": true},
+            {"text": "distinguishes_advisor_from_vuln", "passed": true},
+            {"text": "proper_advisor_args", "passed": true},
+            {"text": "structured_output", "passed": true}
+          ]
+        },
+        {
+          "eval_id": 6, "eval_name": "system-listing",
+          "pass_rate": 1.0, "passed": 5, "total": 5,
+          "assertions": [
+            {"text": "uses_inventory_list_hosts", "passed": true},
+            {"text": "explains_tool_choice", "passed": true},
+            {"text": "handles_pagination", "passed": true},
+            {"text": "includes_system_details", "passed": true},
+            {"text": "flags_stale_checkins", "passed": true}
+          ]
+        }
+      ],
+      "aggregate": {"pass_rate": 1.0, "passed": 14, "total": 14}
+    },
+    {
+      "name": "old_skill",
+      "label": "Baseline Skills (without multi-severity guidance)",
+      "results": [
+        {
+          "eval_id": 4, "eval_name": "multi-severity-cves",
+          "pass_rate": 0.6, "passed": 3, "total": 5,
+          "assertions": [
+            {"text": "uses_get_cves_not_system_cves", "passed": true},
+            {"text": "single_call_omitting_severity", "passed": false},
+            {"text": "cites_multi_severity_strategy", "passed": false},
+            {"text": "uses_affecting_filter", "passed": true},
+            {"text": "uses_cvss_sort", "passed": true}
+          ]
+        },
+        {
+          "eval_id": 5, "eval_name": "advisor-recommendations",
+          "pass_rate": 1.0, "passed": 4, "total": 4,
+          "assertions": [
+            {"text": "uses_advisor_tools", "passed": true},
+            {"text": "distinguishes_advisor_from_vuln", "passed": true},
+            {"text": "proper_advisor_args", "passed": true},
+            {"text": "structured_output", "passed": true}
+          ]
+        },
+        {
+          "eval_id": 6, "eval_name": "system-listing",
+          "pass_rate": 0.8, "passed": 4, "total": 5,
+          "assertions": [
+            {"text": "uses_inventory_list_hosts", "passed": true},
+            {"text": "explains_tool_choice", "passed": true},
+            {"text": "handles_pagination", "passed": true},
+            {"text": "includes_system_details", "passed": true},
+            {"text": "flags_stale_checkins", "passed": false}
+          ]
+        }
+      ],
+      "aggregate": {"pass_rate": 0.786, "passed": 11, "total": 14}
+    }
+  ],
+  "delta": {
+    "pass_rate_change": 0.214,
+    "assertions_improved": ["single_call_omitting_severity", "cites_multi_severity_strategy", "flags_stale_checkins"],
+    "assertions_regressed": []
+  },
+  "analysis": {
+    "observations": [
+      "Improved skills score 14/14 (100%) vs old skills 11/14 (78.6%) — a +21.4% improvement.",
+      "Three assertions discriminate between old and new skills:",
+      "  - single_call_omitting_severity: Old skills lead to two separate API calls (one per severity). While this works in simulation, the production LLM (Gemini) may instead attempt severity=['Critical','Important'] which causes the MCP tool error observed in production logs.",
+      "  - cites_multi_severity_strategy: The new multi-severity section in tool-invocation-rules is explicitly cited, showing the LLM is following documented guidance rather than inferring correct behavior.",
+      "  - flags_stale_checkins: The new skills activate guardrails-safety for system listings and flag check-ins older than 24 hours. The old skills did not activate guardrails-safety for this query type.",
+      "Eval 5 (advisor-recommendations) is non-discriminating: both versions handle advisor queries correctly. This serves as a regression test."
+    ],
+    "non_discriminating_assertions": [
+      "uses_get_cves_not_system_cves — Both versions correctly pick the global CVE tool",
+      "uses_affecting_filter — Both correctly scope to affecting CVEs",
+      "uses_cvss_sort — Both sort by CVSS score",
+      "uses_advisor_tools — Both correctly pick advisor tools",
+      "distinguishes_advisor_from_vuln — Neither conflates the two",
+      "proper_advisor_args — Both use correct parameter types",
+      "structured_output — Both present structured results",
+      "uses_inventory_list_hosts — Both correctly pick inventory",
+      "explains_tool_choice — Both explain their reasoning",
+      "handles_pagination — Both handle pagination",
+      "includes_system_details — Both show system attributes"
+    ],
+    "qualitative_differences": [
+      "Eval 4: with_skill uses 1 API call vs old_skill's 2 calls — more efficient and eliminates the risk of passing severity as a list.",
+      "Eval 4: with_skill explicitly names the failure mode ('we must NOT pass severity=[\"Critical\",\"Important\"]') which matches the exact production error.",
+      "Eval 6: with_skill flags 3 edge nodes with stale data (>17 hours) while old_skill silently presents them without warning.",
+      "The new CVE disambiguation table in multi-step-workflows gives the LLM explicit tool selection criteria for ambiguous CVE queries, reducing reliance on inference."
+    ]
+  }
+}

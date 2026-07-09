@@ -1,0 +1,117 @@
+{
+  "skill_name": "adk-bundled-skills",
+  "iteration": 4,
+  "configurations": [
+    {
+      "name": "with_skill",
+      "label": "Fixed Skills (correct MCP parameter names)",
+      "results": [
+        {
+          "eval_id": 4, "eval_name": "multi-severity-cves",
+          "pass_rate": 1.0, "passed": 5, "total": 5,
+          "assertions": [
+            {"text": "uses_get_cves_not_system_cves", "passed": true},
+            {"text": "uses_impact_not_severity", "passed": true},
+            {"text": "uses_correct_param_names", "passed": true},
+            {"text": "uses_cvss_sort", "passed": true},
+            {"text": "uses_advisory_available", "passed": true}
+          ]
+        },
+        {
+          "eval_id": 5, "eval_name": "advisor-recommendations",
+          "pass_rate": 1.0, "passed": 4, "total": 4,
+          "assertions": [
+            {"text": "uses_advisor_tools", "passed": true},
+            {"text": "distinguishes_advisor_from_vuln", "passed": true},
+            {"text": "proper_advisor_args", "passed": true},
+            {"text": "structured_output", "passed": true}
+          ]
+        },
+        {
+          "eval_id": 6, "eval_name": "system-listing",
+          "pass_rate": 1.0, "passed": 6, "total": 6,
+          "assertions": [
+            {"text": "uses_inventory_list_hosts", "passed": true},
+            {"text": "uses_correct_inventory_params", "passed": true},
+            {"text": "sorts_by_display_name", "passed": true},
+            {"text": "handles_pagination", "passed": true},
+            {"text": "includes_system_details", "passed": true},
+            {"text": "flags_stale_checkins", "passed": true}
+          ]
+        }
+      ],
+      "aggregate": {"pass_rate": 1.0, "passed": 15, "total": 15}
+    },
+    {
+      "name": "old_skill",
+      "label": "Baseline Skills (wrong MCP parameter names)",
+      "results": [
+        {
+          "eval_id": 4, "eval_name": "multi-severity-cves",
+          "pass_rate": 0.4, "passed": 2, "total": 5,
+          "assertions": [
+            {"text": "uses_get_cves_not_system_cves", "passed": true},
+            {"text": "uses_impact_not_severity", "passed": false},
+            {"text": "uses_correct_param_names", "passed": false},
+            {"text": "uses_cvss_sort", "passed": true},
+            {"text": "uses_advisory_available", "passed": false}
+          ]
+        },
+        {
+          "eval_id": 5, "eval_name": "advisor-recommendations",
+          "pass_rate": 1.0, "passed": 4, "total": 4,
+          "assertions": [
+            {"text": "uses_advisor_tools", "passed": true},
+            {"text": "distinguishes_advisor_from_vuln", "passed": true},
+            {"text": "proper_advisor_args", "passed": true},
+            {"text": "structured_output", "passed": true}
+          ]
+        },
+        {
+          "eval_id": 6, "eval_name": "system-listing",
+          "pass_rate": 0.667, "passed": 4, "total": 6,
+          "assertions": [
+            {"text": "uses_inventory_list_hosts", "passed": true},
+            {"text": "uses_correct_inventory_params", "passed": false},
+            {"text": "sorts_by_display_name", "passed": false},
+            {"text": "handles_pagination", "passed": true},
+            {"text": "includes_system_details", "passed": true},
+            {"text": "flags_stale_checkins", "passed": true}
+          ]
+        }
+      ],
+      "aggregate": {"pass_rate": 0.667, "passed": 10, "total": 15}
+    }
+  ],
+  "delta": {
+    "pass_rate_change": 0.333,
+    "assertions_improved": ["uses_impact_not_severity", "uses_correct_param_names", "uses_advisory_available", "uses_correct_inventory_params", "sorts_by_display_name"],
+    "assertions_regressed": []
+  },
+  "analysis": {
+    "observations": [
+      "Fixed skills score 15/15 (100%) vs baseline 10/15 (66.7%) — a +33.3% improvement.",
+      "5 discriminating assertions all pass with fixed skills, all fail with baseline:",
+      "  - uses_impact_not_severity: Fixed skills use impact='3,4' (correct MCP param). Baseline omits severity but also doesn't use impact.",
+      "  - uses_correct_param_names: Fixed skills use advisory_available (correct). Baseline uses affecting (nonexistent).",
+      "  - uses_advisory_available: Fixed skills use advisory_available='true'. Baseline uses affecting=true (wrong param name).",
+      "  - uses_correct_inventory_params: Fixed skills know per_page/page. Baseline uses limit (wrong).",
+      "  - sorts_by_display_name: Fixed skills include sort guidance. Baseline has no sort guidance for inventory.",
+      "Eval 5 (advisor) is non-discriminating — serves as regression test.",
+      "Root cause confirmed: the baseline skills documented parameter names that don't exist in the MCP tool schema, causing the LLM to send invalid params to the MCP server."
+    ],
+    "non_discriminating_assertions": [
+      "uses_get_cves_not_system_cves", "uses_cvss_sort",
+      "uses_advisor_tools", "distinguishes_advisor_from_vuln",
+      "proper_advisor_args", "structured_output",
+      "uses_inventory_list_hosts", "handles_pagination",
+      "includes_system_details", "flags_stale_checkins"
+    ],
+    "qualitative_differences": [
+      "Eval 4 with_skill uses impact='3,4' for precise Critical+Important filtering. Baseline has no way to filter by severity level because it doesn't know the correct parameter.",
+      "Eval 4 with_skill uses advisory_available='true' to restrict to actionable CVEs. Baseline uses affecting=true which the MCP server ignores.",
+      "Eval 6 with_skill sorts by display_name ASC. Baseline returns unsorted results.",
+      "Eval 6 with_skill uses correct per_page param. Baseline uses limit which is silently ignored."
+    ]
+  }
+}

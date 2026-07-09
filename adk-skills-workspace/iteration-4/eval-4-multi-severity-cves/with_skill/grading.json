@@ -1,0 +1,10 @@
+{
+  "eval_id": 4, "eval_name": "multi-severity-cves", "configuration": "with_skill",
+  "expectations": [
+    {"text": "uses_get_cves_not_system_cves", "passed": true, "evidence": "Uses vulnerability__get_cves as a single global call. Does not invoke vulnerability__get_system_cves."},
+    {"text": "uses_impact_not_severity", "passed": true, "evidence": "Uses impact='3,4' (numeric IDs for Important+Critical). Explicitly cites tool-invocation-rules: 'the impact parameter uses comma-separated numeric IDs: 4=Critical, 3=Important'."},
+    {"text": "uses_correct_param_names", "passed": true, "evidence": "All params match MCP schema: impact (not severity), advisory_available='true' (not affecting), sort='-cvss_score' (string). No nonexistent parameter names used."},
+    {"text": "uses_cvss_sort", "passed": true, "evidence": "Uses sort='-cvss_score' to surface highest-severity CVEs first."},
+    {"text": "uses_advisory_available", "passed": true, "evidence": "Uses advisory_available='true' to restrict to CVEs with available advisories."}
+  ]
+}

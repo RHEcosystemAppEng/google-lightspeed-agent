@@ -1,0 +1,10 @@
+{
+  "eval_id": 4, "eval_name": "multi-severity-cves", "configuration": "old_skill",
+  "expectations": [
+    {"text": "uses_get_cves_not_system_cves", "passed": true, "evidence": "Uses vulnerability__get_cves. Does not invoke vulnerability__get_system_cves."},
+    {"text": "uses_impact_not_severity", "passed": false, "evidence": "Does NOT use the 'impact' parameter. The old skills document 'severity' which does not exist in the MCP tool schema. The agent omits severity (per multi-severity strategy) but also does not use 'impact' to filter by severity level."},
+    {"text": "uses_correct_param_names", "passed": false, "evidence": "Uses affecting=true which is NOT a valid MCP parameter (actual param is advisory_available). The old skills document 'affecting (true/false)' but the MCP schema has no such parameter."},
+    {"text": "uses_cvss_sort", "passed": true, "evidence": "Uses sort='-cvss_score'."},
+    {"text": "uses_advisory_available", "passed": false, "evidence": "Uses 'affecting=true' instead of advisory_available='true'. The 'affecting' parameter does not exist in the MCP tool schema."}
+  ]
+}

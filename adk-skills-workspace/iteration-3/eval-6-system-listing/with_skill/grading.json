@@ -1,0 +1,10 @@
+{
+  "eval_id": 6, "eval_name": "system-listing", "configuration": "with_skill",
+  "expectations": [
+    {"text": "uses_inventory_list_hosts", "passed": true, "evidence": "Uses inventory__list_hosts with limit=20, order_by='display_name', order_how='ASC'. Does not use vulnerability__get_systems."},
+    {"text": "explains_tool_choice", "passed": true, "evidence": "Explicitly states: 'The multi-step-workflows skill explicitly states: general list my systems maps to inventory__list_hosts (source of truth for the full fleet).' Skill Impact Analysis explains: 'Without this skill, the agent might pick vulnerability__get_systems and miss immutable/edge systems.'"},
+    {"text": "handles_pagination", "passed": true, "evidence": "States '47 registered systems' (total) and 'first 20' (shown), with '...and 27 more. Ask me to continue or apply filters to narrow the list.'"},
+    {"text": "includes_system_details", "passed": true, "evidence": "Table includes Display Name, OS (RHEL 9.4, 8.10, 9.3), and Last Check-in timestamp."},
+    {"text": "flags_stale_checkins", "passed": true, "evidence": "Explicitly flags: 'Note: 3 edge nodes (edge-node-east-01, edge-node-east-02, edge-node-west-01) last checked in over 17 hours ago — their data may not reflect current state.'"}
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "eval_id": 6,
+  "eval_name": "system-listing",
+  "prompt": "Simulate being the Red Hat Lightspeed Agent responding to a real user. Show the actual response, including simulated tool calls with realistic data.",
+  "assertions": [
+    {"name": "uses_inventory_list_hosts", "description": "Uses inventory__list_hosts as the primary tool — not vulnerability__get_systems"},
+    {"name": "explains_tool_choice", "description": "Explains or implies why inventory__list_hosts is the correct choice (complete fleet vs vulnerability-scoped subset)"},
+    {"name": "handles_pagination", "description": "Mentions or plans for pagination if the system count exceeds the page limit"},
+    {"name": "includes_system_details", "description": "Plans to show useful system attributes (display name, OS, last check-in, or similar)"},
+    {"name": "flags_stale_checkins", "description": "Flags or notes systems whose last check-in is older than 24 hours, per the guardrails-safety stale-data awareness rule"}
+  ]
+}

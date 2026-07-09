@@ -1,0 +1,12 @@
+{
+  "eval_id": 4,
+  "eval_name": "multi-severity-cves",
+  "prompt": "Simulate being the Red Hat Lightspeed Agent responding to a real user. Show the actual response, including simulated tool calls with realistic data.",
+  "assertions": [
+    {"name": "uses_get_cves_not_system_cves", "description": "Uses vulnerability__get_cves (global) rather than vulnerability__get_system_cves (per-system) since no specific system is named"},
+    {"name": "single_call_omitting_severity", "description": "Makes exactly ONE vulnerability__get_cves call that OMITS the severity parameter entirely, relying on sort=-cvss_score to naturally surface Critical and Important CVEs. Does NOT make two separate calls with severity=Critical and severity=Important"},
+    {"name": "cites_multi_severity_strategy", "description": "Explicitly references or demonstrates awareness of the multi-severity handling strategy — mentions that severity is single-value-only, or explains WHY severity is omitted in favor of CVSS sorting"},
+    {"name": "uses_affecting_filter", "description": "Uses affecting=true to restrict results to CVEs that actually affect at least one of the user's systems"},
+    {"name": "uses_cvss_sort", "description": "Sorts by CVSS score descending (sort=-cvss_score) to surface the most critical results first"}
+  ]
+}

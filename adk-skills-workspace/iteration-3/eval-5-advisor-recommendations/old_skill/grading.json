@@ -1,0 +1,9 @@
+{
+  "eval_id": 5, "eval_name": "advisor-recommendations", "configuration": "old_skill",
+  "expectations": [
+    {"text": "uses_advisor_tools", "passed": true, "evidence": "Uses advisor__get_recommendations_stats (Step 1) and advisor__get_active_rules (Step 2). No vulnerability tools invoked."},
+    {"text": "distinguishes_advisor_from_vuln", "passed": true, "evidence": "Treats advisor as its own domain. User-facing response discusses 'Advisor recommendations' without conflating with CVEs or vulnerability data."},
+    {"text": "proper_advisor_args", "passed": true, "evidence": "advisor__get_recommendations_stats called with no args. advisor__get_active_rules called with limit=20 (number) and sort=\"-total_risk\" (string). Correct JSON types."},
+    {"text": "structured_output", "passed": true, "evidence": "Results grouped by risk level (Critical Risk / Important Risk) in tables with Recommendation, Category, Affected Systems, and Resolution columns. Category summary included."}
+  ]
+}

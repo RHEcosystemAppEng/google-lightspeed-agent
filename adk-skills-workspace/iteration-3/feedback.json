@@ -1,0 +1,35 @@
+{
+  "reviews": [
+    {
+      "run_id": "eval-4-multi-severity-cves-old_skill",
+      "feedback": "no need to call twice, using cvss score could be done in one call. Nice that it included the synopsys of the CVE",
+      "timestamp": "2026-07-09T13:25:28.999Z"
+    },
+    {
+      "run_id": "eval-4-multi-severity-cves-with_skill",
+      "feedback": "nice optimization only making one call. It would be nice to include the synopsys of the CVE",
+      "timestamp": "2026-07-09T13:25:28.999Z"
+    },
+    {
+      "run_id": "eval-5-advisor-recommendations-old_skill",
+      "feedback": "",
+      "timestamp": "2026-07-09T13:25:28.999Z"
+    },
+    {
+      "run_id": "eval-5-advisor-recommendations-with_skill",
+      "feedback": "better user facing than with the old skill. Also I like more the follow up options given",
+      "timestamp": "2026-07-09T13:25:28.999Z"
+    },
+    {
+      "run_id": "eval-6-system-listing-old_skill",
+      "feedback": "it would be nice to have the systems sorted by some of the fields, either name or OS",
+      "timestamp": "2026-07-09T13:25:28.999Z"
+    },
+    {
+      "run_id": "eval-6-system-listing-with_skill",
+      "feedback": "nice that it order the results based on the name",
+      "timestamp": "2026-07-09T13:25:28.999Z"
+    }
+  ],
+  "status": "complete"
+}

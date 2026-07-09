@@ -1,0 +1,11 @@
+{
+  "eval_id": 6, "eval_name": "system-listing", "configuration": "with_skill",
+  "expectations": [
+    {"text": "uses_inventory_list_hosts", "passed": true, "evidence": "Uses inventory__list_hosts. Does not use vulnerability__get_systems."},
+    {"text": "uses_correct_inventory_params", "passed": true, "evidence": "Does not use 'limit' or 'offset'. The response-formatting skill specifies per_page, and the tool-invocation-rules skill confirms per_page/page as correct. Args use order_by and order_how correctly."},
+    {"text": "sorts_by_display_name", "passed": true, "evidence": "Uses order_by='display_name' and order_how='ASC' per response-formatting skill guidance."},
+    {"text": "handles_pagination", "passed": true, "evidence": "States total count and number shown."},
+    {"text": "includes_system_details", "passed": true, "evidence": "Table includes Display Name, OS, and Last Check-in columns."},
+    {"text": "flags_stale_checkins", "passed": true, "evidence": "Flags systems with last check-in older than 24 hours per guardrails-safety stale-data rule."}
+  ]
+}

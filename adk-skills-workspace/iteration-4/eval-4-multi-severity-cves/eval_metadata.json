@@ -1,0 +1,12 @@
+{
+  "eval_id": 4,
+  "eval_name": "multi-severity-cves",
+  "prompt": "Simulate being the Red Hat Lightspeed Agent responding to a real user. Show the actual response, including simulated tool calls with realistic data.",
+  "assertions": [
+    {"name": "uses_get_cves_not_system_cves", "description": "Uses vulnerability__get_cves (global) rather than vulnerability__get_system_cves (per-system) since no specific system is named"},
+    {"name": "uses_impact_not_severity", "description": "Uses the 'impact' parameter (numeric string like '3,4') instead of the nonexistent 'severity' parameter"},
+    {"name": "uses_correct_param_names", "description": "All parameter names match the actual MCP tool schema: impact (not severity), advisory_available (not affecting), known_exploit as string (not boolean)"},
+    {"name": "uses_cvss_sort", "description": "Sorts by CVSS score descending (sort='-cvss_score') to surface the most critical results first"},
+    {"name": "uses_advisory_available", "description": "Uses advisory_available='true' to restrict to CVEs with available advisories, or uses sort to surface actionable CVEs"}
+  ]
+}

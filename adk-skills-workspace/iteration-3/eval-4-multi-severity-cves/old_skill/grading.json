@@ -1,0 +1,10 @@
+{
+  "eval_id": 4, "eval_name": "multi-severity-cves", "configuration": "old_skill",
+  "expectations": [
+    {"text": "uses_get_cves_not_system_cves", "passed": true, "evidence": "Uses vulnerability__get_cves for both calls. Does not invoke vulnerability__get_system_cves."},
+    {"text": "single_call_omitting_severity", "passed": false, "evidence": "Makes TWO separate calls — Step 1a with severity='Critical' and Step 1b with severity='Important'. Does not use the preferred single-call approach of omitting severity and sorting by CVSS score. This two-call pattern works in simulation but in production the LLM may instead try severity=['Critical','Important'] which causes an API error."},
+    {"text": "cites_multi_severity_strategy", "passed": false, "evidence": "No explicit multi-severity strategy is cited. The response notes 'Two severity values requested, requiring two separate calls since severity accepts a single value' but this is the LLM inferring correct behavior rather than following documented skill guidance. The old skills lack the 'Multi-severity queries' section that provides the preferred single-call approach."},
+    {"text": "uses_affecting_filter", "passed": true, "evidence": "Both calls include affecting: true."},
+    {"text": "uses_cvss_sort", "passed": true, "evidence": "Both calls use sort: '-cvss_score'."}
+  ]
+}

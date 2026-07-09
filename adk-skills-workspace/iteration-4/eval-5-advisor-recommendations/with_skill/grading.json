@@ -1,0 +1,9 @@
+{
+  "eval_id": 5, "eval_name": "advisor-recommendations", "configuration": "with_skill",
+  "expectations": [
+    {"text": "uses_advisor_tools", "passed": true, "evidence": "Uses advisor__get_recommendations_stats and advisor__get_active_rules. No vulnerability tools invoked."},
+    {"text": "distinguishes_advisor_from_vuln", "passed": true, "evidence": "Treats advisor recommendations as separate from CVEs."},
+    {"text": "proper_advisor_args", "passed": true, "evidence": "limit=20 (number), sort='-total_risk' (string), impacting=true. Correct JSON types."},
+    {"text": "structured_output", "passed": true, "evidence": "Tables grouped by severity with rule descriptions, affected system counts, playbook availability."}
+  ]
+}

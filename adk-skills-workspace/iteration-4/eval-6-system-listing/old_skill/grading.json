@@ -1,0 +1,11 @@
+{
+  "eval_id": 6, "eval_name": "system-listing", "configuration": "old_skill",
+  "expectations": [
+    {"text": "uses_inventory_list_hosts", "passed": true, "evidence": "Uses inventory__list_hosts."},
+    {"text": "uses_correct_inventory_params", "passed": false, "evidence": "Uses limit=20 which is NOT a valid inventory parameter. The actual MCP schema uses per_page and page. The old skills explicitly document 'limit' and 'offset' as inventory parameters."},
+    {"text": "sorts_by_display_name", "passed": false, "evidence": "Does NOT pass order_by or order_how. The old skills do not include sort guidance for inventory listings."},
+    {"text": "handles_pagination", "passed": true, "evidence": "Notes total count."},
+    {"text": "includes_system_details", "passed": true, "evidence": "Table includes Display Name, OS, Last Check-in."},
+    {"text": "flags_stale_checkins", "passed": true, "evidence": "Flags a system with stale check-in."}
+  ]
+}

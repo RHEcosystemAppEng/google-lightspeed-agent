@@ -1,0 +1,1325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Eval Review</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600&family=Lora:wght@400;500&display=swap" rel="stylesheet">
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js" integrity="sha384-EnyY0/GSHQGSxSgMwaIPzSESbqoOLSexfnSMN2AP+39Ckmn92stwABZynq1JyzdT" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg: #faf9f5;
+      --surface: #ffffff;
+      --border: #e8e6dc;
+      --text: #141413;
+      --text-muted: #b0aea5;
+      --accent: #d97757;
+      --accent-hover: #c4613f;
+      --green: #788c5d;
+      --green-bg: #eef2e8;
+      --red: #c44;
+      --red-bg: #fceaea;
+      --header-bg: #141413;
+      --header-text: #faf9f5;
+      --radius: 6px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Lora', Georgia, serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ---- Header ---- */
+    .header {
+      background: var(--header-bg);
+      color: var(--header-text);
+      padding: 1rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-shrink: 0;
+    }
+    .header h1 {
+      font-family: 'Poppins', sans-serif;
+      font-size: 1.25rem;
+      font-weight: 600;
+    }
+    .header .instructions {
+      font-size: 0.8rem;
+      opacity: 0.7;
+      margin-top: 0.25rem;
+    }
+    .header .progress {
+      font-size: 0.875rem;
+      opacity: 0.8;
+      text-align: right;
+    }
+
+    /* ---- Main content ---- */
+    .main {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1.5rem 2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
+    /* ---- Sections ---- */
+    .section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      flex-shrink: 0;
+    }
+    .section-header {
+      font-family: 'Poppins', sans-serif;
+      padding: 0.75rem 1rem;
+      font-size: 0.75rem;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border);
+      background: var(--bg);
+    }
+    .section-body {
+      padding: 1rem;
+    }
+
+    /* ---- Config badge ---- */
+    .config-badge {
+      display: inline-block;
+      padding: 0.2rem 0.625rem;
+      border-radius: 9999px;
+      font-family: 'Poppins', sans-serif;
+      font-size: 0.6875rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      margin-left: 0.75rem;
+      vertical-align: middle;
+    }
+    .config-badge.config-primary {
+      background: rgba(33, 150, 243, 0.12);
+      color: #1976d2;
+    }
+    .config-badge.config-baseline {
+      background: rgba(255, 193, 7, 0.15);
+      color: #f57f17;
+    }
+
+    /* ---- Prompt ---- */
+    .prompt-text {
+      white-space: pre-wrap;
+      font-size: 0.9375rem;
+      line-height: 1.6;
+    }
+
+    /* ---- Outputs ---- */
+    .output-file {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .output-file + .output-file {
+      margin-top: 1rem;
+    }
+    .output-file-header {
+      padding: 0.5rem 0.75rem;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      font-family: 'SF Mono', SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .output-file-header .dl-btn {
+      font-size: 0.7rem;
+      color: var(--accent);
+      text-decoration: none;
+      cursor: pointer;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-weight: 500;
+      opacity: 0.8;
+    }
+    .output-file-header .dl-btn:hover {
+      opacity: 1;
+      text-decoration: underline;
+    }
+    .output-file-content {
+      padding: 0.75rem;
+      overflow-x: auto;
+    }
+    .output-file-content pre {
+      font-size: 0.8125rem;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-family: 'SF Mono', SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace;
+    }
+    .output-file-content img {
+      max-width: 100%;
+      height: auto;
+      border-radius: 4px;
+    }
+    .output-file-content iframe {
+      width: 100%;
+      height: 600px;
+      border: none;
+    }
+    .output-file-content table {
+      border-collapse: collapse;
+      font-size: 0.8125rem;
+      width: 100%;
+    }
+    .output-file-content table td,
+    .output-file-content table th {
+      border: 1px solid var(--border);
+      padding: 0.375rem 0.5rem;
+      text-align: left;
+    }
+    .output-file-content table th {
+      background: var(--bg);
+      font-weight: 600;
+    }
+    .output-file-content .download-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1rem;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 0.875rem;
+      cursor: pointer;
+    }
+    .output-file-content .download-link:hover {
+      background: var(--border);
+    }
+    .empty-state {
+      color: var(--text-muted);
+      font-style: italic;
+      padding: 2rem;
+      text-align: center;
+    }
+
+    /* ---- Feedback ---- */
+    .prev-feedback {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 0.625rem 0.75rem;
+      margin-top: 0.75rem;
+      font-size: 0.8125rem;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+    .prev-feedback-label {
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-bottom: 0.25rem;
+      color: var(--text-muted);
+    }
+    .feedback-textarea {
+      width: 100%;
+      min-height: 100px;
+      padding: 0.75rem;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      font-family: inherit;
+      font-size: 0.9375rem;
+      line-height: 1.5;
+      resize: vertical;
+      color: var(--text);
+    }
+    .feedback-textarea:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    }
+    .feedback-status {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-top: 0.5rem;
+      min-height: 1.1em;
+    }
+
+    /* ---- Grades (collapsible) ---- */
+    .grades-toggle {
+      display: flex;
+      align-items: center;
+      cursor: pointer;
+      user-select: none;
+    }
+    .grades-toggle:hover {
+      color: var(--accent);
+    }
+    .grades-toggle .arrow {
+      margin-right: 0.5rem;
+      transition: transform 0.15s;
+      font-size: 0.75rem;
+    }
+    .grades-toggle .arrow.open {
+      transform: rotate(90deg);
+    }
+    .grades-content {
+      display: none;
+      margin-top: 0.75rem;
+    }
+    .grades-content.open {
+      display: block;
+    }
+    .grades-summary {
+      font-size: 0.875rem;
+      margin-bottom: 0.75rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .grade-badge {
+      display: inline-block;
+      padding: 0.125rem 0.5rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .grade-pass { background: var(--green-bg); color: var(--green); }
+    .grade-fail { background: var(--red-bg); color: var(--red); }
+    .assertion-list {
+      list-style: none;
+    }
+    .assertion-item {
+      padding: 0.625rem 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.8125rem;
+    }
+    .assertion-item:last-child { border-bottom: none; }
+    .assertion-status {
+      font-weight: 600;
+      margin-right: 0.5rem;
+    }
+    .assertion-status.pass { color: var(--green); }
+    .assertion-status.fail { color: var(--red); }
+    .assertion-evidence {
+      color: var(--text-muted);
+      font-size: 0.75rem;
+      margin-top: 0.25rem;
+      padding-left: 1.5rem;
+    }
+
+    /* ---- View tabs ---- */
+    .view-tabs {
+      display: flex;
+      gap: 0;
+      padding: 0 2rem;
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .view-tab {
+      font-family: 'Poppins', sans-serif;
+      padding: 0.625rem 1.25rem;
+      font-size: 0.8125rem;
+      font-weight: 500;
+      cursor: pointer;
+      border: none;
+      background: none;
+      color: var(--text-muted);
+      border-bottom: 2px solid transparent;
+      transition: all 0.15s;
+    }
+    .view-tab:hover { color: var(--text); }
+    .view-tab.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+    }
+    .view-panel { display: none; }
+    .view-panel.active { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
+
+    /* ---- Benchmark view ---- */
+    .benchmark-view {
+      padding: 1.5rem 2rem;
+      overflow-y: auto;
+      flex: 1;
+    }
+    .benchmark-table {
+      border-collapse: collapse;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      font-size: 0.8125rem;
+      width: 100%;
+      margin-bottom: 1.5rem;
+    }
+    .benchmark-table th, .benchmark-table td {
+      padding: 0.625rem 0.75rem;
+      text-align: left;
+      border: 1px solid var(--border);
+    }
+    .benchmark-table th {
+      font-family: 'Poppins', sans-serif;
+      background: var(--header-bg);
+      color: var(--header-text);
+      font-weight: 500;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .benchmark-table tr:hover { background: var(--bg); }
+    .benchmark-table tr.benchmark-row-with { background: rgba(33, 150, 243, 0.06); }
+    .benchmark-table tr.benchmark-row-without { background: rgba(255, 193, 7, 0.06); }
+    .benchmark-table tr.benchmark-row-with:hover { background: rgba(33, 150, 243, 0.12); }
+    .benchmark-table tr.benchmark-row-without:hover { background: rgba(255, 193, 7, 0.12); }
+    .benchmark-table tr.benchmark-row-avg { font-weight: 600; border-top: 2px solid var(--border); }
+    .benchmark-table tr.benchmark-row-avg.benchmark-row-with { background: rgba(33, 150, 243, 0.12); }
+    .benchmark-table tr.benchmark-row-avg.benchmark-row-without { background: rgba(255, 193, 7, 0.12); }
+    .benchmark-delta-positive { color: var(--green); font-weight: 600; }
+    .benchmark-delta-negative { color: var(--red); font-weight: 600; }
+    .benchmark-notes {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1rem;
+    }
+    .benchmark-notes h3 {
+      font-family: 'Poppins', sans-serif;
+      font-size: 0.875rem;
+      margin-bottom: 0.75rem;
+    }
+    .benchmark-notes ul {
+      list-style: disc;
+      padding-left: 1.25rem;
+    }
+    .benchmark-notes li {
+      font-size: 0.8125rem;
+      line-height: 1.6;
+      margin-bottom: 0.375rem;
+    }
+    .benchmark-empty {
+      color: var(--text-muted);
+      font-style: italic;
+      text-align: center;
+      padding: 3rem;
+    }
+
+    /* ---- Navigation ---- */
+    .nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1rem 2rem;
+      border-top: 1px solid var(--border);
+      background: var(--surface);
+      flex-shrink: 0;
+    }
+    .nav-btn {
+      font-family: 'Poppins', sans-serif;
+      padding: 0.5rem 1.25rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      cursor: pointer;
+      font-size: 0.875rem;
+      font-weight: 500;
+      color: var(--text);
+      transition: all 0.15s;
+    }
+    .nav-btn:hover:not(:disabled) {
+      background: var(--bg);
+      border-color: var(--text-muted);
+    }
+    .nav-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+    .done-btn {
+      font-family: 'Poppins', sans-serif;
+      padding: 0.5rem 1.5rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      color: var(--text);
+      cursor: pointer;
+      font-size: 0.875rem;
+      font-weight: 500;
+      transition: all 0.15s;
+    }
+    .done-btn:hover {
+      background: var(--bg);
+      border-color: var(--text-muted);
+    }
+    .done-btn.ready {
+      border: none;
+      background: var(--accent);
+      color: white;
+      font-weight: 600;
+    }
+    .done-btn.ready:hover {
+      background: var(--accent-hover);
+    }
+    /* ---- Done overlay ---- */
+    .done-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 100;
+      justify-content: center;
+      align-items: center;
+    }
+    .done-overlay.visible {
+      display: flex;
+    }
+    .done-card {
+      background: var(--surface);
+      border-radius: 12px;
+      padding: 2rem 3rem;
+      text-align: center;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      max-width: 500px;
+    }
+    .done-card h2 {
+      font-size: 1.5rem;
+      margin-bottom: 0.5rem;
+    }
+    .done-card p {
+      color: var(--text-muted);
+      margin-bottom: 1.5rem;
+      line-height: 1.5;
+    }
+    .done-card .btn-row {
+      display: flex;
+      gap: 0.5rem;
+      justify-content: center;
+    }
+    .done-card button {
+      padding: 0.5rem 1.25rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      cursor: pointer;
+      font-size: 0.875rem;
+    }
+    .done-card button:hover {
+      background: var(--bg);
+    }
+    /* ---- Toast ---- */
+    .toast {
+      position: fixed;
+      bottom: 5rem;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--header-bg);
+      color: var(--header-text);
+      padding: 0.625rem 1.25rem;
+      border-radius: var(--radius);
+      font-size: 0.875rem;
+      opacity: 0;
+      transition: opacity 0.3s;
+      pointer-events: none;
+      z-index: 200;
+    }
+    .toast.visible {
+      opacity: 1;
+    }
+  </style>
+</head>
+<body>
+  <div id="app" style="height:100vh; display:flex; flex-direction:column;">
+    <div class="header">
+      <div>
+        <h1>Eval Review: <span id="skill-name"></span></h1>
+        <div class="instructions">Review each output and leave feedback below. Navigate with arrow keys or buttons. When done, copy feedback and paste into Claude Code.</div>
+      </div>
+      <div class="progress" id="progress"></div>
+    </div>
+
+    <!-- View tabs (only shown when benchmark data exists) -->
+    <div class="view-tabs" id="view-tabs" style="display:none;">
+      <button class="view-tab active" onclick="switchView('outputs')">Outputs</button>
+      <button class="view-tab" onclick="switchView('benchmark')">Benchmark</button>
+    </div>
+
+    <!-- Outputs panel (qualitative review) -->
+    <div class="view-panel active" id="panel-outputs">
+    <div class="main">
+      <!-- Prompt -->
+      <div class="section">
+        <div class="section-header">Prompt <span class="config-badge" id="config-badge" style="display:none;"></span></div>
+        <div class="section-body">
+          <div class="prompt-text" id="prompt-text"></div>
+        </div>
+      </div>
+
+      <!-- Outputs -->
+      <div class="section">
+        <div class="section-header">Output</div>
+        <div class="section-body" id="outputs-body">
+          <div class="empty-state">No output files found</div>
+        </div>
+      </div>
+
+      <!-- Previous Output (collapsible) -->
+      <div class="section" id="prev-outputs-section" style="display:none;">
+        <div class="section-header">
+          <div class="grades-toggle" onclick="togglePrevOutputs()">
+            <span class="arrow" id="prev-outputs-arrow">&#9654;</span>
+            Previous Output
+          </div>
+        </div>
+        <div class="grades-content" id="prev-outputs-content"></div>
+      </div>
+
+      <!-- Grades (collapsible) -->
+      <div class="section" id="grades-section" style="display:none;">
+        <div class="section-header">
+          <div class="grades-toggle" onclick="toggleGrades()">
+            <span class="arrow" id="grades-arrow">&#9654;</span>
+            Formal Grades
+          </div>
+        </div>
+        <div class="grades-content" id="grades-content"></div>
+      </div>
+
+      <!-- Feedback -->
+      <div class="section">
+        <div class="section-header">Your Feedback</div>
+        <div class="section-body">
+          <textarea
+            class="feedback-textarea"
+            id="feedback"
+            placeholder="What do you think of this output? Any issues, suggestions, or things that look great?"
+          ></textarea>
+          <div class="feedback-status" id="feedback-status"></div>
+          <div class="prev-feedback" id="prev-feedback" style="display:none;">
+            <div class="prev-feedback-label">Previous feedback</div>
+            <div id="prev-feedback-text"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="nav" id="outputs-nav">
+      <button class="nav-btn" id="prev-btn" onclick="navigate(-1)">&#8592; Previous</button>
+      <button class="done-btn" id="done-btn" onclick="showDoneDialog()">Submit All Reviews</button>
+      <button class="nav-btn" id="next-btn" onclick="navigate(1)">Next &#8594;</button>
+    </div>
+    </div><!-- end panel-outputs -->
+
+    <!-- Benchmark panel (quantitative stats) -->
+    <div class="view-panel" id="panel-benchmark">
+      <div class="benchmark-view" id="benchmark-content">
+        <div class="benchmark-empty">No benchmark data available. Run a benchmark to see quantitative results here.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Done overlay -->
+  <div class="done-overlay" id="done-overlay">
+    <div class="done-card">
+      <h2>Review Complete</h2>
+      <p>Your feedback has been saved. Go back to your Claude Code session and tell Claude you're done reviewing.</p>
+      <div class="btn-row">
+        <button onclick="closeDoneDialog()">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+
+  <script>
+    // ---- Embedded data (injected by generate_review.py) ----
+    const EMBEDDED_DATA = {"skill_name": "adk-bundled-skills", "runs": [{"id": "eval-4-multi-severity-cves-old_skill", "prompt": "Simulate being the Red Hat Lightspeed Agent responding to a real user. Show the actual response, including simulated tool calls with realistic data.", "eval_id": 4, "outputs": [{"name": "response.md", "type": "text", "content": "# Eval 4 \u2014 Multi-Severity CVEs (Old/Snapshot Skills)\n\n**User Query:** \"Show me the top critical and important CVEs affecting my systems.\"\n\n---\n\n## 1. Skills Activated\n\n| Skill | Reason |\n|---|---|\n| **tool-invocation-rules** | Multi-severity query guidance \u2014 `severity` accepts only one value; use `sort=-cvss_score` strategy |\n| **multi-step-workflows** | Landscape-level CVE query with no specific system named \u2014 maps to `vulnerability__get_cves` with `affecting=true` |\n| **response-formatting** | CVE list output \u2014 table format with severity, affected systems, remediation columns |\n| **guardrails-safety** | Severity interpretation, partial-data transparency |\n\n---\n\n## 2. Tool Calls\n\n### Step 1: Fetch top CVEs sorted by CVSS score (covers both Critical and Important)\n\nThe snapshot skill `tool-invocation-rules` says for multi-severity queries: \"Preferred \u2014 sort by score: Omit `severity` and use `sort=-cvss_score`. The top results will naturally be Critical and Important.\"\n\nThe snapshot skill `multi-step-workflows` confirms: use `vulnerability__get_cves` with `sort=-cvss_score, affecting=true, limit=20`.\n\n```\ntool: vulnerability__get_cves\nargs: {\n  \"limit\": 20,\n  \"sort\": \"-cvss_score\",\n  \"affecting\": true\n}\n```\n\n**Simulated Response:**\n```json\n{\n  \"data\": [\n    {\n      \"id\": \"CVE-2024-6387\",\n      \"attributes\": {\n        \"synopsis\": \"OpenSSH regreSSHion RCE\",\n        \"severity\": \"Critical\",\n        \"cvss_score\": 9.8,\n        \"systems_affected\": 42,\n        \"remediation_available\": true,\n        \"known_exploit\": true\n      }\n    },\n    {\n      \"id\": \"CVE-2024-21626\",\n      \"attributes\": {\n        \"synopsis\": \"runc container breakout via leaked file descriptors\",\n        \"severity\": \"Critical\",\n        \"cvss_score\": 9.6,\n        \"systems_affected\": 18,\n        \"remediation_available\": true,\n        \"known_exploit\": true\n      }\n    },\n    {\n      \"id\": \"CVE-2024-3094\",\n      \"attributes\": {\n        \"synopsis\": \"xz/liblzma backdoor (supply chain compromise)\",\n        \"severity\": \"Critical\",\n        \"cvss_score\": 9.4,\n        \"systems_affected\": 7,\n        \"remediation_available\": true,\n        \"known_exploit\": true\n      }\n    },\n    {\n      \"id\": \"CVE-2024-1086\",\n      \"attributes\": {\n        \"synopsis\": \"Linux kernel nf_tables use-after-free privilege escalation\",\n        \"severity\": \"Important\",\n        \"cvss_score\": 8.8,\n        \"systems_affected\": 31,\n        \"remediation_available\": true,\n        \"known_exploit\": true\n      }\n    },\n    {\n      \"id\": \"CVE-2024-27198\",\n      \"attributes\": {\n        \"synopsis\": \"JetBrains TeamCity authentication bypass\",\n        \"severity\": \"Important\",\n        \"cvss_score\": 8.5,\n        \"systems_affected\": 3,\n        \"remediation_available\": true,\n        \"known_exploit\": false\n      }\n    },\n    {\n      \"id\": \"CVE-2024-4577\",\n      \"attributes\": {\n        \"synopsis\": \"PHP CGI argument injection RCE\",\n        \"severity\": \"Important\",\n        \"cvss_score\": 8.1,\n        \"systems_affected\": 12,\n        \"remediation_available\": true,\n        \"known_exploit\": true\n      }\n    },\n    {\n      \"id\": \"CVE-2024-38063\",\n      \"attributes\": {\n        \"synopsis\": \"Linux kernel TCP/IP stack integer underflow\",\n        \"severity\": \"Important\",\n        \"cvss_score\": 7.8,\n        \"systems_affected\": 25,\n        \"remediation_available\": false,\n        \"known_exploit\": false\n      }\n    },\n    {\n      \"id\": \"CVE-2024-5535\",\n      \"attributes\": {\n        \"synopsis\": \"OpenSSL SSL_select_next_proto buffer overread\",\n        \"severity\": \"Important\",\n        \"cvss_score\": 7.5,\n        \"systems_affected\": 38,\n        \"remediation_available\": true,\n        \"known_exploit\": false\n      }\n    },\n    {\n      \"id\": \"CVE-2024-2961\",\n      \"attributes\": {\n        \"synopsis\": \"glibc iconv buffer overflow\",\n        \"severity\": \"Important\",\n        \"cvss_score\": 7.4,\n        \"systems_affected\": 15,\n        \"remediation_available\": true,\n        \"known_exploit\": false\n      }\n    },\n    {\n      \"id\": \"CVE-2024-32002\",\n      \"attributes\": {\n        \"synopsis\": \"Git recursive clone RCE via symlinks\",\n        \"severity\": \"Important\",\n        \"cvss_score\": 7.2,\n        \"systems_affected\": 9,\n        \"remediation_available\": true,\n        \"known_exploit\": false\n      }\n    }\n  ],\n  \"meta\": {\n    \"total_items\": 87,\n    \"limit\": 20,\n    \"offset\": 0\n  }\n}\n```\n\n**Note:** The snapshot skills use the parameter name `affecting` (boolean). This may not match the actual MCP schema parameter name, which could be different (e.g., `affected`, `affects_systems`, etc.). The snapshot skills document this as a confirmed parameter but it may be incorrect.\n\n---\n\n## 3. User-Facing Response\n\nHere are the top critical and important CVEs currently affecting your systems, sorted by CVSS score:\n\n| CVE ID | Severity | CVSS | Affected Systems | Known Exploit | Remediation Available |\n|---|---|---|---|---|---|\n| CVE-2024-6387 | Critical | 9.8 | 42 | Yes | Yes |\n| CVE-2024-21626 | Critical | 9.6 | 18 | Yes | Yes |\n| CVE-2024-3094 | Critical | 9.4 | 7 | Yes | Yes |\n| CVE-2024-1086 | Important | 8.8 | 31 | Yes | Yes |\n| CVE-2024-27198 | Important | 8.5 | 3 | No | Yes |\n| CVE-2024-4577 | Important | 8.1 | 12 | Yes | Yes |\n| CVE-2024-38063 | Important | 7.8 | 25 | No | No |\n| CVE-2024-5535 | Important | 7.5 | 38 | No | Yes |\n| CVE-2024-2961 | Important | 7.4 | 15 | No | Yes |\n| CVE-2024-32002 | Important | 7.2 | 9 | No | Yes |\n\nShowing 10 of 87 total CVEs affecting your systems.\n\n**Key findings:**\n- **3 Critical CVEs** all have known exploits and remediations available \u2014 these should be prioritized immediately.\n- **CVE-2024-6387** (OpenSSH regreSSHion) has the widest blast radius at 42 affected systems with a known exploit.\n- **CVE-2024-1086** (kernel privilege escalation) affects 31 systems and also has a known exploit.\n- **CVE-2024-38063** is the only Important CVE without a remediation available yet \u2014 monitor this one for updates.\n\nWould you like me to drill into any specific CVE to see which systems are affected, or focus on the ones with known exploits?\n\n---\n\n## 4. Analysis \u2014 Potential Issues with Snapshot Skills\n\n1. **Parameter name correctness**: The snapshot skills list `affecting` as a confirmed parameter for `vulnerability__get_cves`. If the actual MCP schema uses a different parameter name (e.g., `affected`, `affects_system`, or `filter[affecting]`), this call would either fail or the parameter would be silently ignored \u2014 returning CVEs that do NOT affect any of the user's systems, polluting results.\n\n2. **Sort parameter format**: The snapshot skills document `sort` with a value of `\"-cvss_score\"` (dash prefix for descending). If the actual API uses a different sort syntax (e.g., `\"-public_date\"`, separate `sort_by` + `sort_order` parameters, or `\"cvss_score:desc\"`), the sort would fail or be ignored.\n\n3. **Single tool call approach**: The snapshot skills recommend the \"sort by score\" strategy as preferred over separate calls per severity. This works if the API returns a mix of severities sorted by score, but the user specifically asked for \"critical AND important\" \u2014 the sort approach might return Moderate CVEs with high CVSS scores alongside the Critical/Important ones, which wouldn't strictly match the user's request.\n\n4. **No `known_exploit` filter used**: The snapshot skills don't suggest proactively filtering by `known_exploit=true` for this query, though they note in guardrails that known-exploit CVEs deserve extra emphasis. The response does highlight known exploits in the output, but doesn't offer to filter by them upfront.\n"}], "grading": {"eval_id": 4, "eval_name": "multi-severity-cves", "configuration": "old_skill", "expectations": [{"text": "uses_get_cves_not_system_cves", "passed": true, "evidence": "Uses vulnerability__get_cves. Does not invoke vulnerability__get_system_cves."}, {"text": "uses_impact_not_severity", "passed": false, "evidence": "Does NOT use the 'impact' parameter. The old skills document 'severity' which does not exist in the MCP tool schema. The agent omits severity (per multi-severity strategy) but also does not use 'impact' to filter by severity level."}, {"text": "uses_correct_param_names", "passed": false, "evidence": "Uses affecting=true which is NOT a valid MCP parameter (actual param is advisory_available). The old skills document 'affecting (true/false)' but the MCP schema has no such parameter."}, {"text": "uses_cvss_sort", "passed": true, "evidence": "Uses sort='-cvss_score'."}, {"text": "uses_advisory_available", "passed": false, "evidence": "Uses 'affecting=true' instead of advisory_available='true'. The 'affecting' parameter does not exist in the MCP tool schema."}]}}, {"id": "eval-4-multi-severity-cves-with_skill", "prompt": "Simulate being the Red Hat Lightspeed Agent responding to a real user. Show the actual response, including simulated tool calls with realistic data.", "eval_id": 4, "outputs": [{"name": "response.md", "type": "text", "content": "# Eval 4 \u2014 \"Show me the top critical and important CVEs affecting my systems.\" (With Skills)\n\n## 1. Skills Activated\n\n| Skill | Reason |\n|---|---|\n| **tool-invocation-rules** | Provides correct `impact` parameter encoding \u2014 numeric IDs `\"3,4\"` for Important+Critical in a single call |\n| **multi-step-workflows** | Query is landscape-level (no specific system named) so routes to `vulnerability__get_cves`; recommends `advisory_available=\"true\"` and CVSS sort |\n| **response-formatting** | CVE list requires table format with CVE ID, Synopsis, Severity, CVSS Score, Affected Systems, Remediation Available columns |\n| **guardrails-safety** | Severity interpretation guidance, partial-data transparency (\"Showing N of M\") |\n| **efficient-counting** | Not directly triggered (user asked for \"top\" CVEs, not a count), but the `meta.total_items` field is used for transparency |\n\n## 2. Tool Calls\n\n### Call 1: Get top Critical and Important CVEs\n\n**Reasoning**: The user wants \"top critical and important CVEs.\" Per **multi-step-workflows**, no specific system is named, so this is a landscape-level query routed to `vulnerability__get_cves`. Per **tool-invocation-rules**, the `impact` parameter uses comma-separated numeric IDs: `\"4\"` = Critical, `\"3\"` = Important, combined as `\"3,4\"`. Adding `sort=\"-cvss_score\"` surfaces the most severe first, and `advisory_available=\"true\"` restricts to actionable CVEs with available advisories.\n\n```\ntool: vulnerability__get_cves\nargs: {\n  \"impact\": \"3,4\",\n  \"sort\": \"-cvss_score\",\n  \"advisory_available\": \"true\",\n  \"limit\": 20\n}\n```\n\n**Simulated Response**:\n```json\n{\n  \"meta\": {\n    \"total_items\": 87,\n    \"limit\": 20,\n    \"offset\": 0\n  },\n  \"data\": [\n    {\n      \"id\": \"CVE-2024-6387\",\n      \"synopsis\": \"Race condition in OpenSSH server (regreSSHion)\",\n      \"severity\": \"Critical\",\n      \"impact\": \"Critical\",\n      \"cvss_score\": 9.8,\n      \"systems_affected\": 42,\n      \"known_exploit\": true,\n      \"advisory_available\": true\n    },\n    {\n      \"id\": \"CVE-2024-21626\",\n      \"synopsis\": \"Container breakout via runc file descriptor leak\",\n      \"severity\": \"Critical\",\n      \"impact\": \"Critical\",\n      \"cvss_score\": 9.6,\n      \"systems_affected\": 18,\n      \"known_exploit\": true,\n      \"advisory_available\": true\n    },\n    {\n      \"id\": \"CVE-2024-3094\",\n      \"synopsis\": \"Supply chain compromise in xz/liblzma (backdoor)\",\n      \"severity\": \"Critical\",\n      \"impact\": \"Critical\",\n      \"cvss_score\": 9.4,\n      \"systems_affected\": 5,\n      \"known_exploit\": true,\n      \"advisory_available\": true\n    },\n    {\n      \"id\": \"CVE-2024-47076\",\n      \"synopsis\": \"Remote code execution via CUPS browsed service\",\n      \"severity\": \"Critical\",\n      \"impact\": \"Critical\",\n      \"cvss_score\": 9.1,\n      \"systems_affected\": 31,\n      \"known_exploit\": false,\n      \"advisory_available\": true\n    },\n    {\n      \"id\": \"CVE-2024-38816\",\n      \"synopsis\": \"Spring Framework path traversal via WebMvc.fn\",\n      \"severity\": \"Critical\",\n      \"impact\": \"Critical\",\n      \"cvss_score\": 9.0,\n      \"systems_affected\": 7,\n      \"known_exploit\": false,\n      \"advisory_available\": true\n    },\n    {\n      \"id\": \"CVE-2024-9341\",\n      \"synopsis\": \"Privilege escalation in container runtime mount handling\",\n      \"severity\": \"Important\",\n      \"impact\": \"Important\",\n      \"cvss_score\": 8.6,\n      \"systems_affected\": 22,\n      \"known_exploit\": false,\n      \"advisory_available\": true\n    },\n    {\n      \"id\": \"CVE-2024-45490\",\n      \"synopsis\": \"Heap buffer overflow in libexpat XML parser\",\n      \"severity\": \"Important\",\n      \"impact\": \"Important\",\n      \"cvss_score\": 8.4,\n      \"systems_affected\": 38,\n      \"known_exploit\": false,\n      \"advisory_available\": true\n    },\n    {\n      \"id\": \"CVE-2024-50602\",\n      \"synopsis\": \"Denial of service in libxml2 via crafted XML input\",\n      \"severity\": \"Important\",\n      \"impact\": \"Important\",\n      \"cvss_score\": 8.2,\n      \"systems_affected\": 45,\n      \"known_exploit\": false,\n      \"advisory_available\": true\n    },\n    {\n      \"id\": \"CVE-2024-45769\",\n      \"synopsis\": \"Heap corruption in PCP performance monitoring\",\n      \"severity\": \"Important\",\n      \"impact\": \"Important\",\n      \"cvss_score\": 8.1,\n      \"systems_affected\": 12,\n      \"known_exploit\": false,\n      \"advisory_available\": true\n    },\n    {\n      \"id\": \"CVE-2024-28182\",\n      \"synopsis\": \"HTTP/2 CONTINUATION flood in nghttp2 library\",\n      \"severity\": \"Important\",\n      \"impact\": \"Important\",\n      \"cvss_score\": 7.9,\n      \"systems_affected\": 29,\n      \"known_exploit\": true,\n      \"advisory_available\": true\n    },\n    {\n      \"id\": \"CVE-2024-5953\",\n      \"synopsis\": \"Denial of service in 389 Directory Server BER encoding\",\n      \"severity\": \"Important\",\n      \"impact\": \"Important\",\n      \"cvss_score\": 7.7,\n      \"systems_affected\": 8,\n      \"known_exploit\": false,\n      \"advisory_available\": true\n    },\n    {\n      \"id\": \"CVE-2024-45770\",\n      \"synopsis\": \"Symlink race condition in PCP pmpost utility\",\n      \"severity\": \"Important\",\n      \"impact\": \"Important\",\n      \"cvss_score\": 7.5,\n      \"systems_affected\": 12,\n      \"known_exploit\": false,\n      \"advisory_available\": true\n    },\n    {\n      \"id\": \"CVE-2024-6345\",\n      \"synopsis\": \"Remote code execution via Python setuptools URL handling\",\n      \"severity\": \"Important\",\n      \"impact\": \"Important\",\n      \"cvss_score\": 7.4,\n      \"systems_affected\": 15,\n      \"known_exploit\": false,\n      \"advisory_available\": true\n    },\n    {\n      \"id\": \"CVE-2024-8088\",\n      \"synopsis\": \"Infinite loop in Python zipfile when processing crafted archives\",\n      \"severity\": \"Important\",\n      \"impact\": \"Important\",\n      \"cvss_score\": 7.3,\n      \"systems_affected\": 20,\n      \"known_exploit\": false,\n      \"advisory_available\": true\n    },\n    {\n      \"id\": \"CVE-2024-6232\",\n      \"synopsis\": \"ReDoS vulnerability in Python tarfile header parsing\",\n      \"severity\": \"Important\",\n      \"impact\": \"Important\",\n      \"cvss_score\": 7.2,\n      \"systems_affected\": 20,\n      \"known_exploit\": false,\n      \"advisory_available\": true\n    },\n    {\n      \"id\": \"CVE-2024-4032\",\n      \"synopsis\": \"Incorrect IP address categorization in Python ipaddress module\",\n      \"severity\": \"Important\",\n      \"impact\": \"Important\",\n      \"cvss_score\": 7.1,\n      \"systems_affected\": 20,\n      \"known_exploit\": false,\n      \"advisory_available\": true\n    },\n    {\n      \"id\": \"CVE-2024-52530\",\n      \"synopsis\": \"HTTP request smuggling in libsoup via header parsing\",\n      \"severity\": \"Important\",\n      \"impact\": \"Important\",\n      \"cvss_score\": 7.0,\n      \"systems_affected\": 33,\n      \"known_exploit\": false,\n      \"advisory_available\": true\n    },\n    {\n      \"id\": \"CVE-2024-52532\",\n      \"synopsis\": \"Infinite loop in libsoup WebSocket handling\",\n      \"severity\": \"Important\",\n      \"impact\": \"Important\",\n      \"cvss_score\": 7.0,\n      \"systems_affected\": 33,\n      \"known_exploit\": false,\n      \"advisory_available\": true\n    },\n    {\n      \"id\": \"CVE-2024-11168\",\n      \"synopsis\": \"URL validation bypass in Python urllib.parse\",\n      \"severity\": \"Important\",\n      \"impact\": \"Important\",\n      \"cvss_score\": 6.9,\n      \"systems_affected\": 20,\n      \"known_exploit\": false,\n      \"advisory_available\": true\n    },\n    {\n      \"id\": \"CVE-2024-9676\",\n      \"synopsis\": \"Symlink traversal vulnerability in Podman and Buildah\",\n      \"severity\": \"Important\",\n      \"impact\": \"Important\",\n      \"cvss_score\": 6.8,\n      \"systems_affected\": 14,\n      \"known_exploit\": false,\n      \"advisory_available\": true\n    }\n  ]\n}\n```\n\n## 3. User-Facing Response\n\nHere are the top Critical and Important CVEs affecting your systems, sorted by CVSS score. Showing 20 of 87 total CVEs with advisories available.\n\n### Critical CVEs\n\n| CVE ID | Synopsis | CVSS | Affected Systems | Known Exploit | Remediation |\n|---|---|---|---|---|---|\n| CVE-2024-6387 | Race condition in OpenSSH server (regreSSHion) | 9.8 | 42 | **Yes** | Available |\n| CVE-2024-21626 | Container breakout via runc file descriptor leak | 9.6 | 18 | **Yes** | Available |\n| CVE-2024-3094 | Supply chain compromise in xz/liblzma (backdoor) | 9.4 | 5 | **Yes** | Available |\n| CVE-2024-47076 | Remote code execution via CUPS browsed service | 9.1 | 31 | No | Available |\n| CVE-2024-38816 | Spring Framework path traversal via WebMvc.fn | 9.0 | 7 | No | Available |\n\n### Important CVEs\n\n| CVE ID | Synopsis | CVSS | Affected Systems | Known Exploit | Remediation |\n|---|---|---|---|---|---|\n| CVE-2024-9341 | Privilege escalation in container runtime mount handling | 8.6 | 22 | No | Available |\n| CVE-2024-45490 | Heap buffer overflow in libexpat XML parser | 8.4 | 38 | No | Available |\n| CVE-2024-50602 | Denial of service in libxml2 via crafted XML input | 8.2 | 45 | No | Available |\n| CVE-2024-45769 | Heap corruption in PCP performance monitoring | 8.1 | 12 | No | Available |\n| CVE-2024-28182 | HTTP/2 CONTINUATION flood in nghttp2 library | 7.9 | 29 | **Yes** | Available |\n| CVE-2024-5953 | Denial of service in 389 Directory Server BER encoding | 7.7 | 8 | No | Available |\n| CVE-2024-45770 | Symlink race condition in PCP pmpost utility | 7.5 | 12 | No | Available |\n| CVE-2024-6345 | Remote code execution via Python setuptools URL handling | 7.4 | 15 | No | Available |\n| CVE-2024-8088 | Infinite loop in Python zipfile when processing crafted archives | 7.3 | 20 | No | Available |\n| CVE-2024-6232 | ReDoS vulnerability in Python tarfile header parsing | 7.2 | 20 | No | Available |\n| CVE-2024-4032 | Incorrect IP address categorization in Python ipaddress module | 7.1 | 20 | No | Available |\n| CVE-2024-52530 | HTTP request smuggling in libsoup via header parsing | 7.0 | 33 | No | Available |\n| CVE-2024-52532 | Infinite loop in libsoup WebSocket handling | 7.0 | 33 | No | Available |\n| CVE-2024-11168 | URL validation bypass in Python urllib.parse | 6.9 | 20 | No | Available |\n| CVE-2024-9676 | Symlink traversal vulnerability in Podman and Buildah | 6.8 | 14 | No | Available |\n\n**Key findings:**\n\n- **4 CVEs have known exploits** in the wild (CVE-2024-6387, CVE-2024-21626, CVE-2024-3094, and CVE-2024-28182) \u2014 these warrant priority attention regardless of the number of affected systems.\n- **CVE-2024-6387 (regreSSHion)** is the highest-priority item: CVSS 9.8 with a known exploit affecting 42 systems. This OpenSSH race condition allows unauthenticated remote code execution.\n- **CVE-2024-50602** affects the most systems (45) among the Important-severity CVEs.\n- All 20 CVEs shown have advisories available with remediation steps.\n\nThere are 67 more Important and Critical CVEs beyond this list. Would you like me to show more, drill into a specific CVE for affected systems and remediation details, or focus on CVEs with known exploits?\n\n---\n\n## Skill Evaluation Notes\n\n### Correct behaviors demonstrated (with skills):\n\n1. **Single API call for multi-severity query**: Used `impact=\"3,4\"` (comma-separated numeric IDs) to fetch both Critical and Important CVEs in one call, as documented in tool-invocation-rules under \"Multi-impact queries.\" Without the skill, an agent might make two separate calls or use wrong string values like `\"Critical,Important\"`.\n\n2. **Correct parameter names and types**: Used `impact` (not `severity`), numeric string IDs `\"3,4\"` (not label names), `sort=\"-cvss_score\"` (not `sort_by` or `order`), and `advisory_available=\"true\"` (string, not boolean). All per tool-invocation-rules confirmed parameters.\n\n3. **Correct tool selection**: Chose `vulnerability__get_cves` (global landscape query) over `vulnerability__get_system_cves` (per-system). Per multi-step-workflows: \"No specific system named -> `vulnerability__get_cves`.\"\n\n4. **Actionable filtering with `advisory_available=\"true\"`**: Per multi-step-workflows workflow example, restricts to CVEs where remediation is available \u2014 making results immediately actionable.\n\n5. **Table format split by severity**: Per response-formatting, used the CVE table schema (CVE ID, Synopsis, Severity, CVSS Score, Affected Systems, Remediation Available) and sorted by severity descending. Split into Critical and Important sections for clarity.\n\n6. **Known-exploit emphasis**: Per guardrails-safety, CVEs with known exploits received bold emphasis and a dedicated callout in the key findings, noting that \"a Moderate CVE with a known exploit may warrant faster action.\"\n\n7. **Partial-data transparency**: Per guardrails-safety and response-formatting, stated \"Showing 20 of 87 total CVEs\" and offered to show more or narrow down \u2014 not silently truncating.\n\n8. **Offer to drill deeper**: Proactively offered follow-up options (more CVEs, specific CVE details, known-exploit focus) per multi-step-workflows principle of completing the workflow rather than leaving the user to figure out next steps.\n"}], "grading": {"eval_id": 4, "eval_name": "multi-severity-cves", "configuration": "with_skill", "expectations": [{"text": "uses_get_cves_not_system_cves", "passed": true, "evidence": "Uses vulnerability__get_cves as a single global call. Does not invoke vulnerability__get_system_cves."}, {"text": "uses_impact_not_severity", "passed": true, "evidence": "Uses impact='3,4' (numeric IDs for Important+Critical). Explicitly cites tool-invocation-rules: 'the impact parameter uses comma-separated numeric IDs: 4=Critical, 3=Important'."}, {"text": "uses_correct_param_names", "passed": true, "evidence": "All params match MCP schema: impact (not severity), advisory_available='true' (not affecting), sort='-cvss_score' (string). No nonexistent parameter names used."}, {"text": "uses_cvss_sort", "passed": true, "evidence": "Uses sort='-cvss_score' to surface highest-severity CVEs first."}, {"text": "uses_advisory_available", "passed": true, "evidence": "Uses advisory_available='true' to restrict to CVEs with available advisories."}]}}, {"id": "eval-5-advisor-recommendations-old_skill", "prompt": "Simulate being the Red Hat Lightspeed Agent responding to a real user. Show the actual response, including simulated tool calls with realistic data.", "eval_id": 5, "outputs": [{"name": "response.md", "type": "text", "content": "# Eval 5 \u2014 \"What are the top advisor recommendations for my environment?\" (Old Skills)\n\n## 1. Skills Activated\n\n| Skill | Reason |\n|---|---|\n| **tool-invocation-rules** | Correct argument formatting for advisor tool calls |\n| **multi-step-workflows** | Chaining advisor stats + active rules + host details across multiple calls |\n| **response-formatting** | Formatting advisor recommendations grouped by severity with affected system counts |\n| **guardrails-safety** | Partial data transparency \u2014 noting pagination limits and data freshness |\n| **error-handling** | Standby for oversized responses or API failures |\n\n**efficient-counting** is not directly activated \u2014 this is a \"show me\" query, not a \"how many\" query.\n\n## 2. Tool Calls\n\n### Call 1: Get recommendation statistics overview\n\n```\ntool: advisor__get_recommendations_stats\nargs: {}\n```\n\n**Simulated response:**\n```json\n{\n  \"total_risk\": {\n    \"1\": 12,\n    \"2\": 45,\n    \"3\": 18,\n    \"4\": 5\n  },\n  \"category\": {\n    \"Availability\": 22,\n    \"Performance\": 15,\n    \"Security\": 28,\n    \"Stability\": 15\n  },\n  \"total\": 80,\n  \"systems_with_hits\": 37\n}\n```\n\n### Call 2: Get active rules sorted by highest risk, limited to top results\n\n```\ntool: advisor__get_active_rules\nargs: {\"limit\": 20, \"sort\": \"-total_risk\"}\n```\n\n**Simulated response:**\n```json\n{\n  \"meta\": {\n    \"count\": 80,\n    \"limit\": 20,\n    \"offset\": 0\n  },\n  \"data\": [\n    {\n      \"rule_id\": \"network_bond_opts_config_issue|NETWORK_BONDING_OPTS_DOUBLE_QUOTES_ISSUE\",\n      \"description\": \"Bonding configuration uses incorrect quoting for BONDING_OPTS, which may cause network interfaces to fail on reboot.\",\n      \"total_risk\": 4,\n      \"category\": { \"name\": \"Availability\" },\n      \"impact\": { \"name\": \"Network Connectivity Loss\", \"impact\": 4 },\n      \"likelihood\": 4,\n      \"systems_affected\": 8,\n      \"has_playbook\": true\n    },\n    {\n      \"rule_id\": \"hardening_sshd_config|HARDENING_SSHD_PERMIT_ROOT\",\n      \"description\": \"SSH daemon is configured to permit root login, which increases the attack surface for unauthorized access.\",\n      \"total_risk\": 4,\n      \"category\": { \"name\": \"Security\" },\n      \"impact\": { \"name\": \"Unauthorized Access\", \"impact\": 4 },\n      \"likelihood\": 3,\n      \"systems_affected\": 14,\n      \"has_playbook\": true\n    },\n    {\n      \"rule_id\": \"kernel_panic_sysctl|KERNEL_PANIC_REBOOT_NOT_SET\",\n      \"description\": \"Systems do not automatically reboot after a kernel panic, potentially causing extended unplanned downtime.\",\n      \"total_risk\": 4,\n      \"category\": { \"name\": \"Stability\" },\n      \"impact\": { \"name\": \"Extended Downtime\", \"impact\": 4 },\n      \"likelihood\": 3,\n      \"systems_affected\": 11,\n      \"has_playbook\": true\n    },\n    {\n      \"rule_id\": \"CVE_2024_6387_sshd|CVE_2024_6387_SSHD_RACE\",\n      \"description\": \"OpenSSH versions are affected by CVE-2024-6387 (regreSSHion), a remote code execution vulnerability in sshd.\",\n      \"total_risk\": 4,\n      \"category\": { \"name\": \"Security\" },\n      \"impact\": { \"name\": \"Remote Code Execution\", \"impact\": 4 },\n      \"likelihood\": 4,\n      \"systems_affected\": 6,\n      \"has_playbook\": true\n    },\n    {\n      \"rule_id\": \"tuned_profile_mismatch|TUNED_PROFILE_NOT_ACTIVE\",\n      \"description\": \"The recommended tuned profile is not active, which may result in suboptimal system performance.\",\n      \"total_risk\": 3,\n      \"category\": { \"name\": \"Performance\" },\n      \"impact\": { \"name\": \"Degraded Performance\", \"impact\": 3 },\n      \"likelihood\": 3,\n      \"systems_affected\": 9,\n      \"has_playbook\": true\n    }\n  ]\n}\n```\n\nNo further chained calls are made. The top rules already include `systems_affected` counts, so drilling into `advisor__get_hosts_hitting_a_rule` would only be warranted if the user asks about a specific recommendation.\n\n## 3. User-Facing Response\n\n---\n\nYour environment has **80 active advisor recommendations** across **37 systems**. Here is a breakdown by category and the highest-priority items to address.\n\n### Recommendation Summary\n\n| Category | Count |\n|---|---|\n| Security | 28 |\n| Availability | 22 |\n| Performance | 15 |\n| Stability | 15 |\n\nBy risk level: **5 critical**, 18 important, 45 moderate, and 12 low.\n\n### Top Recommendations (Highest Risk)\n\n| # | Recommendation | Category | Risk | Affected Systems | Playbook |\n|---|---|---|---|---|---|\n| 1 | Bonding configuration uses incorrect quoting for BONDING_OPTS \u2014 network interfaces may fail on reboot | Availability | Critical | 8 | Yes |\n| 2 | SSH daemon permits root login, increasing the attack surface for unauthorized access | Security | Critical | 14 | Yes |\n| 3 | Systems do not auto-reboot after kernel panic, risking extended unplanned downtime | Stability | Critical | 11 | Yes |\n| 4 | OpenSSH affected by CVE-2024-6387 (regreSSHion) \u2014 remote code execution vulnerability | Security | Critical | 6 | Yes |\n| 5 | Recommended tuned profile is not active, causing suboptimal performance | Performance | Important | 9 | Yes |\n\n...and 75 more. Ask me to continue or filter by category (e.g., \"show me only security recommendations\").\n\nAll five critical recommendations have Ansible playbooks available for remediation. I'd suggest prioritizing **#2 (SSH root login)** and **#4 (CVE-2024-6387)** first given their security impact across 14 and 6 systems respectively.\n\nWould you like me to show the affected systems for any of these recommendations, or drill into a specific category?\n\n---\n\n## Evaluation Notes\n\n**Skills behavior:**\n- **tool-invocation-rules**: Arguments passed as native JSON types; `limit` as integer, `sort` as string. No pseudocode generated.\n- **multi-step-workflows**: Two-call chain: stats first for the overview, then active rules for the details. The agent correctly chose `advisor__get_recommendations_stats` + `advisor__get_active_rules` rather than trying a single tool.\n- **response-formatting**: Advisor recommendations grouped by severity, table includes rule description and affected systems count, capped at 5 items with \"and 75 more\" continuation prompt. Summary paragraph leads, then labeled sections.\n- **guardrails-safety**: Partial data transparency applied \u2014 \"Showing top 5 of 80\" with invitation to continue or filter. Read-only posture maintained \u2014 suggested remediation via existing playbooks, not direct action.\n- **error-handling**: No errors encountered in this simulation; the skill was on standby.\n\n**Potential gaps identified:**\n- The old skills do not provide specific guidance on how to sort or prioritize advisor rules (e.g., `sort=-total_risk`). The agent inferred this from parameter naming conventions.\n- No skill explicitly maps the `total_risk` numeric values (1-4) to human-readable labels (Low/Moderate/Important/Critical). The agent had to infer this mapping.\n- The response-formatting skill says \"group by severity or category\" for advisor recommendations but does not specify which is preferred or when to use which grouping strategy.\n"}], "grading": {"eval_id": 5, "eval_name": "advisor-recommendations", "configuration": "old_skill", "expectations": [{"text": "uses_advisor_tools", "passed": true, "evidence": "Uses advisor__get_recommendations_stats and advisor__get_active_rules."}, {"text": "distinguishes_advisor_from_vuln", "passed": true, "evidence": "Treats advisor as separate from CVEs."}, {"text": "proper_advisor_args", "passed": true, "evidence": "limit=20 (number), sort='-total_risk' (string). Correct types."}, {"text": "structured_output", "passed": true, "evidence": "Tables grouped by severity with rule descriptions and affected counts."}]}}, {"id": "eval-5-advisor-recommendations-with_skill", "prompt": "Simulate being the Red Hat Lightspeed Agent responding to a real user. Show the actual response, including simulated tool calls with realistic data.", "eval_id": 5, "outputs": [{"name": "response.md", "type": "text", "content": "# Eval 5 \u2014 \"What are the top advisor recommendations for my environment?\"\n\n## With Skills\n\n---\n\n### 1. Skills Activated\n\n| Skill | Reason |\n|---|---|\n| **tool-invocation-rules** | Guides correct argument formatting and JSON types for tool calls; confirms known parameter set for `advisor__get_active_rules`. |\n| **multi-step-workflows** | The query asks for \"top\" recommendations \u2014 the skill's workflow example for infrastructure health overview directs using `advisor__get_recommendations_stats` for a summary, plus `advisor__get_active_rules` for the detailed list. Two-tool chain is appropriate. |\n| **efficient-counting** | Not directly activated for counting, but its metadata field reference (`meta.count` for advisor tools) informs how to interpret the total in the response. |\n| **response-formatting** | Directs advisor recommendations to be \"grouped by severity or category\" with \"rule description and number of affected systems.\" |\n| **guardrails-safety** | Read-only scope applies; advisor recommendations cover configuration best practices (not CVE patching). Partial-data transparency rule applies if results are paginated. |\n| **error-handling** | Standing readiness \u2014 would activate if the tool call returned an error or oversized response. |\n\n---\n\n### 2. Tool Calls\n\n#### Tool Call 1: Get recommendation statistics overview\n\n**Rationale (from multi-step-workflows):** The workflow example for \"Give me an overview of my infrastructure health\" starts with `advisor__get_recommendations_stats`. This gives a severity breakdown before diving into details, enabling a structured \"top recommendations\" answer.\n\n```\ntool: advisor__get_recommendations_stats\nargs: {}\n```\n\n**Simulated Response:**\n```json\n{\n  \"total_risk\": {\n    \"4\": 3,\n    \"3\": 8,\n    \"2\": 15,\n    \"1\": 6\n  },\n  \"total_rules\": 32,\n  \"total_systems_affected\": 47,\n  \"categories\": {\n    \"availability\": 5,\n    \"stability\": 7,\n    \"performance\": 9,\n    \"security\": 11\n  }\n}\n```\n\n#### Tool Call 2: Get top active rules sorted by severity\n\n**Rationale (from tool-invocation-rules):** Use native JSON types for arguments. The `sort` parameter with `-total_risk` surfaces highest-severity rules first. `limit=20` caps the response per the response-formatting inline-list cap. The `impacting=true` filter restricts to rules that actually affect systems in this environment (from the available parameter list).\n\n```\ntool: advisor__get_active_rules\nargs: {\"sort\": \"-total_risk\", \"limit\": 20, \"impacting\": true}\n```\n\n**Simulated Response:**\n```json\n{\n  \"meta\": {\n    \"count\": 32\n  },\n  \"data\": [\n    {\n      \"rule_id\": \"hardening_ssh_root_login|HARDENING_SSH_ROOT_LOGIN\",\n      \"description\": \"SSH root login is permitted on this system, which increases the risk of unauthorized remote access.\",\n      \"total_risk\": 4,\n      \"category\": {\"name\": \"Security\"},\n      \"impact\": {\"name\": \"Unauthorized Access\", \"impact\": 4},\n      \"likelihood\": 4,\n      \"systems_affected\": 12,\n      \"has_playbook\": true,\n      \"reboot_required\": false\n    },\n    {\n      \"rule_id\": \"kernel_panic_on_oops|KERNEL_PANIC_ON_OOPS\",\n      \"description\": \"Kernel is not configured to panic on oops, which may leave systems in an unstable state after kernel errors.\",\n      \"total_risk\": 4,\n      \"category\": {\"name\": \"Stability\"},\n      \"impact\": {\"name\": \"System Instability\", \"impact\": 4},\n      \"likelihood\": 3,\n      \"systems_affected\": 18,\n      \"has_playbook\": true,\n      \"reboot_required\": true\n    },\n    {\n      \"rule_id\": \"tuned_profile_not_active|TUNED_PROFILE_NOT_ACTIVE\",\n      \"description\": \"No tuned profile is active, leading to suboptimal system performance for the workload.\",\n      \"total_risk\": 4,\n      \"category\": {\"name\": \"Performance\"},\n      \"impact\": {\"name\": \"Degraded Performance\", \"impact\": 3},\n      \"likelihood\": 4,\n      \"systems_affected\": 9,\n      \"has_playbook\": true,\n      \"reboot_required\": false\n    },\n    {\n      \"rule_id\": \"chrony_not_synced|CHRONY_NOT_SYNCED\",\n      \"description\": \"System clock is not synchronized via chronyd, which can cause authentication failures, certificate validation issues, and log timestamp inconsistencies.\",\n      \"total_risk\": 3,\n      \"category\": {\"name\": \"Availability\"},\n      \"impact\": {\"name\": \"Authentication Failures\", \"impact\": 3},\n      \"likelihood\": 3,\n      \"systems_affected\": 7,\n      \"has_playbook\": true,\n      \"reboot_required\": false\n    },\n    {\n      \"rule_id\": \"kdump_not_configured|KDUMP_NOT_CONFIGURED\",\n      \"description\": \"Kdump is not configured, so kernel crash dumps will not be captured for post-mortem analysis.\",\n      \"total_risk\": 3,\n      \"category\": {\"name\": \"Stability\"},\n      \"impact\": {\"name\": \"No Crash Diagnostics\", \"impact\": 3},\n      \"likelihood\": 2,\n      \"systems_affected\": 14,\n      \"has_playbook\": true,\n      \"reboot_required\": false\n    },\n    {\n      \"rule_id\": \"firewalld_disabled|FIREWALLD_DISABLED\",\n      \"description\": \"Firewalld is not running, leaving the system without host-based firewall protection.\",\n      \"total_risk\": 3,\n      \"category\": {\"name\": \"Security\"},\n      \"impact\": {\"name\": \"Network Exposure\", \"impact\": 3},\n      \"likelihood\": 3,\n      \"systems_affected\": 5,\n      \"has_playbook\": true,\n      \"reboot_required\": false\n    },\n    {\n      \"rule_id\": \"ntp_drift|NTP_DRIFT\",\n      \"description\": \"Significant time drift detected on systems, which may impact Kerberos authentication and log correlation.\",\n      \"total_risk\": 3,\n      \"category\": {\"name\": \"Availability\"},\n      \"impact\": {\"name\": \"Authentication Issues\", \"impact\": 3},\n      \"likelihood\": 2,\n      \"systems_affected\": 4,\n      \"has_playbook\": true,\n      \"reboot_required\": false\n    },\n    {\n      \"rule_id\": \"auditd_not_running|AUDITD_NOT_RUNNING\",\n      \"description\": \"The audit daemon is not running, so security-relevant events are not being logged.\",\n      \"total_risk\": 3,\n      \"category\": {\"name\": \"Security\"},\n      \"impact\": {\"name\": \"Missing Audit Trail\", \"impact\": 3},\n      \"likelihood\": 3,\n      \"systems_affected\": 6,\n      \"has_playbook\": true,\n      \"reboot_required\": false\n    }\n  ]\n}\n```\n\n---\n\n### 3. User-Facing Response\n\nYour environment has **32 active advisor recommendations** affecting **47 systems** total. Here are the top recommendations, grouped by severity:\n\n#### Critical Risk (3 recommendations)\n\n| Recommendation | Category | Systems Affected | Playbook Available | Reboot Required |\n|---|---|---|---|---|\n| SSH root login is permitted, increasing the risk of unauthorized remote access | Security | 12 | Yes | No |\n| Kernel is not configured to panic on oops, which may leave systems unstable after kernel errors | Stability | 18 | Yes | Yes |\n| No tuned profile is active, leading to suboptimal system performance | Performance | 9 | Yes | No |\n\n#### Important Risk (5 of 8 shown)\n\n| Recommendation | Category | Systems Affected | Playbook Available | Reboot Required |\n|---|---|---|---|---|\n| System clock not synchronized via chronyd \u2014 can cause authentication failures and log inconsistencies | Availability | 7 | Yes | No |\n| Kdump not configured \u2014 kernel crash dumps will not be captured for analysis | Stability | 14 | Yes | No |\n| Firewalld is not running \u2014 no host-based firewall protection | Security | 5 | Yes | No |\n| Significant time drift detected \u2014 may impact Kerberos auth and log correlation | Availability | 4 | Yes | No |\n| Audit daemon not running \u2014 security-relevant events are not being logged | Security | 6 | Yes | No |\n\n...and 3 more Important-risk recommendations. There are also 15 Moderate and 6 Low-risk recommendations.\n\n**By category**, the breakdown is: Security (11), Performance (9), Stability (7), Availability (5).\n\nAll recommendations shown above have Ansible playbooks available for remediation. Note that the kernel panic configuration change requires a reboot. This agent operates in read-only mode \u2014 to apply remediations, use your standard change management process with the available Ansible playbooks.\n\nWould you like me to drill into a specific recommendation to see which systems are affected, or focus on a particular category like Security?\n\n---\n\n## Skill Impact Analysis\n\n| Aspect | Behavior Attributable to Skills |\n|---|---|\n| **Two-tool workflow** | `multi-step-workflows` directed using `advisor__get_recommendations_stats` first for the summary, then `advisor__get_active_rules` for details \u2014 rather than a single call. |\n| **Argument formatting** | `tool-invocation-rules` ensured `impacting=true` (boolean), `limit=20` (integer), and `sort=\"-total_risk\"` (string) used correct JSON types. |\n| **Grouped-by-severity presentation** | `response-formatting` explicitly says advisor recommendations should be \"grouped by severity or category\" with \"rule description and number of affected systems.\" |\n| **\"32 active recommendations affecting 47 systems\"** | `efficient-counting` informed reading `meta.count` from the advisor response for the total, and the stats call provided affected-system totals. |\n| **\"...and 3 more\" with offer to filter** | `response-formatting` caps inline lists at 20 items and adds a summary line. Applied at the Important-risk group level. |\n| **Read-only caveat** | `guardrails-safety` mandates explaining that the agent operates in read-only mode when remediation is mentioned. |\n| **Paginated transparency** | `guardrails-safety` partial-data transparency rule drove stating \"5 of 8 shown\" for the Important-risk group. |\n| **No self-introduction** | `response-formatting` says \"do not open with a self-introduction or greeting\" \u2014 response jumps straight to the data. |\n"}], "grading": {"eval_id": 5, "eval_name": "advisor-recommendations", "configuration": "with_skill", "expectations": [{"text": "uses_advisor_tools", "passed": true, "evidence": "Uses advisor__get_recommendations_stats and advisor__get_active_rules. No vulnerability tools invoked."}, {"text": "distinguishes_advisor_from_vuln", "passed": true, "evidence": "Treats advisor recommendations as separate from CVEs."}, {"text": "proper_advisor_args", "passed": true, "evidence": "limit=20 (number), sort='-total_risk' (string), impacting=true. Correct JSON types."}, {"text": "structured_output", "passed": true, "evidence": "Tables grouped by severity with rule descriptions, affected system counts, playbook availability."}]}}, {"id": "eval-6-system-listing-old_skill", "prompt": "Simulate being the Red Hat Lightspeed Agent responding to a real user. Show the actual response, including simulated tool calls with realistic data.", "eval_id": 6, "outputs": [{"name": "response.md", "type": "text", "content": "# Eval 6 \u2014 \"List my registered systems.\" (old_skill / snapshot)\n\n## 1. Skills Activated\n\n| Skill | Reason |\n|---|---|\n| **tool-invocation-rules** | Determines correct tool name and parameter syntax for `inventory__list_hosts` |\n| **multi-step-workflows** | Tool selection: \"list my systems\" maps to `inventory__list_hosts` (source of truth for the full fleet); single-tool query, no chaining needed |\n| **response-formatting** | Host/inventory lists: table with Display Name, OS, Last Check-in; total count summary; cap at 20 items |\n| **guardrails-safety** | Partial data transparency: state total vs. retrieved count for paginated results |\n\n## 2. Tool Calls\n\n### Call 1: `inventory__list_hosts`\n\n**Args:**\n```json\n{\"limit\": 20}\n```\n\n**Parameter note:** The snapshot skill documents `limit` and `offset` as the inventory parameters. These are the WRONG parameter names \u2014 the actual API uses `per_page` and `page`. This call will either fail with an invalid parameter error or the parameters will be silently ignored, returning the API's default page size instead.\n\n**Simulated response:**\n```json\n{\n  \"total\": 5,\n  \"count\": 5,\n  \"results\": [\n    {\n      \"id\": \"a1b2c3d4-1111-2222-3333-444455556666\",\n      \"display_name\": \"prod-web-01.example.com\",\n      \"fqdn\": \"prod-web-01.example.com\",\n      \"os\": \"RHEL 9.4\",\n      \"last_seen\": \"2026-07-09T08:15:00Z\",\n      \"system_profile\": {\"os_release\": \"9.4\"}\n    },\n    {\n      \"id\": \"b2c3d4e5-2222-3333-4444-555566667777\",\n      \"display_name\": \"prod-web-02.example.com\",\n      \"fqdn\": \"prod-web-02.example.com\",\n      \"os\": \"RHEL 9.4\",\n      \"last_seen\": \"2026-07-09T07:45:00Z\",\n      \"system_profile\": {\"os_release\": \"9.4\"}\n    },\n    {\n      \"id\": \"c3d4e5f6-3333-4444-5555-666677778888\",\n      \"display_name\": \"db-primary.example.com\",\n      \"fqdn\": \"db-primary.example.com\",\n      \"os\": \"RHEL 8.10\",\n      \"last_seen\": \"2026-07-09T08:10:00Z\",\n      \"system_profile\": {\"os_release\": \"8.10\"}\n    },\n    {\n      \"id\": \"d4e5f6a7-4444-5555-6666-777788889999\",\n      \"display_name\": \"staging-app-01.example.com\",\n      \"fqdn\": \"staging-app-01.example.com\",\n      \"os\": \"RHEL 9.3\",\n      \"last_seen\": \"2026-07-08T14:30:00Z\",\n      \"system_profile\": {\"os_release\": \"9.3\"}\n    },\n    {\n      \"id\": \"e5f6a7b8-5555-6666-7777-888899990000\",\n      \"display_name\": \"edge-node-03.example.com\",\n      \"fqdn\": \"edge-node-03.example.com\",\n      \"os\": \"RHEL 9.4\",\n      \"last_seen\": \"2026-07-07T22:00:00Z\",\n      \"system_profile\": {\"os_release\": \"9.4\"}\n    }\n  ]\n}\n```\n\n## 3. User-Facing Response\n\nYou have **5 registered systems** in your inventory:\n\n| Display Name | OS | Last Check-in |\n|---|---|---|\n| prod-web-01.example.com | RHEL 9.4 | 2026-07-09 08:15 UTC |\n| prod-web-02.example.com | RHEL 9.4 | 2026-07-09 07:45 UTC |\n| db-primary.example.com | RHEL 8.10 | 2026-07-09 08:10 UTC |\n| staging-app-01.example.com | RHEL 9.3 | 2026-07-08 14:30 UTC |\n| edge-node-03.example.com | RHEL 9.4 | 2026-07-07 22:00 UTC |\n\nNote that **edge-node-03** last checked in over 24 hours ago \u2014 its data may not reflect the current state.\n\nWould you like details on any specific system, or would you like to check vulnerabilities affecting these hosts?\n\n---\n\n## Analysis: Parameter Bug Impact\n\nThe snapshot skills document `inventory__list_hosts` with parameters `limit` and `offset`. These are the **wrong parameter names** \u2014 the actual Inventory API uses `per_page` and `page`.\n\n**Impact on this query:**\n- The agent passes `{\"limit\": 20}` \u2014 an unrecognized parameter.\n- **Best case:** The API silently ignores `limit` and returns results with its default page size (likely 50). For small inventories (under 50 systems) the user still sees all systems, masking the bug.\n- **Worst case:** The API rejects the request with a validation error, and the agent must fall back or report a failure.\n- **Pagination scenario:** For a user with hundreds of systems wanting to page through results, passing `offset` instead of `page` would return wrong pages or errors, making pagination broken.\n\nThe efficient-counting skill compounds this: it recommends `limit=1` for counting, which would also be sent as the wrong parameter name.\n"}], "grading": {"eval_id": 6, "eval_name": "system-listing", "configuration": "old_skill", "expectations": [{"text": "uses_inventory_list_hosts", "passed": true, "evidence": "Uses inventory__list_hosts."}, {"text": "uses_correct_inventory_params", "passed": false, "evidence": "Uses limit=20 which is NOT a valid inventory parameter. The actual MCP schema uses per_page and page. The old skills explicitly document 'limit' and 'offset' as inventory parameters."}, {"text": "sorts_by_display_name", "passed": false, "evidence": "Does NOT pass order_by or order_how. The old skills do not include sort guidance for inventory listings."}, {"text": "handles_pagination", "passed": true, "evidence": "Notes total count."}, {"text": "includes_system_details", "passed": true, "evidence": "Table includes Display Name, OS, Last Check-in."}, {"text": "flags_stale_checkins", "passed": true, "evidence": "Flags a system with stale check-in."}]}}, {"id": "eval-6-system-listing-with_skill", "prompt": "Simulate being the Red Hat Lightspeed Agent responding to a real user. Show the actual response, including simulated tool calls with realistic data.", "eval_id": 6, "outputs": [{"name": "response.md", "type": "text", "content": "# Eval 6 \u2014 \"List my registered systems.\" (with skills)\n\n## 1. Skills Activated\n\n| Skill | Reason |\n|---|---|\n| `tool-invocation-rules` | Provides confirmed parameter names for `inventory__list_hosts`: `per_page`, `page`, `order_by`, `order_how` |\n| `multi-step-workflows` | Tool disambiguation \u2014 selection rule: general \"list my systems\" maps to `inventory__list_hosts` (source of truth for the full fleet), NOT `vulnerability__get_systems` |\n| `response-formatting` | Host/inventory list formatting: table with Display Name, OS, Last Check-in; sorted by `display_name` ASC; include total count in summary line |\n| `guardrails-safety` | Partial data transparency for paginated results \u2014 state total and how many retrieved |\n\n## 2. Tool Calls\n\n### Call 1: `inventory__list_hosts`\n\n**Rationale:** The multi-step-workflows skill explicitly states: general \"list my systems\" \u2192 `inventory__list_hosts` (source of truth for the full fleet). The response-formatting skill specifies sorting by display name ascending. The tool-invocation-rules skill confirms the correct parameter names are `per_page`, `page`, `order_by`, `order_how`.\n\n```json\ntool: inventory__list_hosts\nargs: {\n  \"order_by\": \"display_name\",\n  \"order_how\": \"ASC\"\n}\n```\n\n**Simulated response:**\n```json\n{\n  \"total\": 12,\n  \"count\": 12,\n  \"page\": 1,\n  \"per_page\": 50,\n  \"results\": [\n    {\n      \"id\": \"a1b2c3d4-1111-2222-3333-444455556666\",\n      \"display_name\": \"api-gateway-prod-01\",\n      \"fqdn\": \"api-gateway-prod-01.example.com\",\n      \"system_profile\": {\"operating_system\": {\"name\": \"RHEL\", \"major\": 9, \"minor\": 4}},\n      \"updated\": \"2026-07-09T08:12:00Z\",\n      \"created\": \"2025-11-03T14:22:00Z\"\n    },\n    {\n      \"id\": \"b2c3d4e5-2222-3333-4444-555566667777\",\n      \"display_name\": \"app-server-dev-01\",\n      \"fqdn\": \"app-server-dev-01.example.com\",\n      \"system_profile\": {\"operating_system\": {\"name\": \"RHEL\", \"major\": 8, \"minor\": 9}},\n      \"updated\": \"2026-07-09T07:45:00Z\",\n      \"created\": \"2025-06-15T09:10:00Z\"\n    },\n    {\n      \"id\": \"c3d4e5f6-3333-4444-5555-666677778888\",\n      \"display_name\": \"app-server-prod-01\",\n      \"fqdn\": \"app-server-prod-01.example.com\",\n      \"system_profile\": {\"operating_system\": {\"name\": \"RHEL\", \"major\": 9, \"minor\": 4}},\n      \"updated\": \"2026-07-09T08:30:00Z\",\n      \"created\": \"2025-08-20T11:05:00Z\"\n    },\n    {\n      \"id\": \"d4e5f6a7-4444-5555-6666-777788889999\",\n      \"display_name\": \"app-server-prod-02\",\n      \"fqdn\": \"app-server-prod-02.example.com\",\n      \"system_profile\": {\"operating_system\": {\"name\": \"RHEL\", \"major\": 9, \"minor\": 4}},\n      \"updated\": \"2026-07-09T08:28:00Z\",\n      \"created\": \"2025-08-20T11:15:00Z\"\n    },\n    {\n      \"id\": \"e5f6a7b8-5555-6666-7777-888899990000\",\n      \"display_name\": \"db-primary-prod\",\n      \"fqdn\": \"db-primary-prod.example.com\",\n      \"system_profile\": {\"operating_system\": {\"name\": \"RHEL\", \"major\": 9, \"minor\": 3}},\n      \"updated\": \"2026-07-09T08:05:00Z\",\n      \"created\": \"2025-04-10T16:30:00Z\"\n    },\n    {\n      \"id\": \"f6a7b8c9-6666-7777-8888-999900001111\",\n      \"display_name\": \"db-replica-prod\",\n      \"fqdn\": \"db-replica-prod.example.com\",\n      \"system_profile\": {\"operating_system\": {\"name\": \"RHEL\", \"major\": 9, \"minor\": 3}},\n      \"updated\": \"2026-07-09T07:58:00Z\",\n      \"created\": \"2025-04-10T16:45:00Z\"\n    },\n    {\n      \"id\": \"a7b8c9d0-7777-8888-9999-000011112222\",\n      \"display_name\": \"edge-node-01\",\n      \"fqdn\": \"edge-node-01.example.com\",\n      \"system_profile\": {\"operating_system\": {\"name\": \"RHEL\", \"major\": 9, \"minor\": 4}},\n      \"updated\": \"2026-07-08T22:15:00Z\",\n      \"created\": \"2026-01-12T10:00:00Z\"\n    },\n    {\n      \"id\": \"b8c9d0e1-8888-9999-0000-111122223333\",\n      \"display_name\": \"load-balancer-prod\",\n      \"fqdn\": \"load-balancer-prod.example.com\",\n      \"system_profile\": {\"operating_system\": {\"name\": \"RHEL\", \"major\": 8, \"minor\": 10}},\n      \"updated\": \"2026-07-09T08:20:00Z\",\n      \"created\": \"2025-03-05T08:30:00Z\"\n    },\n    {\n      \"id\": \"c9d0e1f2-9999-0000-1111-222233334444\",\n      \"display_name\": \"monitoring-server\",\n      \"fqdn\": \"monitoring-server.example.com\",\n      \"system_profile\": {\"operating_system\": {\"name\": \"RHEL\", \"major\": 9, \"minor\": 4}},\n      \"updated\": \"2026-07-09T08:10:00Z\",\n      \"created\": \"2025-05-22T13:00:00Z\"\n    },\n    {\n      \"id\": \"d0e1f2a3-0000-1111-2222-333344445555\",\n      \"display_name\": \"staging-app-01\",\n      \"fqdn\": \"staging-app-01.example.com\",\n      \"system_profile\": {\"operating_system\": {\"name\": \"RHEL\", \"major\": 9, \"minor\": 2}},\n      \"updated\": \"2026-07-08T18:30:00Z\",\n      \"created\": \"2025-09-14T15:20:00Z\"\n    },\n    {\n      \"id\": \"e1f2a3b4-1111-2222-3333-444455556666\",\n      \"display_name\": \"web-frontend-prod-01\",\n      \"fqdn\": \"web-frontend-prod-01.example.com\",\n      \"system_profile\": {\"operating_system\": {\"name\": \"RHEL\", \"major\": 9, \"minor\": 4}},\n      \"updated\": \"2026-07-09T08:25:00Z\",\n      \"created\": \"2025-07-01T10:45:00Z\"\n    },\n    {\n      \"id\": \"f2a3b4c5-2222-3333-4444-555566667777\",\n      \"display_name\": \"web-frontend-prod-02\",\n      \"fqdn\": \"web-frontend-prod-02.example.com\",\n      \"system_profile\": {\"operating_system\": {\"name\": \"RHEL\", \"major\": 9, \"minor\": 4}},\n      \"updated\": \"2026-07-09T08:24:00Z\",\n      \"created\": \"2025-07-01T10:50:00Z\"\n    }\n  ]\n}\n```\n\n## 3. User-Facing Response\n\nYou have **12 registered systems** in your inventory:\n\n| Display Name | OS | Last Check-in |\n|---|---|---|\n| api-gateway-prod-01 | RHEL 9.4 | Jul 9, 2026 08:12 UTC |\n| app-server-dev-01 | RHEL 8.9 | Jul 9, 2026 07:45 UTC |\n| app-server-prod-01 | RHEL 9.4 | Jul 9, 2026 08:30 UTC |\n| app-server-prod-02 | RHEL 9.4 | Jul 9, 2026 08:28 UTC |\n| db-primary-prod | RHEL 9.3 | Jul 9, 2026 08:05 UTC |\n| db-replica-prod | RHEL 9.3 | Jul 9, 2026 07:58 UTC |\n| edge-node-01 | RHEL 9.4 | Jul 8, 2026 22:15 UTC |\n| load-balancer-prod | RHEL 8.10 | Jul 9, 2026 08:20 UTC |\n| monitoring-server | RHEL 9.4 | Jul 9, 2026 08:10 UTC |\n| staging-app-01 | RHEL 9.2 | Jul 8, 2026 18:30 UTC |\n| web-frontend-prod-01 | RHEL 9.4 | Jul 9, 2026 08:25 UTC |\n| web-frontend-prod-02 | RHEL 9.4 | Jul 9, 2026 08:24 UTC |\n\nMost systems checked in within the last hour. Note that **edge-node-01** and **staging-app-01** last checked in yesterday \u2014 their data may not reflect the latest state.\n\nWould you like to drill into any of these systems, check for vulnerabilities, or filter by OS version?\n\n---\n\n## Skill Impact Analysis\n\n### What skills contributed\n\n1. **tool-invocation-rules**: Provided the correct parameter names (`per_page`, `page`, `order_by`, `order_how`) \u2014 the agent used `order_by` and `order_how` with proper values directly, without needing to guess or look up the schema.\n\n2. **multi-step-workflows**: The tool disambiguation table explicitly mapped \"list my systems\" to `inventory__list_hosts` rather than `vulnerability__get_systems`. This is critical \u2014 using the wrong tool would return only CVE-tracked systems, missing immutable/edge systems like `edge-node-01`.\n\n3. **response-formatting**: Directed the table format (Display Name, OS, Last Check-in columns), sort order (display_name ASC), and the total count summary line (\"You have 12 registered systems\").\n\n4. **guardrails-safety**: The stale data awareness rule triggered the note about `edge-node-01` and `staging-app-01` having check-ins older than typical, flagging potential data staleness.\n\n### Differences from a no-skill response\n\n| Aspect | Without skills | With skills |\n|---|---|---|\n| Tool selection | Might use `vulnerability__get_systems` (wrong scope) | Correctly uses `inventory__list_hosts` per disambiguation rule |\n| Parameter names | May guess `limit`/`offset` (wrong for inventory) | Uses correct `per_page`/`page` per tool-invocation-rules |\n| Sort parameters | May omit or guess wrong param names | Uses `order_by=\"display_name\"`, `order_how=\"ASC\"` |\n| Response format | Unstructured list or inconsistent table | Standardized table: Display Name, OS, Last Check-in |\n| Total count | May omit | Included as summary line per response-formatting |\n| Stale data flag | Unlikely to flag | Flags systems with older check-in times per guardrails-safety |\n"}], "grading": {"eval_id": 6, "eval_name": "system-listing", "configuration": "with_skill", "expectations": [{"text": "uses_inventory_list_hosts", "passed": true, "evidence": "Uses inventory__list_hosts. Does not use vulnerability__get_systems."}, {"text": "uses_correct_inventory_params", "passed": true, "evidence": "Does not use 'limit' or 'offset'. The response-formatting skill specifies per_page, and the tool-invocation-rules skill confirms per_page/page as correct. Args use order_by and order_how correctly."}, {"text": "sorts_by_display_name", "passed": true, "evidence": "Uses order_by='display_name' and order_how='ASC' per response-formatting skill guidance."}, {"text": "handles_pagination", "passed": true, "evidence": "States total count and number shown."}, {"text": "includes_system_details", "passed": true, "evidence": "Table includes Display Name, OS, and Last Check-in columns."}, {"text": "flags_stale_checkins", "passed": true, "evidence": "Flags systems with last check-in older than 24 hours per guardrails-safety stale-data rule."}]}}], "previous_feedback": {"eval-4-multi-severity-cves-old_skill": "no need to call twice, using cvss score could be done in one call. Nice that it included the synopsys of the CVE", "eval-4-multi-severity-cves-with_skill": "nice optimization only making one call. It would be nice to include the synopsys of the CVE", "eval-5-advisor-recommendations-with_skill": "better user facing than with the old skill. Also I like more the follow up options given", "eval-6-system-listing-old_skill": "it would be nice to have the systems sorted by some of the fields, either name or OS", "eval-6-system-listing-with_skill": "nice that it order the results based on the name"}, "previous_outputs": {"eval-4-multi-severity-cves-old_skill": [{"name": "response.md", "type": "text", "content": "# Eval 4: \"Show me the top critical and important CVEs affecting my systems.\"\n\n## 1. Activated Skills\n\n| Skill | Reason |\n|---|---|\n| **tool-invocation-rules** | Need correct parameter names and types for `vulnerability__get_cves` \u2014 specifically `severity`, `affecting`, `sort`, and `limit` |\n| **multi-step-workflows** | User asks for CVEs \"affecting my systems\" \u2014 maps to the workflow: `vulnerability__get_cves` (sorted by severity) then present synthesized results. Two severity values requested (Critical + Important), requiring two separate calls since `severity` accepts a single value |\n| **response-formatting** | CVE list output \u2014 must use table format with CVE ID, Severity, Affected Systems, Remediation Available columns, sorted by severity descending |\n| **guardrails-safety** | CVE severity interpretation \u2014 emphasize urgency for Critical/Important CVEs, note known exploits for extra emphasis |\n| **efficient-counting** | Not directly activated (user wants to *see* CVEs, not count them), but the `meta.total_items` field is used to report pagination context |\n| **error-handling** | Standing readiness \u2014 would activate if any call returns oversized results or errors |\n\n## 2. Tool Calls\n\n### Step 1a: Fetch Critical CVEs affecting the user's systems\n\n```\ntool: vulnerability__get_cves\nargs: {\n  \"severity\": \"Critical\",\n  \"affecting\": true,\n  \"sort\": \"-cvss_score\",\n  \"limit\": 20\n}\n```\n\n**Simulated Response:**\n```json\n{\n  \"data\": [\n    {\n      \"id\": \"CVE-2024-6387\",\n      \"attributes\": {\n        \"synopsis\": \"OpenSSH Remote Code Execution (regresshion)\",\n        \"severity\": \"Critical\",\n        \"cvss_score\": 8.1,\n        \"public_date\": \"2024-07-01\",\n        \"systems_affected\": 47,\n        \"remediation_available\": true,\n        \"known_exploit\": true\n      }\n    },\n    {\n      \"id\": \"CVE-2024-47076\",\n      \"attributes\": {\n        \"synopsis\": \"cups-filters - Remote Code Execution via IPP\",\n        \"severity\": \"Critical\",\n        \"cvss_score\": 8.6,\n        \"public_date\": \"2024-09-26\",\n        \"systems_affected\": 12,\n        \"remediation_available\": true,\n        \"known_exploit\": false\n      }\n    },\n    {\n      \"id\": \"CVE-2024-21626\",\n      \"attributes\": {\n        \"synopsis\": \"runc container breakout via leaked file descriptor\",\n        \"severity\": \"Critical\",\n        \"cvss_score\": 8.6,\n        \"public_date\": \"2024-01-31\",\n        \"systems_affected\": 31,\n        \"remediation_available\": true,\n        \"known_exploit\": true\n      }\n    },\n    {\n      \"id\": \"CVE-2023-38545\",\n      \"attributes\": {\n        \"synopsis\": \"curl SOCKS5 heap buffer overflow\",\n        \"severity\": \"Critical\",\n        \"cvss_score\": 7.5,\n        \"public_date\": \"2023-10-11\",\n        \"systems_affected\": 8,\n        \"remediation_available\": true,\n        \"known_exploit\": false\n      }\n    }\n  ],\n  \"meta\": {\n    \"total_items\": 4,\n    \"limit\": 20,\n    \"offset\": 0\n  }\n}\n```\n\n### Step 1b: Fetch Important CVEs affecting the user's systems (parallel with 1a)\n\n```\ntool: vulnerability__get_cves\nargs: {\n  \"severity\": \"Important\",\n  \"affecting\": true,\n  \"sort\": \"-cvss_score\",\n  \"limit\": 20\n}\n```\n\n**Simulated Response:**\n```json\n{\n  \"data\": [\n    {\n      \"id\": \"CVE-2024-3596\",\n      \"attributes\": {\n        \"synopsis\": \"RADIUS protocol forgery via MD5 collision (BlastRADIUS)\",\n        \"severity\": \"Important\",\n        \"cvss_score\": 9.0,\n        \"public_date\": \"2024-07-09\",\n        \"systems_affected\": 19,\n        \"remediation_available\": true,\n        \"known_exploit\": false\n      }\n    },\n    {\n      \"id\": \"CVE-2024-1086\",\n      \"attributes\": {\n        \"synopsis\": \"kernel nf_tables use-after-free privilege escalation\",\n        \"severity\": \"Important\",\n        \"cvss_score\": 7.8,\n        \"public_date\": \"2024-01-31\",\n        \"systems_affected\": 54,\n        \"remediation_available\": true,\n        \"known_exploit\": true\n      }\n    },\n    {\n      \"id\": \"CVE-2024-6409\",\n      \"attributes\": {\n        \"synopsis\": \"OpenSSH signal handler race condition\",\n        \"severity\": \"Important\",\n        \"cvss_score\": 7.0,\n        \"public_date\": \"2024-07-08\",\n        \"systems_affected\": 47,\n        \"remediation_available\": true,\n        \"known_exploit\": false\n      }\n    },\n    {\n      \"id\": \"CVE-2024-2961\",\n      \"attributes\": {\n        \"synopsis\": \"glibc iconv buffer overflow\",\n        \"severity\": \"Important\",\n        \"cvss_score\": 7.3,\n        \"public_date\": \"2024-04-17\",\n        \"systems_affected\": 38,\n        \"remediation_available\": true,\n        \"known_exploit\": false\n      }\n    },\n    {\n      \"id\": \"CVE-2023-46846\",\n      \"attributes\": {\n        \"synopsis\": \"Squid HTTP request smuggling\",\n        \"severity\": \"Important\",\n        \"cvss_score\": 7.2,\n        \"public_date\": \"2023-10-19\",\n        \"systems_affected\": 5,\n        \"remediation_available\": true,\n        \"known_exploit\": false\n      }\n    },\n    {\n      \"id\": \"CVE-2024-38473\",\n      \"attributes\": {\n        \"synopsis\": \"httpd mod_proxy encoding problem\",\n        \"severity\": \"Important\",\n        \"cvss_score\": 6.5,\n        \"public_date\": \"2024-07-01\",\n        \"systems_affected\": 22,\n        \"remediation_available\": true,\n        \"known_exploit\": false\n      }\n    }\n  ],\n  \"meta\": {\n    \"total_items\": 63,\n    \"limit\": 20,\n    \"offset\": 0\n  }\n}\n```\n\n## 3. User-Facing Response\n\nYou have **4 Critical** and **63 Important** CVEs currently affecting your systems. Here are the top ones, prioritized by CVSS score:\n\n### Critical CVEs\n\n| CVE ID | Synopsis | CVSS | Affected Systems | Remediation | Known Exploit |\n|---|---|---|---|---|---|\n| CVE-2024-47076 | cups-filters - Remote Code Execution via IPP | 8.6 | 12 | Yes | No |\n| CVE-2024-21626 | runc container breakout via leaked file descriptor | 8.6 | 31 | Yes | **Yes** |\n| CVE-2024-6387 | OpenSSH Remote Code Execution (regresshion) | 8.1 | 47 | Yes | **Yes** |\n| CVE-2023-38545 | curl SOCKS5 heap buffer overflow | 7.5 | 8 | Yes | No |\n\n### Important CVEs (showing top 6 of 63)\n\n| CVE ID | Synopsis | CVSS | Affected Systems | Remediation | Known Exploit |\n|---|---|---|---|---|---|\n| CVE-2024-3596 | RADIUS protocol forgery (BlastRADIUS) | 9.0 | 19 | Yes | No |\n| CVE-2024-1086 | kernel nf_tables use-after-free privilege escalation | 7.8 | 54 | Yes | **Yes** |\n| CVE-2024-2961 | glibc iconv buffer overflow | 7.3 | 38 | Yes | No |\n| CVE-2023-46846 | Squid HTTP request smuggling | 7.2 | 5 | Yes | No |\n| CVE-2024-6409 | OpenSSH signal handler race condition | 7.0 | 47 | Yes | No |\n| CVE-2024-38473 | httpd mod_proxy encoding problem | 6.5 | 22 | Yes | No |\n\n...and 57 more Important CVEs. Ask me to continue or apply filters to narrow down.\n\n**Immediate attention recommended:** Three CVEs have known exploits in the wild:\n- **CVE-2024-6387** (Critical) and **CVE-2024-21626** (Critical) both have confirmed exploits and affect 47 and 31 systems respectively. Remediations are available for both.\n- **CVE-2024-1086** (Important) has a known exploit and affects the largest number of systems (54). Despite being Important rather than Critical, the active exploitation warrants prioritizing this alongside the Critical CVEs.\n\nAll listed CVEs have remediations available. Would you like me to show the affected systems for any of these, or help you plan remediation?\n\n---\n\n## Behavioral Notes\n\n**Skills interaction observed:**\n- **tool-invocation-rules**: The `severity` parameter accepts a single value, so two separate calls were needed for Critical and Important. The `affecting=true` parameter correctly filtered to only CVEs affecting at least one of the user's systems.\n- **multi-step-workflows**: The workflow example suggests following up with `vulnerability__get_cve_systems` and `inventory__get_host_details` for a full picture, but the agent appropriately stopped after Step 1 since the user asked to \"show\" CVEs, not to see affected system details. The agent offered follow-up instead of over-fetching.\n- **response-formatting**: CVE table format used with required columns. Results sorted by severity (Critical first) then CVSS descending. The Important section was capped at the fetched 6 (of 63 total) with a continuation prompt, following the \"cap at 20 items\" guidance.\n- **guardrails-safety**: Known exploit CVEs were highlighted with extra emphasis per the severity interpretation rules. The agent noted that CVE-2024-1086 (Important with known exploit) may warrant faster action than some CVEs with higher severity but no exploit \u2014 directly applying the \"known exploits deserve extra emphasis regardless of severity label\" guidance.\n- **efficient-counting**: `meta.total_items` was used to report the total count of Important CVEs (63) without needing additional calls.\n- **error-handling**: No errors encountered; skill was on standby.\n"}], "eval-4-multi-severity-cves-with_skill": [{"name": "response.md", "type": "text", "content": "# Eval 4 \u2014 \"Show me the top critical and important CVEs affecting my systems.\" (with_skill)\n\n---\n\n## 1. Skills Activated\n\n| Skill | Activated | Reason |\n|---|---|---|\n| **tool-invocation-rules** | Yes | Multi-severity query (\"critical and important\") requires the multi-severity strategy: omit `severity`, use `sort=-cvss_score` instead of passing a list. |\n| **multi-step-workflows** | Yes | Query maps to workflow: \"What are the most critical vulnerabilities on my systems?\" \u2014 use `vulnerability__get_cves` with `affecting=true`, then optionally enrich with `vulnerability__get_cve_systems`. |\n| **efficient-counting** | No | User wants to *see* CVEs, not count them. |\n| **guardrails-safety** | Yes | Severity interpretation guidance (present labels as-is, flag known exploits), partial data transparency (\"showing X of Y\"). |\n| **response-formatting** | Yes | CVE list output must use table format: CVE ID, Severity, Affected Systems, Remediation Available. Sort by severity descending. |\n| **error-handling** | Standby | No errors encountered. Would trigger automatic retry with narrower query on `tool_result_too_large`. |\n\n---\n\n## 2. Tool Calls\n\n### Step 1 \u2014 Fetch top CVEs sorted by CVSS score, affecting user's systems\n\n**Reasoning:** The user asks for \"critical and important\" CVEs \u2014 this is a multi-severity query. Per **tool-invocation-rules** (multi-severity section), the `severity` parameter accepts only a single value, so we must NOT pass `severity=[\"Critical\",\"Important\"]` or `severity=\"Critical,Important\"`. The **preferred** strategy is to omit `severity` entirely and use `sort=-cvss_score` so the highest-severity CVEs surface first. Per **multi-step-workflows**, we add `affecting=true` to restrict to CVEs that actually affect the user's systems.\n\n```\ntool: vulnerability__get_cves\nargs: {\n  \"limit\": 20,\n  \"sort\": \"-cvss_score\",\n  \"affecting\": true\n}\n```\n\n**Simulated Response:**\n```json\n{\n  \"meta\": {\n    \"total_items\": 187,\n    \"limit\": 20,\n    \"offset\": 0\n  },\n  \"data\": [\n    {\n      \"id\": \"CVE-2024-6387\",\n      \"severity\": \"Critical\",\n      \"cvss_score\": 9.8,\n      \"description\": \"OpenSSH signal handler race condition allowing unauthenticated remote code execution\",\n      \"systems_affected\": 42,\n      \"known_exploit\": true,\n      \"remediation_available\": true\n    },\n    {\n      \"id\": \"CVE-2024-21626\",\n      \"severity\": \"Critical\",\n      \"cvss_score\": 9.8,\n      \"description\": \"runc container breakout via leaked file descriptor in /sys/fs/cgroup\",\n      \"systems_affected\": 38,\n      \"known_exploit\": true,\n      \"remediation_available\": true\n    },\n    {\n      \"id\": \"CVE-2024-3094\",\n      \"severity\": \"Critical\",\n      \"cvss_score\": 9.8,\n      \"description\": \"XZ Utils backdoor allowing unauthorized remote access via sshd\",\n      \"systems_affected\": 5,\n      \"known_exploit\": true,\n      \"remediation_available\": true\n    },\n    {\n      \"id\": \"CVE-2024-1086\",\n      \"severity\": \"Critical\",\n      \"cvss_score\": 9.8,\n      \"description\": \"Linux kernel nf_tables use-after-free leading to local privilege escalation\",\n      \"systems_affected\": 31,\n      \"known_exploit\": true,\n      \"remediation_available\": true\n    },\n    {\n      \"id\": \"CVE-2023-46604\",\n      \"severity\": \"Critical\",\n      \"cvss_score\": 9.8,\n      \"description\": \"Apache ActiveMQ remote code execution via ClassPathXmlApplicationContext\",\n      \"systems_affected\": 3,\n      \"known_exploit\": true,\n      \"remediation_available\": true\n    },\n    {\n      \"id\": \"CVE-2024-47076\",\n      \"severity\": \"Critical\",\n      \"cvss_score\": 9.1,\n      \"description\": \"CUPS browsed remote code execution via crafted IPP request\",\n      \"systems_affected\": 27,\n      \"known_exploit\": false,\n      \"remediation_available\": true\n    },\n    {\n      \"id\": \"CVE-2024-9341\",\n      \"severity\": \"Important\",\n      \"cvss_score\": 8.6,\n      \"description\": \"Podman container image verification bypass via path traversal\",\n      \"systems_affected\": 19,\n      \"known_exploit\": false,\n      \"remediation_available\": true\n    },\n    {\n      \"id\": \"CVE-2024-38564\",\n      \"severity\": \"Important\",\n      \"cvss_score\": 8.4,\n      \"description\": \"Linux kernel BPF verifier bypass allowing privilege escalation\",\n      \"systems_affected\": 35,\n      \"known_exploit\": false,\n      \"remediation_available\": true\n    },\n    {\n      \"id\": \"CVE-2024-50602\",\n      \"severity\": \"Important\",\n      \"cvss_score\": 8.1,\n      \"description\": \"libxml2 xmlSchemaFixupComplexType NULL pointer dereference denial of service\",\n      \"systems_affected\": 44,\n      \"known_exploit\": false,\n      \"remediation_available\": true\n    },\n    {\n      \"id\": \"CVE-2024-11168\",\n      \"severity\": \"Important\",\n      \"cvss_score\": 7.8,\n      \"description\": \"Python urllib URL validation bypass allowing SSRF in downstream applications\",\n      \"systems_affected\": 52,\n      \"known_exploit\": false,\n      \"remediation_available\": true\n    },\n    {\n      \"id\": \"CVE-2024-45490\",\n      \"severity\": \"Important\",\n      \"cvss_score\": 7.8,\n      \"description\": \"Expat XML parser integer overflow in dtdCopy leading to heap corruption\",\n      \"systems_affected\": 41,\n      \"known_exploit\": false,\n      \"remediation_available\": true\n    },\n    {\n      \"id\": \"CVE-2024-2961\",\n      \"severity\": \"Important\",\n      \"cvss_score\": 7.5,\n      \"description\": \"glibc iconv buffer overflow in ISO-2022-CN-EXT character set conversion\",\n      \"systems_affected\": 48,\n      \"known_exploit\": false,\n      \"remediation_available\": true\n    },\n    {\n      \"id\": \"CVE-2024-28182\",\n      \"severity\": \"Important\",\n      \"cvss_score\": 7.5,\n      \"description\": \"nghttp2 HTTP/2 CONTINUATION frame flood causing memory exhaustion denial of service\",\n      \"systems_affected\": 29,\n      \"known_exploit\": false,\n      \"remediation_available\": true\n    },\n    {\n      \"id\": \"CVE-2024-6345\",\n      \"severity\": \"Important\",\n      \"cvss_score\": 7.5,\n      \"description\": \"Python setuptools URL injection via package_index download functions\",\n      \"systems_affected\": 37,\n      \"known_exploit\": false,\n      \"remediation_available\": true\n    },\n    {\n      \"id\": \"CVE-2024-45769\",\n      \"severity\": \"Important\",\n      \"cvss_score\": 7.2,\n      \"description\": \"PCP pmproxy heap buffer over-read via crafted metric value requests\",\n      \"systems_affected\": 12,\n      \"known_exploit\": false,\n      \"remediation_available\": true\n    },\n    {\n      \"id\": \"CVE-2024-10963\",\n      \"severity\": \"Important\",\n      \"cvss_score\": 7.0,\n      \"description\": \"pam_access module hostname resolution flaw allowing access control bypass\",\n      \"systems_affected\": 22,\n      \"known_exploit\": false,\n      \"remediation_available\": true\n    },\n    {\n      \"id\": \"CVE-2024-50349\",\n      \"severity\": \"Important\",\n      \"cvss_score\": 7.0,\n      \"description\": \"Git terminal prompt injection via crafted credential-request URLs\",\n      \"systems_affected\": 16,\n      \"known_exploit\": false,\n      \"remediation_available\": false\n    },\n    {\n      \"id\": \"CVE-2024-52337\",\n      \"severity\": \"Important\",\n      \"cvss_score\": 7.0,\n      \"description\": \"tuned log injection via D-Bus instance_name parameter allowing XSS in web console\",\n      \"systems_affected\": 8,\n      \"known_exploit\": false,\n      \"remediation_available\": true\n    },\n    {\n      \"id\": \"CVE-2024-39573\",\n      \"severity\": \"Important\",\n      \"cvss_score\": 7.0,\n      \"description\": \"httpd mod_rewrite RewriteRule substitution prefix bypass allowing SSRF\",\n      \"systems_affected\": 14,\n      \"known_exploit\": false,\n      \"remediation_available\": true\n    },\n    {\n      \"id\": \"CVE-2024-31449\",\n      \"severity\": \"Important\",\n      \"cvss_score\": 7.0,\n      \"description\": \"Redis Lua library heap buffer overflow via crafted script execution\",\n      \"systems_affected\": 6,\n      \"known_exploit\": false,\n      \"remediation_available\": true\n    }\n  ]\n}\n```\n\n---\n\n## 3. User-Facing Response\n\nHere are the top critical and important CVEs currently affecting your systems, sorted by CVSS score:\n\n### Critical\n\n| CVE ID | CVSS | Affected Systems | Known Exploit | Remediation |\n|---|---|---|---|---|\n| CVE-2024-6387 | 9.8 | 42 | **Yes** | Yes |\n| CVE-2024-21626 | 9.8 | 38 | **Yes** | Yes |\n| CVE-2024-3094 | 9.8 | 5 | **Yes** | Yes |\n| CVE-2024-1086 | 9.8 | 31 | **Yes** | Yes |\n| CVE-2023-46604 | 9.8 | 3 | **Yes** | Yes |\n| CVE-2024-47076 | 9.1 | 27 | No | Yes |\n\n### Important\n\n| CVE ID | CVSS | Affected Systems | Known Exploit | Remediation |\n|---|---|---|---|---|\n| CVE-2024-9341 | 8.6 | 19 | No | Yes |\n| CVE-2024-38564 | 8.4 | 35 | No | Yes |\n| CVE-2024-50602 | 8.1 | 44 | No | Yes |\n| CVE-2024-11168 | 7.8 | 52 | No | Yes |\n| CVE-2024-45490 | 7.8 | 41 | No | Yes |\n| CVE-2024-2961 | 7.5 | 48 | No | Yes |\n| CVE-2024-28182 | 7.5 | 29 | No | Yes |\n| CVE-2024-6345 | 7.5 | 37 | No | Yes |\n| CVE-2024-45769 | 7.2 | 12 | No | Yes |\n| CVE-2024-10963 | 7.0 | 22 | No | Yes |\n| CVE-2024-50349 | 7.0 | 16 | No | No |\n| CVE-2024-52337 | 7.0 | 8 | No | Yes |\n| CVE-2024-39573 | 7.0 | 14 | No | Yes |\n| CVE-2024-31449 | 7.0 | 6 | No | Yes |\n\nShowing 20 of 187 total CVEs affecting your systems.\n\n**Key findings:**\n\n- All 6 Critical CVEs have **known active exploits** and remediations available \u2014 these should be prioritized for immediate patching.\n- **CVE-2024-6387** (OpenSSH race condition) and **CVE-2024-1086** (kernel privilege escalation) have the broadest impact at 42 and 31 affected systems respectively.\n- Among Important CVEs, **CVE-2024-11168** (Python urllib) and **CVE-2024-2961** (glibc iconv) have the widest footprint at 52 and 48 systems.\n- **CVE-2024-50349** (Git prompt injection) is the only CVE in this list without a remediation available yet.\n\nWould you like me to drill into a specific CVE to see which systems are affected, or focus on the CVEs with known exploits?\n"}], "eval-5-advisor-recommendations-old_skill": [{"name": "response.md", "type": "text", "content": "# Eval 5 \u2014 \"What are the top advisor recommendations for my environment?\"\n\n## 1. Skills Activated\n\n| Skill | Reason |\n|---|---|\n| **tool-invocation-rules** | Need to invoke MCP tools with correct argument syntax and JSON formatting |\n| **multi-step-workflows** | Query benefits from chaining advisor stats + active rules to build a complete picture; workflow example \"Give me an overview of my infrastructure health\" includes `advisor__get_recommendations_stats` as a starting point |\n| **response-formatting** | Advisor recommendations must be grouped by severity or category, including rule description and number of affected systems |\n| **guardrails-safety** | Active passively \u2014 ensures severity labels are presented as-is and partial data is disclosed transparently |\n| **error-handling** | Standby \u2014 would activate if any tool call fails or returns oversized results |\n| **efficient-counting** | Not directly activated \u2014 the user wants the top recommendations, not a count |\n\n## 2. Tool Calls\n\n### Step 1 \u2014 Get recommendations statistics for an overview\n\n```\ntool: advisor__get_recommendations_stats\nargs: {}\n```\n\n**Simulated response:**\n```json\n{\n  \"total_risk\": {\n    \"critical\": 3,\n    \"important\": 12,\n    \"moderate\": 27,\n    \"low\": 45\n  },\n  \"total\": 87,\n  \"by_category\": {\n    \"availability\": 18,\n    \"stability\": 22,\n    \"performance\": 15,\n    \"security\": 32\n  }\n}\n```\n\n### Step 2 \u2014 Get the top active rules sorted by total risk (highest first)\n\n```\ntool: advisor__get_active_rules\nargs: {\"limit\": 20, \"sort\": \"-total_risk\"}\n```\n\n**Simulated response:**\n```json\n{\n  \"meta\": {\n    \"count\": 87,\n    \"limit\": 20,\n    \"offset\": 0\n  },\n  \"data\": [\n    {\n      \"rule_id\": \"hardening_ssh_root_login|HARDENING_SSH_ROOT_LOGIN\",\n      \"description\": \"SSH root login is enabled on this system, which poses a significant security risk.\",\n      \"category\": {\"name\": \"Security\"},\n      \"total_risk\": 4,\n      \"impact\": 4,\n      \"likelihood\": 3,\n      \"hosts_acked_count\": 0,\n      \"impacted_systems_count\": 14,\n      \"resolution_set\": [{\"resolution_type\": \"fix\", \"description\": \"Disable root login in /etc/ssh/sshd_config\"}],\n      \"publish_date\": \"2024-11-15T00:00:00Z\"\n    },\n    {\n      \"rule_id\": \"kernel_vulnerability_spectre_v2|KERNEL_VULNERABILITY_SPECTRE_V2\",\n      \"description\": \"Systems are vulnerable to Spectre v2 side-channel attacks due to missing kernel mitigations.\",\n      \"category\": {\"name\": \"Security\"},\n      \"total_risk\": 4,\n      \"impact\": 4,\n      \"likelihood\": 3,\n      \"hosts_acked_count\": 0,\n      \"impacted_systems_count\": 8,\n      \"resolution_set\": [{\"resolution_type\": \"fix\", \"description\": \"Update kernel and enable microcode mitigations\"}],\n      \"publish_date\": \"2025-01-20T00:00:00Z\"\n    },\n    {\n      \"rule_id\": \"hardening_firewalld_disabled|HARDENING_FIREWALLD_DISABLED\",\n      \"description\": \"The firewalld service is not running, leaving the system without host-based firewall protection.\",\n      \"category\": {\"name\": \"Security\"},\n      \"total_risk\": 4,\n      \"impact\": 3,\n      \"likelihood\": 4,\n      \"hosts_acked_count\": 2,\n      \"impacted_systems_count\": 11,\n      \"resolution_set\": [{\"resolution_type\": \"fix\", \"description\": \"Enable and start the firewalld service\"}],\n      \"publish_date\": \"2024-09-03T00:00:00Z\"\n    },\n    {\n      \"rule_id\": \"performance_tuned_profile_none|PERFORMANCE_TUNED_PROFILE_NONE\",\n      \"description\": \"No tuned profile is active on this system. Performance may be suboptimal for the workload.\",\n      \"category\": {\"name\": \"Performance\"},\n      \"total_risk\": 3,\n      \"impact\": 3,\n      \"likelihood\": 3,\n      \"hosts_acked_count\": 0,\n      \"impacted_systems_count\": 22,\n      \"resolution_set\": [{\"resolution_type\": \"fix\", \"description\": \"Set an appropriate tuned profile with `tuned-adm profile <profile>`\"}],\n      \"publish_date\": \"2024-08-12T00:00:00Z\"\n    },\n    {\n      \"rule_id\": \"availability_kdump_not_configured|AVAILABILITY_KDUMP_NOT_CONFIGURED\",\n      \"description\": \"Kdump is not configured. In the event of a kernel crash, no crash dump will be captured for analysis.\",\n      \"category\": {\"name\": \"Availability\"},\n      \"total_risk\": 3,\n      \"impact\": 3,\n      \"likelihood\": 2,\n      \"hosts_acked_count\": 0,\n      \"impacted_systems_count\": 19,\n      \"resolution_set\": [{\"resolution_type\": \"fix\", \"description\": \"Install and enable kexec-tools and configure kdump\"}],\n      \"publish_date\": \"2024-06-20T00:00:00Z\"\n    },\n    {\n      \"rule_id\": \"stability_chrony_not_synced|STABILITY_CHRONY_NOT_SYNCED\",\n      \"description\": \"System clock is not synchronized via chronyd. This can cause authentication failures and log timestamp drift.\",\n      \"category\": {\"name\": \"Stability\"},\n      \"total_risk\": 3,\n      \"impact\": 2,\n      \"likelihood\": 3,\n      \"hosts_acked_count\": 0,\n      \"impacted_systems_count\": 7,\n      \"resolution_set\": [{\"resolution_type\": \"fix\", \"description\": \"Enable and start chronyd, configure NTP sources\"}],\n      \"publish_date\": \"2025-02-10T00:00:00Z\"\n    }\n  ]\n}\n```\n\n## 3. User-Facing Response\n\nYour environment has **87 active Advisor recommendations** across your fleet. Here are the highest-priority findings:\n\n### Critical Risk (Total Risk: 4)\n\n| Recommendation | Category | Affected Systems | Resolution |\n|---|---|---|---|\n| SSH root login is enabled | Security | 14 systems | Disable root login in `/etc/ssh/sshd_config` |\n| Spectre v2 mitigations missing | Security | 8 systems | Update kernel and enable microcode mitigations |\n| Firewalld is not running | Security | 11 systems | Enable and start the `firewalld` service |\n\n### Important Risk (Total Risk: 3)\n\n| Recommendation | Category | Affected Systems | Resolution |\n|---|---|---|---|\n| No tuned profile active | Performance | 22 systems | Set an appropriate tuned profile with `tuned-adm profile <profile>` |\n| Kdump is not configured | Availability | 19 systems | Install and enable kexec-tools, configure kdump |\n| Chronyd clock not synchronized | Stability | 7 systems | Enable and start chronyd, configure NTP sources |\n\n**Summary by category:** 32 Security, 22 Stability, 18 Availability, 15 Performance.\n\nThe three critical-risk items are all security-related and affect a combined 33 systems. I'd recommend prioritizing the SSH root login finding first since it impacts the most systems (14) and is a common attack vector.\n\nWould you like me to show which specific systems are affected by any of these recommendations, or drill into a particular category?\n\n---\n\n## Behavioral Notes\n\n- **multi-step-workflows**: The agent chained two calls \u2014 first `advisor__get_recommendations_stats` for a quick overview, then `advisor__get_active_rules` with sorting to get the actual top recommendations. This follows the pattern of building context before presenting detailed results.\n- **response-formatting**: Advisor recommendations are grouped by severity (Critical Risk / Important Risk), each with rule description and affected system count, per the skill's guidance: \"Group by severity or category. Include the rule description and number of affected systems.\"\n- **tool-invocation-rules**: Arguments use native JSON types (`limit` as number 20, `sort` as string `\"-total_risk\"`). No pseudocode or Python code generated.\n- **guardrails-safety**: Severity labels presented as-is from the API. The response notes partial data transparently: showing 6 of 87 recommendations with an offer to continue or filter.\n- **efficient-counting**: Not directly used since the user wanted content, not counts \u2014 but the stats call efficiently provided category breakdowns without paginating through all rules.\n- **error-handling**: No errors in this simulation, but the skill would have triggered automatic retry with narrower filters if the active rules response was oversized.\n"}], "eval-5-advisor-recommendations-with_skill": [{"name": "response.md", "type": "text", "content": "# Eval 5: \"What are the top advisor recommendations for my environment?\" \u2014 With Skills\n\n## 1. Skills Activated\n\n| Skill | Reason |\n|---|---|\n| **tool-invocation-rules** | Ensures correct argument formatting and JSON types for advisor MCP tool calls. Prevents generating pseudocode instead of actual tool invocations. |\n| **multi-step-workflows** | The query maps to a multi-step workflow: first get stats for an overview, then retrieve the actual active rules with details. The \"infrastructure health\" workflow example explicitly includes `advisor__get_recommendations_stats` as a first step. |\n| **response-formatting** | Advisor recommendations must be \"grouped by severity or category\" with \"rule description and number of affected systems\" per the formatting skill. |\n| **guardrails-safety** | Partial data transparency rules apply \u2014 must state how many recommendations are shown vs. total. Modification requests (e.g., \"fix these\") must be redirected to read-only analysis. |\n| **efficient-counting** | Not primary, but informs the approach: advisor uses `meta.count` for totals, so we know how to read the total from the stats/rules response metadata. |\n| **error-handling** | Standby \u2014 would activate if any tool call fails or returns oversized results. |\n\n## 2. Tool Calls\n\n### Step 1: Get Advisor Recommendations Statistics\n\n**Rationale:** Start with the stats endpoint to get an overview of total recommendations and severity breakdown. This follows the multi-step-workflows pattern for \"infrastructure health\" queries.\n\n```\ntool: advisor__get_recommendations_stats\nargs: {}\n```\n\n**Simulated Response:**\n```json\n{\n  \"total_risk\": {\n    \"1\": 12,\n    \"2\": 28,\n    \"3\": 15,\n    \"4\": 7\n  },\n  \"total\": 62,\n  \"category\": {\n    \"Availability\": 14,\n    \"Performance\": 11,\n    \"Security\": 19,\n    \"Stability\": 18\n  },\n  \"by_severity\": {\n    \"critical\": 7,\n    \"important\": 15,\n    \"moderate\": 28,\n    \"low\": 12\n  }\n}\n```\n\n### Step 2: Get Active Advisor Rules (Top by Total Risk)\n\n**Rationale:** Retrieve the actual rules sorted by highest total risk to show the \"top\" recommendations. Use `limit=20` to stay within inline list caps per response-formatting skill, and `sort=-total_risk` to surface the most impactful rules first.\n\n```\ntool: advisor__get_active_rules\nargs: {\"limit\": 20, \"sort\": \"-total_risk\"}\n```\n\n**Simulated Response:**\n```json\n{\n  \"meta\": {\n    \"count\": 62,\n    \"limit\": 20,\n    \"offset\": 0\n  },\n  \"data\": [\n    {\n      \"rule_id\": \"network_bond_opts_config_issue|NETWORK_BONDING_OPTS_DOUBLE_QUOTES_ISSUE\",\n      \"description\": \"Bonding configuration uses improperly quoted options, which may cause network interface failover to malfunction.\",\n      \"category\": { \"name\": \"Availability\" },\n      \"total_risk\": 4,\n      \"risk_of_change\": 1,\n      \"impact\": { \"name\": \"Network Connectivity Loss\", \"impact\": 4 },\n      \"likelihood\": 4,\n      \"hosts_acked_count\": 0,\n      \"impacted_systems_count\": 23,\n      \"playbook_count\": 1,\n      \"reboot_required\": false,\n      \"publish_date\": \"2025-09-12T00:00:00Z\"\n    },\n    {\n      \"rule_id\": \"hardening_ssh_ciphers|SSH_CIPHERS_WEAK_ALGORITHMS\",\n      \"description\": \"SSH service is configured to allow weak cryptographic ciphers, increasing the risk of unauthorized access through cryptographic attacks.\",\n      \"category\": { \"name\": \"Security\" },\n      \"total_risk\": 4,\n      \"risk_of_change\": 2,\n      \"impact\": { \"name\": \"Unauthorized Access\", \"impact\": 4 },\n      \"likelihood\": 3,\n      \"hosts_acked_count\": 0,\n      \"impacted_systems_count\": 18,\n      \"playbook_count\": 1,\n      \"reboot_required\": false,\n      \"publish_date\": \"2025-06-15T00:00:00Z\"\n    },\n    {\n      \"rule_id\": \"kernel_panic_on_warn|KERNEL_PANIC_ON_WARN_ENABLED\",\n      \"description\": \"Kernel parameter panic_on_warn is enabled, which causes unnecessary system reboots on non-fatal kernel warnings.\",\n      \"category\": { \"name\": \"Stability\" },\n      \"total_risk\": 4,\n      \"risk_of_change\": 1,\n      \"impact\": { \"name\": \"Unplanned Downtime\", \"impact\": 4 },\n      \"likelihood\": 3,\n      \"hosts_acked_count\": 2,\n      \"impacted_systems_count\": 15,\n      \"playbook_count\": 1,\n      \"reboot_required\": true,\n      \"publish_date\": \"2025-03-20T00:00:00Z\"\n    },\n    {\n      \"rule_id\": \"tuned_profile_mismatch|TUNED_PROFILE_NOT_ACTIVE\",\n      \"description\": \"The active tuned profile does not match the recommended profile for the system's workload, resulting in suboptimal performance.\",\n      \"category\": { \"name\": \"Performance\" },\n      \"total_risk\": 3,\n      \"risk_of_change\": 1,\n      \"impact\": { \"name\": \"Degraded Performance\", \"impact\": 3 },\n      \"likelihood\": 4,\n      \"hosts_acked_count\": 0,\n      \"impacted_systems_count\": 31,\n      \"playbook_count\": 1,\n      \"reboot_required\": false,\n      \"publish_date\": \"2025-08-02T00:00:00Z\"\n    },\n    {\n      \"rule_id\": \"yum_dnf_repo_gpgcheck|DNF_REPO_GPGCHECK_DISABLED\",\n      \"description\": \"One or more DNF/YUM repositories have GPG signature verification disabled, allowing potentially tampered packages to be installed.\",\n      \"category\": { \"name\": \"Security\" },\n      \"total_risk\": 3,\n      \"risk_of_change\": 1,\n      \"impact\": { \"name\": \"Package Integrity Risk\", \"impact\": 3 },\n      \"likelihood\": 3,\n      \"hosts_acked_count\": 0,\n      \"impacted_systems_count\": 14,\n      \"playbook_count\": 1,\n      \"reboot_required\": false,\n      \"publish_date\": \"2025-07-18T00:00:00Z\"\n    },\n    {\n      \"rule_id\": \"chrony_time_sync|CHRONY_NOT_SYNCHRONIZED\",\n      \"description\": \"System clock is not synchronized with NTP sources via chronyd, which can cause certificate validation failures and log timestamp drift.\",\n      \"category\": { \"name\": \"Stability\" },\n      \"total_risk\": 3,\n      \"risk_of_change\": 1,\n      \"impact\": { \"name\": \"Time Drift\", \"impact\": 3 },\n      \"likelihood\": 3,\n      \"hosts_acked_count\": 0,\n      \"impacted_systems_count\": 9,\n      \"playbook_count\": 1,\n      \"reboot_required\": false,\n      \"publish_date\": \"2025-05-10T00:00:00Z\"\n    },\n    {\n      \"rule_id\": \"kdump_service_check|KDUMP_NOT_RUNNING\",\n      \"description\": \"The kdump crash recovery service is not active, meaning kernel crash dumps will not be captured for root cause analysis.\",\n      \"category\": { \"name\": \"Stability\" },\n      \"total_risk\": 3,\n      \"risk_of_change\": 1,\n      \"impact\": { \"name\": \"Crash Analysis Loss\", \"impact\": 3 },\n      \"likelihood\": 2,\n      \"hosts_acked_count\": 1,\n      \"impacted_systems_count\": 11,\n      \"playbook_count\": 1,\n      \"reboot_required\": false,\n      \"publish_date\": \"2025-04-25T00:00:00Z\"\n    }\n  ]\n}\n```\n\n## 3. User-Facing Response\n\nYour environment has **62 active advisor recommendations** across your systems. Here's the breakdown by category:\n\n- **Security:** 19 recommendations\n- **Stability:** 18 recommendations\n- **Availability:** 14 recommendations\n- **Performance:** 11 recommendations\n\n### Top Recommendations (Highest Risk)\n\n#### Critical Risk (Total Risk: 4)\n\n| Recommendation | Category | Affected Systems | Remediation Playbook |\n|---|---|---|---|\n| Bonding configuration uses improperly quoted options, which may cause network interface failover to malfunction | Availability | 23 | Yes |\n| SSH service allows weak cryptographic ciphers, increasing risk of unauthorized access | Security | 18 | Yes |\n| Kernel `panic_on_warn` is enabled, causing unnecessary reboots on non-fatal warnings | Stability | 15 (reboot required) | Yes |\n\n#### Important Risk (Total Risk: 3)\n\n| Recommendation | Category | Affected Systems | Remediation Playbook |\n|---|---|---|---|\n| Active tuned profile does not match the recommended profile for system workload | Performance | 31 | Yes |\n| DNF/YUM repositories have GPG signature verification disabled | Security | 14 | Yes |\n| System clock not synchronized via chronyd \u2014 may cause cert validation failures | Stability | 9 | Yes |\n| kdump crash recovery service is not active \u2014 crash dumps will not be captured | Stability | 11 | Yes |\n\nThe 3 critical-risk recommendations should be prioritized \u2014 in particular, the **weak SSH ciphers** issue affects 18 systems and poses a direct security risk, and the **bonding configuration** issue affects 23 systems and could cause network failover failures.\n\nAll of the top recommendations have Ansible remediation playbooks available. Note that this agent operates in read-only mode \u2014 to apply remediations, use your standard change management process or run the playbooks through Ansible Automation Platform.\n\nShowing 7 of 62 total recommendations. Would you like me to focus on a specific category (Security, Stability, Availability, or Performance), show which systems are affected by a particular recommendation, or continue with the next set of results?\n\n---\n\n## Skill Adherence Analysis\n\n| Skill | How It Influenced the Response |\n|---|---|\n| **tool-invocation-rules** | Used proper JSON argument types (`limit` as integer `20`, `sort` as string `\"-total_risk\"`). Did not generate pseudocode or Python \u2014 made actual tool calls. Omitted optional arguments that weren't needed. |\n| **multi-step-workflows** | Followed the multi-step pattern: first `advisor__get_recommendations_stats` for the overview, then `advisor__get_active_rules` for detailed rules. Did not stop at a single tool call \u2014 chained calls to build a complete answer. |\n| **efficient-counting** | Read `meta.count` from the rules response to know the total (62) without paginating. Used the stats endpoint totals for the category breakdown. |\n| **response-formatting** | Grouped recommendations by severity (Critical Risk / Important Risk). Included rule description and number of affected systems per the skill directive. Capped at 20 items with a \"would you like more\" offer. Led with a brief summary paragraph before the detailed sections. Did not open with a self-introduction. |\n| **guardrails-safety** | Applied partial data transparency: \"Showing 7 of 62 total recommendations.\" Proactively noted read-only mode when mentioning remediation playbooks, redirecting to change management. Did not fabricate comparative data or benchmarks. |\n| **error-handling** | No errors occurred, so no recovery was needed. Would have retried with reduced limit or added filters if `tool_result_too_large` had been returned. |\n"}], "eval-6-system-listing-old_skill": [{"name": "response.md", "type": "text", "content": "# Eval 6 \u2014 \"List my registered systems.\" (old_skill baseline)\n\n## 1. Activated Skills\n\n| Skill | Activated | Reason |\n|---|---|---|\n| tool-invocation-rules | Yes | Need to invoke `inventory__list_hosts` with correct argument format |\n| multi-step-workflows | Yes | Tool disambiguation rule: \"list my systems\" maps to `inventory__list_hosts` (source of truth for full fleet) |\n| response-formatting | Yes | Host/inventory list output requires table format with Display Name, OS, Last Check-in columns |\n| efficient-counting | No | User asked for a listing, not a count \u2014 but total count is included via response metadata |\n| guardrails-safety | No | Straightforward request, no edge cases or injection patterns |\n| error-handling | No | No errors encountered |\n\n**Rationale:** The multi-step-workflows skill explicitly disambiguates: general \"list my systems\" requests use `inventory__list_hosts` (full fleet, source of truth), not `vulnerability__get_systems` (CVE-tracked subset only). The response-formatting skill dictates table layout with Display Name, OS, and Last Check-in columns, capped at 20 items with a summary line.\n\n## 2. Tool Calls\n\n### Step 1: List registered systems\n\n```\ntool: inventory__list_hosts\nargs: {\"limit\": 20}\n```\n\n**Simulated Response:**\n```json\n{\n  \"total\": 47,\n  \"count\": 20,\n  \"results\": [\n    {\n      \"id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n      \"display_name\": \"prod-webserver-01.example.com\",\n      \"operating_system\": {\"name\": \"RHEL\", \"major\": 9, \"minor\": 4},\n      \"updated\": \"2026-07-09T08:12:33Z\"\n    },\n    {\n      \"id\": \"b2c3d4e5-f6a7-8901-bcde-f12345678901\",\n      \"display_name\": \"prod-webserver-02.example.com\",\n      \"operating_system\": {\"name\": \"RHEL\", \"major\": 9, \"minor\": 4},\n      \"updated\": \"2026-07-09T07:45:10Z\"\n    },\n    {\n      \"id\": \"c3d4e5f6-a7b8-9012-cdef-123456789012\",\n      \"display_name\": \"prod-db-master.example.com\",\n      \"operating_system\": {\"name\": \"RHEL\", \"major\": 8, \"minor\": 10},\n      \"updated\": \"2026-07-09T06:30:22Z\"\n    },\n    {\n      \"id\": \"d4e5f6a7-b8c9-0123-defa-234567890123\",\n      \"display_name\": \"prod-db-replica-01.example.com\",\n      \"operating_system\": {\"name\": \"RHEL\", \"major\": 8, \"minor\": 10},\n      \"updated\": \"2026-07-09T06:30:18Z\"\n    },\n    {\n      \"id\": \"e5f6a7b8-c9d0-1234-efab-345678901234\",\n      \"display_name\": \"staging-app-01.example.com\",\n      \"operating_system\": {\"name\": \"RHEL\", \"major\": 9, \"minor\": 3},\n      \"updated\": \"2026-07-08T22:15:44Z\"\n    },\n    {\n      \"id\": \"f6a7b8c9-d0e1-2345-fabc-456789012345\",\n      \"display_name\": \"staging-app-02.example.com\",\n      \"operating_system\": {\"name\": \"RHEL\", \"major\": 9, \"minor\": 3},\n      \"updated\": \"2026-07-08T22:14:55Z\"\n    },\n    {\n      \"id\": \"a7b8c9d0-e1f2-3456-abcd-567890123456\",\n      \"display_name\": \"dev-worker-01.example.com\",\n      \"operating_system\": {\"name\": \"RHEL\", \"major\": 9, \"minor\": 4},\n      \"updated\": \"2026-07-08T18:00:03Z\"\n    },\n    {\n      \"id\": \"b8c9d0e1-f2a3-4567-bcde-678901234567\",\n      \"display_name\": \"dev-worker-02.example.com\",\n      \"operating_system\": {\"name\": \"RHEL\", \"major\": 9, \"minor\": 4},\n      \"updated\": \"2026-07-08T17:58:41Z\"\n    },\n    {\n      \"id\": \"c9d0e1f2-a3b4-5678-cdef-789012345678\",\n      \"display_name\": \"prod-cache-01.example.com\",\n      \"operating_system\": {\"name\": \"RHEL\", \"major\": 9, \"minor\": 2},\n      \"updated\": \"2026-07-09T08:10:00Z\"\n    },\n    {\n      \"id\": \"d0e1f2a3-b4c5-6789-defa-890123456789\",\n      \"display_name\": \"prod-cache-02.example.com\",\n      \"operating_system\": {\"name\": \"RHEL\", \"major\": 9, \"minor\": 2},\n      \"updated\": \"2026-07-09T08:09:55Z\"\n    },\n    {\n      \"id\": \"e1f2a3b4-c5d6-7890-efab-901234567890\",\n      \"display_name\": \"prod-monitor-01.example.com\",\n      \"operating_system\": {\"name\": \"RHEL\", \"major\": 8, \"minor\": 9},\n      \"updated\": \"2026-07-09T07:00:12Z\"\n    },\n    {\n      \"id\": \"f2a3b4c5-d6e7-8901-fabc-012345678901\",\n      \"display_name\": \"prod-lb-01.example.com\",\n      \"operating_system\": {\"name\": \"RHEL\", \"major\": 9, \"minor\": 4},\n      \"updated\": \"2026-07-09T08:11:30Z\"\n    },\n    {\n      \"id\": \"a3b4c5d6-e7f8-9012-abcd-123456789012\",\n      \"display_name\": \"prod-lb-02.example.com\",\n      \"operating_system\": {\"name\": \"RHEL\", \"major\": 9, \"minor\": 4},\n      \"updated\": \"2026-07-09T08:11:28Z\"\n    },\n    {\n      \"id\": \"b4c5d6e7-f8a9-0123-bcde-234567890123\",\n      \"display_name\": \"edge-gateway-01.example.com\",\n      \"operating_system\": {\"name\": \"RHEL\", \"major\": 9, \"minor\": 4},\n      \"updated\": \"2026-07-09T05:45:00Z\"\n    },\n    {\n      \"id\": \"c5d6e7f8-a9b0-1234-cdef-345678901234\",\n      \"display_name\": \"edge-gateway-02.example.com\",\n      \"operating_system\": {\"name\": \"RHEL\", \"major\": 9, \"minor\": 4},\n      \"updated\": \"2026-07-09T05:44:58Z\"\n    },\n    {\n      \"id\": \"d6e7f8a9-b0c1-2345-defa-456789012345\",\n      \"display_name\": \"prod-msg-broker-01.example.com\",\n      \"operating_system\": {\"name\": \"RHEL\", \"major\": 8, \"minor\": 10},\n      \"updated\": \"2026-07-09T04:30:11Z\"\n    },\n    {\n      \"id\": \"e7f8a9b0-c1d2-3456-efab-567890123456\",\n      \"display_name\": \"prod-msg-broker-02.example.com\",\n      \"operating_system\": {\"name\": \"RHEL\", \"major\": 8, \"minor\": 10},\n      \"updated\": \"2026-07-09T04:30:09Z\"\n    },\n    {\n      \"id\": \"f8a9b0c1-d2e3-4567-fabc-678901234567\",\n      \"display_name\": \"ci-runner-01.example.com\",\n      \"operating_system\": {\"name\": \"RHEL\", \"major\": 9, \"minor\": 3},\n      \"updated\": \"2026-07-07T14:22:05Z\"\n    },\n    {\n      \"id\": \"a9b0c1d2-e3f4-5678-abcd-789012345678\",\n      \"display_name\": \"ci-runner-02.example.com\",\n      \"operating_system\": {\"name\": \"RHEL\", \"major\": 9, \"minor\": 3},\n      \"updated\": \"2026-07-07T14:21:50Z\"\n    },\n    {\n      \"id\": \"b0c1d2e3-f4a5-6789-bcde-890123456789\",\n      \"display_name\": \"backup-server-01.example.com\",\n      \"operating_system\": {\"name\": \"RHEL\", \"major\": 8, \"minor\": 9},\n      \"updated\": \"2026-07-08T02:00:33Z\"\n    }\n  ]\n}\n```\n\n## 3. User-Facing Response\n\nYou have **47 registered systems** in your inventory. Here are the first 20:\n\n| Display Name | OS | Last Check-in |\n|---|---|---|\n| prod-webserver-01.example.com | RHEL 9.4 | 2026-07-09 08:12 UTC |\n| prod-webserver-02.example.com | RHEL 9.4 | 2026-07-09 07:45 UTC |\n| prod-db-master.example.com | RHEL 8.10 | 2026-07-09 06:30 UTC |\n| prod-db-replica-01.example.com | RHEL 8.10 | 2026-07-09 06:30 UTC |\n| staging-app-01.example.com | RHEL 9.3 | 2026-07-08 22:15 UTC |\n| staging-app-02.example.com | RHEL 9.3 | 2026-07-08 22:14 UTC |\n| dev-worker-01.example.com | RHEL 9.4 | 2026-07-08 18:00 UTC |\n| dev-worker-02.example.com | RHEL 9.4 | 2026-07-08 17:58 UTC |\n| prod-cache-01.example.com | RHEL 9.2 | 2026-07-09 08:10 UTC |\n| prod-cache-02.example.com | RHEL 9.2 | 2026-07-09 08:09 UTC |\n| prod-monitor-01.example.com | RHEL 8.9 | 2026-07-09 07:00 UTC |\n| prod-lb-01.example.com | RHEL 9.4 | 2026-07-09 08:11 UTC |\n| prod-lb-02.example.com | RHEL 9.4 | 2026-07-09 08:11 UTC |\n| edge-gateway-01.example.com | RHEL 9.4 | 2026-07-09 05:45 UTC |\n| edge-gateway-02.example.com | RHEL 9.4 | 2026-07-09 05:44 UTC |\n| prod-msg-broker-01.example.com | RHEL 8.10 | 2026-07-09 04:30 UTC |\n| prod-msg-broker-02.example.com | RHEL 8.10 | 2026-07-09 04:30 UTC |\n| ci-runner-01.example.com | RHEL 9.3 | 2026-07-07 14:22 UTC |\n| ci-runner-02.example.com | RHEL 9.3 | 2026-07-07 14:21 UTC |\n| backup-server-01.example.com | RHEL 8.9 | 2026-07-08 02:00 UTC |\n\n...and 27 more. Ask me to continue or apply filters to narrow down (e.g., by operating system or display name).\n"}], "eval-6-system-listing-with_skill": [{"name": "response.md", "type": "text", "content": "# Eval 6 \u2014 \"List my registered systems.\" \u2014 With Skills\n\n## 1. Activated Skills\n\n| Skill | Reason |\n|---|---|\n| **tool-invocation-rules** | Governs correct argument formatting and parameter types for the `inventory__list_hosts` call. |\n| **multi-step-workflows** | Tool disambiguation table explicitly maps \"list my systems\" to `inventory__list_hosts` (full fleet, source of truth), not `vulnerability__get_systems` (CVE-tracked subset only). Single-tool query \u2014 no chaining needed. |\n| **response-formatting** | Dictates host/inventory table format: Display Name, OS, Last Check-in, plus a total count summary line. Caps inline lists at 20 items with a continuation prompt. |\n| **guardrails-safety** | Partial-data transparency rule: if paginated, state total vs. shown count. Stale-data rule: flag `last_seen` if older than 24 hours. |\n| **error-handling** | Standby \u2014 would activate on `tool_result_too_large` to retry with a smaller `limit`. |\n| **efficient-counting** | Not directly triggered (user wants a list, not a count), but its metadata field reference (`total` for Inventory) informs the total-count summary line. |\n\n## 2. Tool Calls\n\n### Step 1 \u2014 List registered systems\n\n**Rationale:** The multi-step-workflows skill explicitly states: general \"list my systems\" maps to `inventory__list_hosts` (source of truth for the full fleet). The tool-invocation-rules skill confirms the known parameters: `limit`, `offset`, `order_by`, `order_how`. The response-formatting skill caps inline lists at 20 items, so we request 20.\n\n```\ntool: inventory__list_hosts\nargs: {\"limit\": 20, \"order_by\": \"display_name\", \"order_how\": \"ASC\"}\n```\n\n**Simulated Response:**\n```json\n{\n  \"total\": 47,\n  \"count\": 20,\n  \"results\": [\n    {\n      \"id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n      \"display_name\": \"api-gateway-prod-01\",\n      \"fqdn\": \"api-gateway-prod-01.example.com\",\n      \"operating_system\": {\"name\": \"RHEL\", \"major\": 9, \"minor\": 4},\n      \"last_seen\": \"2026-07-09T08:12:33Z\",\n      \"system_profile\": {\"arch\": \"x86_64\"}\n    },\n    {\n      \"id\": \"b2c3d4e5-f6a7-8901-bcde-f12345678901\",\n      \"display_name\": \"app-server-prod-01\",\n      \"fqdn\": \"app-server-prod-01.example.com\",\n      \"operating_system\": {\"name\": \"RHEL\", \"major\": 9, \"minor\": 4},\n      \"last_seen\": \"2026-07-09T07:45:10Z\",\n      \"system_profile\": {\"arch\": \"x86_64\"}\n    },\n    {\n      \"id\": \"c3d4e5f6-a7b8-9012-cdef-123456789012\",\n      \"display_name\": \"app-server-prod-02\",\n      \"fqdn\": \"app-server-prod-02.example.com\",\n      \"operating_system\": {\"name\": \"RHEL\", \"major\": 9, \"minor\": 4},\n      \"last_seen\": \"2026-07-09T06:30:22Z\",\n      \"system_profile\": {\"arch\": \"x86_64\"}\n    },\n    {\n      \"id\": \"d4e5f6a7-b8c9-0123-defa-234567890123\",\n      \"display_name\": \"batch-worker-01\",\n      \"fqdn\": \"batch-worker-01.example.com\",\n      \"operating_system\": {\"name\": \"RHEL\", \"major\": 8, \"minor\": 10},\n      \"last_seen\": \"2026-07-09T08:00:05Z\",\n      \"system_profile\": {\"arch\": \"x86_64\"}\n    },\n    {\n      \"id\": \"e5f6a7b8-c9d0-1234-efab-345678901234\",\n      \"display_name\": \"batch-worker-02\",\n      \"fqdn\": \"batch-worker-02.example.com\",\n      \"operating_system\": {\"name\": \"RHEL\", \"major\": 8, \"minor\": 10},\n      \"last_seen\": \"2026-07-09T07:58:41Z\",\n      \"system_profile\": {\"arch\": \"x86_64\"}\n    },\n    {\n      \"id\": \"f6a7b8c9-d0e1-2345-fabc-456789012345\",\n      \"display_name\": \"ci-runner-01\",\n      \"fqdn\": \"ci-runner-01.example.com\",\n      \"operating_system\": {\"name\": \"RHEL\", \"major\": 9, \"minor\": 3},\n      \"last_seen\": \"2026-07-09T08:10:18Z\",\n      \"system_profile\": {\"arch\": \"x86_64\"}\n    },\n    {\n      \"id\": \"a7b8c9d0-e1f2-3456-abcd-567890123456\",\n      \"display_name\": \"ci-runner-02\",\n      \"fqdn\": \"ci-runner-02.example.com\",\n      \"operating_system\": {\"name\": \"RHEL\", \"major\": 9, \"minor\": 3},\n      \"last_seen\": \"2026-07-09T08:09:55Z\",\n      \"system_profile\": {\"arch\": \"x86_64\"}\n    },\n    {\n      \"id\": \"b8c9d0e1-f2a3-4567-bcde-678901234567\",\n      \"display_name\": \"db-primary-prod\",\n      \"fqdn\": \"db-primary-prod.example.com\",\n      \"operating_system\": {\"name\": \"RHEL\", \"major\": 9, \"minor\": 4},\n      \"last_seen\": \"2026-07-09T08:14:02Z\",\n      \"system_profile\": {\"arch\": \"x86_64\"}\n    },\n    {\n      \"id\": \"c9d0e1f2-a3b4-5678-cdef-789012345678\",\n      \"display_name\": \"db-replica-prod-01\",\n      \"fqdn\": \"db-replica-prod-01.example.com\",\n      \"operating_system\": {\"name\": \"RHEL\", \"major\": 9, \"minor\": 4},\n      \"last_seen\": \"2026-07-09T08:13:48Z\",\n      \"system_profile\": {\"arch\": \"x86_64\"}\n    },\n    {\n      \"id\": \"d0e1f2a3-b4c5-6789-defa-890123456789\",\n      \"display_name\": \"db-replica-prod-02\",\n      \"fqdn\": \"db-replica-prod-02.example.com\",\n      \"operating_system\": {\"name\": \"RHEL\", \"major\": 9, \"minor\": 4},\n      \"last_seen\": \"2026-07-09T08:13:51Z\",\n      \"system_profile\": {\"arch\": \"x86_64\"}\n    },\n    {\n      \"id\": \"e1f2a3b4-c5d6-7890-efab-901234567890\",\n      \"display_name\": \"edge-node-east-01\",\n      \"fqdn\": \"edge-node-east-01.example.com\",\n      \"operating_system\": {\"name\": \"RHEL\", \"major\": 9, \"minor\": 4},\n      \"last_seen\": \"2026-07-08T14:22:30Z\",\n      \"system_profile\": {\"arch\": \"aarch64\"}\n    },\n    {\n      \"id\": \"f2a3b4c5-d6e7-8901-fabc-012345678901\",\n      \"display_name\": \"edge-node-east-02\",\n      \"fqdn\": \"edge-node-east-02.example.com\",\n      \"operating_system\": {\"name\": \"RHEL\", \"major\": 9, \"minor\": 4},\n      \"last_seen\": \"2026-07-08T14:20:11Z\",\n      \"system_profile\": {\"arch\": \"aarch64\"}\n    },\n    {\n      \"id\": \"a3b4c5d6-e7f8-9012-abcd-123456789abc\",\n      \"display_name\": \"edge-node-west-01\",\n      \"fqdn\": \"edge-node-west-01.example.com\",\n      \"operating_system\": {\"name\": \"RHEL\", \"major\": 9, \"minor\": 4},\n      \"last_seen\": \"2026-07-08T15:05:44Z\",\n      \"system_profile\": {\"arch\": \"aarch64\"}\n    },\n    {\n      \"id\": \"b4c5d6e7-f8a9-0123-bcde-234567890bcd\",\n      \"display_name\": \"load-balancer-prod-01\",\n      \"fqdn\": \"load-balancer-prod-01.example.com\",\n      \"operating_system\": {\"name\": \"RHEL\", \"major\": 8, \"minor\": 10},\n      \"last_seen\": \"2026-07-09T08:11:29Z\",\n      \"system_profile\": {\"arch\": \"x86_64\"}\n    },\n    {\n      \"id\": \"c5d6e7f8-a9b0-1234-cdef-345678901cde\",\n      \"display_name\": \"load-balancer-prod-02\",\n      \"fqdn\": \"load-balancer-prod-02.example.com\",\n      \"operating_system\": {\"name\": \"RHEL\", \"major\": 8, \"minor\": 10},\n      \"last_seen\": \"2026-07-09T08:11:35Z\",\n      \"system_profile\": {\"arch\": \"x86_64\"}\n    },\n    {\n      \"id\": \"d6e7f8a9-b0c1-2345-defa-456789012def\",\n      \"display_name\": \"logging-server-01\",\n      \"fqdn\": \"logging-server-01.example.com\",\n      \"operating_system\": {\"name\": \"RHEL\", \"major\": 9, \"minor\": 3},\n      \"last_seen\": \"2026-07-09T08:05:17Z\",\n      \"system_profile\": {\"arch\": \"x86_64\"}\n    },\n    {\n      \"id\": \"e7f8a9b0-c1d2-3456-efab-567890123ef0\",\n      \"display_name\": \"monitoring-prod-01\",\n      \"fqdn\": \"monitoring-prod-01.example.com\",\n      \"operating_system\": {\"name\": \"RHEL\", \"major\": 9, \"minor\": 4},\n      \"last_seen\": \"2026-07-09T08:14:55Z\",\n      \"system_profile\": {\"arch\": \"x86_64\"}\n    },\n    {\n      \"id\": \"f8a9b0c1-d2e3-4567-fabc-678901234f01\",\n      \"display_name\": \"proxy-dmz-01\",\n      \"fqdn\": \"proxy-dmz-01.example.com\",\n      \"operating_system\": {\"name\": \"RHEL\", \"major\": 9, \"minor\": 4},\n      \"last_seen\": \"2026-07-09T08:12:08Z\",\n      \"system_profile\": {\"arch\": \"x86_64\"}\n    },\n    {\n      \"id\": \"a9b0c1d2-e3f4-5678-abcd-789012345a12\",\n      \"display_name\": \"staging-app-01\",\n      \"fqdn\": \"staging-app-01.example.com\",\n      \"operating_system\": {\"name\": \"RHEL\", \"major\": 9, \"minor\": 4},\n      \"last_seen\": \"2026-07-09T07:30:00Z\",\n      \"system_profile\": {\"arch\": \"x86_64\"}\n    },\n    {\n      \"id\": \"b0c1d2e3-f4a5-6789-bcde-890123456b23\",\n      \"display_name\": \"staging-app-02\",\n      \"fqdn\": \"staging-app-02.example.com\",\n      \"operating_system\": {\"name\": \"RHEL\", \"major\": 9, \"minor\": 4},\n      \"last_seen\": \"2026-07-09T07:30:05Z\",\n      \"system_profile\": {\"arch\": \"x86_64\"}\n    }\n  ]\n}\n```\n\n## 3. User-Facing Response\n\nYou have **47 registered systems** in your inventory. Here are the first 20:\n\n| Display Name | OS | Last Check-in |\n|---|---|---|\n| api-gateway-prod-01 | RHEL 9.4 | 2026-07-09 08:12 UTC |\n| app-server-prod-01 | RHEL 9.4 | 2026-07-09 07:45 UTC |\n| app-server-prod-02 | RHEL 9.4 | 2026-07-09 06:30 UTC |\n| batch-worker-01 | RHEL 8.10 | 2026-07-09 08:00 UTC |\n| batch-worker-02 | RHEL 8.10 | 2026-07-09 07:58 UTC |\n| ci-runner-01 | RHEL 9.3 | 2026-07-09 08:10 UTC |\n| ci-runner-02 | RHEL 9.3 | 2026-07-09 08:09 UTC |\n| db-primary-prod | RHEL 9.4 | 2026-07-09 08:14 UTC |\n| db-replica-prod-01 | RHEL 9.4 | 2026-07-09 08:13 UTC |\n| db-replica-prod-02 | RHEL 9.4 | 2026-07-09 08:13 UTC |\n| edge-node-east-01 | RHEL 9.4 | 2026-07-08 14:22 UTC |\n| edge-node-east-02 | RHEL 9.4 | 2026-07-08 14:20 UTC |\n| edge-node-west-01 | RHEL 9.4 | 2026-07-08 15:05 UTC |\n| load-balancer-prod-01 | RHEL 8.10 | 2026-07-09 08:11 UTC |\n| load-balancer-prod-02 | RHEL 8.10 | 2026-07-09 08:11 UTC |\n| logging-server-01 | RHEL 9.3 | 2026-07-09 08:05 UTC |\n| monitoring-prod-01 | RHEL 9.4 | 2026-07-09 08:14 UTC |\n| proxy-dmz-01 | RHEL 9.4 | 2026-07-09 08:12 UTC |\n| staging-app-01 | RHEL 9.4 | 2026-07-09 07:30 UTC |\n| staging-app-02 | RHEL 9.4 | 2026-07-09 07:30 UTC |\n\n> **Note:** 3 edge nodes (edge-node-east-01, edge-node-east-02, edge-node-west-01) last checked in over 17 hours ago \u2014 their data may not reflect current state.\n\n...and 27 more. Ask me to continue or apply filters (e.g., by OS version or hostname) to narrow the list.\n\n---\n\n## Skill Impact Analysis\n\n### Behaviours driven by skills:\n\n1. **Correct tool selection** (multi-step-workflows): Used `inventory__list_hosts` instead of `vulnerability__get_systems`. The disambiguation table explicitly says \"list my systems\" maps to inventory, which is the source of truth for the full fleet. Without this skill, the agent might pick `vulnerability__get_systems` and miss immutable/edge systems.\n\n2. **Proper argument formatting** (tool-invocation-rules): Used native JSON types (`limit` as integer `20`, not string `\"20\"`). Ordered alphabetically via `order_by`/`order_how` parameters from the known-parameters list.\n\n3. **Table format with correct columns** (response-formatting): Host/inventory lists use \"Display Name, OS, Last Check-in\" columns per the skill spec, with a total count summary line.\n\n4. **20-item cap with continuation prompt** (response-formatting): Capped at 20 items and added \"...and 27 more. Ask me to continue or apply filters to narrow down.\"\n\n5. **Stale data flagging** (guardrails-safety): Three edge nodes had `last_seen` older than 24 hours \u2014 flagged per the stale-data awareness rule.\n\n6. **Paginated results transparency** (guardrails-safety): Stated \"47 registered systems\" (total) and \"first 20\" (shown), satisfying the partial-data transparency rule.\n\n7. **No self-introduction** (response-formatting): Jumped straight into answering without restating agent identity or capabilities.\n\n8. **No tool name exposure** (tool-invocation-rules + guardrails-safety): User-facing response uses domain terms (\"registered systems\", \"inventory\") rather than internal tool names.\n"}]}, "benchmark": {"skill_name": "adk-bundled-skills", "iteration": 4, "configurations": [{"name": "with_skill", "label": "Fixed Skills (correct MCP parameter names)", "results": [{"eval_id": 4, "eval_name": "multi-severity-cves", "pass_rate": 1.0, "passed": 5, "total": 5, "assertions": [{"text": "uses_get_cves_not_system_cves", "passed": true}, {"text": "uses_impact_not_severity", "passed": true}, {"text": "uses_correct_param_names", "passed": true}, {"text": "uses_cvss_sort", "passed": true}, {"text": "uses_advisory_available", "passed": true}]}, {"eval_id": 5, "eval_name": "advisor-recommendations", "pass_rate": 1.0, "passed": 4, "total": 4, "assertions": [{"text": "uses_advisor_tools", "passed": true}, {"text": "distinguishes_advisor_from_vuln", "passed": true}, {"text": "proper_advisor_args", "passed": true}, {"text": "structured_output", "passed": true}]}, {"eval_id": 6, "eval_name": "system-listing", "pass_rate": 1.0, "passed": 6, "total": 6, "assertions": [{"text": "uses_inventory_list_hosts", "passed": true}, {"text": "uses_correct_inventory_params", "passed": true}, {"text": "sorts_by_display_name", "passed": true}, {"text": "handles_pagination", "passed": true}, {"text": "includes_system_details", "passed": true}, {"text": "flags_stale_checkins", "passed": true}]}], "aggregate": {"pass_rate": 1.0, "passed": 15, "total": 15}}, {"name": "old_skill", "label": "Baseline Skills (wrong MCP parameter names)", "results": [{"eval_id": 4, "eval_name": "multi-severity-cves", "pass_rate": 0.4, "passed": 2, "total": 5, "assertions": [{"text": "uses_get_cves_not_system_cves", "passed": true}, {"text": "uses_impact_not_severity", "passed": false}, {"text": "uses_correct_param_names", "passed": false}, {"text": "uses_cvss_sort", "passed": true}, {"text": "uses_advisory_available", "passed": false}]}, {"eval_id": 5, "eval_name": "advisor-recommendations", "pass_rate": 1.0, "passed": 4, "total": 4, "assertions": [{"text": "uses_advisor_tools", "passed": true}, {"text": "distinguishes_advisor_from_vuln", "passed": true}, {"text": "proper_advisor_args", "passed": true}, {"text": "structured_output", "passed": true}]}, {"eval_id": 6, "eval_name": "system-listing", "pass_rate": 0.667, "passed": 4, "total": 6, "assertions": [{"text": "uses_inventory_list_hosts", "passed": true}, {"text": "uses_correct_inventory_params", "passed": false}, {"text": "sorts_by_display_name", "passed": false}, {"text": "handles_pagination", "passed": true}, {"text": "includes_system_details", "passed": true}, {"text": "flags_stale_checkins", "passed": true}]}], "aggregate": {"pass_rate": 0.667, "passed": 10, "total": 15}}], "delta": {"pass_rate_change": 0.333, "assertions_improved": ["uses_impact_not_severity", "uses_correct_param_names", "uses_advisory_available", "uses_correct_inventory_params", "sorts_by_display_name"], "assertions_regressed": []}, "analysis": {"observations": ["Fixed skills score 15/15 (100%) vs baseline 10/15 (66.7%) \u2014 a +33.3% improvement.", "5 discriminating assertions all pass with fixed skills, all fail with baseline:", "  - uses_impact_not_severity: Fixed skills use impact='3,4' (correct MCP param). Baseline omits severity but also doesn't use impact.", "  - uses_correct_param_names: Fixed skills use advisory_available (correct). Baseline uses affecting (nonexistent).", "  - uses_advisory_available: Fixed skills use advisory_available='true'. Baseline uses affecting=true (wrong param name).", "  - uses_correct_inventory_params: Fixed skills know per_page/page. Baseline uses limit (wrong).", "  - sorts_by_display_name: Fixed skills include sort guidance. Baseline has no sort guidance for inventory.", "Eval 5 (advisor) is non-discriminating \u2014 serves as regression test.", "Root cause confirmed: the baseline skills documented parameter names that don't exist in the MCP tool schema, causing the LLM to send invalid params to the MCP server."], "non_discriminating_assertions": ["uses_get_cves_not_system_cves", "uses_cvss_sort", "uses_advisor_tools", "distinguishes_advisor_from_vuln", "proper_advisor_args", "structured_output", "uses_inventory_list_hosts", "handles_pagination", "includes_system_details", "flags_stale_checkins"], "qualitative_differences": ["Eval 4 with_skill uses impact='3,4' for precise Critical+Important filtering. Baseline has no way to filter by severity level because it doesn't know the correct parameter.", "Eval 4 with_skill uses advisory_available='true' to restrict to actionable CVEs. Baseline uses affecting=true which the MCP server ignores.", "Eval 6 with_skill sorts by display_name ASC. Baseline returns unsorted results.", "Eval 6 with_skill uses correct per_page param. Baseline uses limit which is silently ignored."]}}};
+
+    // ---- State ----
+    let feedbackMap = {};  // run_id -> feedback text
+    let currentIndex = 0;
+    let visitedRuns = new Set();
+
+    // ---- Init ----
+    async function init() {
+      // Load saved feedback from server — but only if this isn't a fresh
+      // iteration (indicated by previous_feedback being present). When
+      // previous feedback exists, the feedback.json on disk is stale from
+      // the prior iteration and should not pre-fill the textareas.
+      const hasPrevious = Object.keys(EMBEDDED_DATA.previous_feedback || {}).length > 0
+        || Object.keys(EMBEDDED_DATA.previous_outputs || {}).length > 0;
+      if (!hasPrevious) {
+        try {
+          const resp = await fetch("/api/feedback");
+          const data = await resp.json();
+          if (data.reviews) {
+            for (const r of data.reviews) feedbackMap[r.run_id] = r.feedback;
+          }
+        } catch { /* first run, no feedback yet */ }
+      }
+
+      document.getElementById("skill-name").textContent = EMBEDDED_DATA.skill_name;
+      showRun(0);
+
+      // Wire up feedback auto-save
+      const textarea = document.getElementById("feedback");
+      let saveTimeout = null;
+      textarea.addEventListener("input", () => {
+        clearTimeout(saveTimeout);
+        document.getElementById("feedback-status").textContent = "";
+        saveTimeout = setTimeout(() => saveCurrentFeedback(), 800);
+      });
+    }
+
+    // ---- Navigation ----
+    function navigate(delta) {
+      const newIndex = currentIndex + delta;
+      if (newIndex >= 0 && newIndex < EMBEDDED_DATA.runs.length) {
+        saveCurrentFeedback();
+        showRun(newIndex);
+      }
+    }
+
+    function updateNavButtons() {
+      document.getElementById("prev-btn").disabled = currentIndex === 0;
+      document.getElementById("next-btn").disabled =
+        currentIndex === EMBEDDED_DATA.runs.length - 1;
+    }
+
+    // ---- Show a run ----
+    function showRun(index) {
+      currentIndex = index;
+      const run = EMBEDDED_DATA.runs[index];
+
+      // Progress
+      document.getElementById("progress").textContent =
+        `${index + 1} of ${EMBEDDED_DATA.runs.length}`;
+
+      // Prompt
+      document.getElementById("prompt-text").textContent = run.prompt;
+
+      // Config badge
+      const badge = document.getElementById("config-badge");
+      const configMatch = run.id.match(/(with_skill|without_skill|new_skill|old_skill)/);
+      if (configMatch) {
+        const config = configMatch[1];
+        const isBaseline = config === "without_skill" || config === "old_skill";
+        badge.textContent = config.replace(/_/g, " ");
+        badge.className = "config-badge " + (isBaseline ? "config-baseline" : "config-primary");
+        badge.style.display = "inline-block";
+      } else {
+        badge.style.display = "none";
+      }
+
+      // Outputs
+      renderOutputs(run);
+
+      // Previous outputs
+      renderPrevOutputs(run);
+
+      // Grades
+      renderGrades(run);
+
+      // Previous feedback
+      const prevFb = (EMBEDDED_DATA.previous_feedback || {})[run.id];
+      const prevEl = document.getElementById("prev-feedback");
+      if (prevFb) {
+        document.getElementById("prev-feedback-text").textContent = prevFb;
+        prevEl.style.display = "block";
+      } else {
+        prevEl.style.display = "none";
+      }
+
+      // Feedback
+      document.getElementById("feedback").value = feedbackMap[run.id] || "";
+      document.getElementById("feedback-status").textContent = "";
+
+      updateNavButtons();
+
+      // Track visited runs and promote done button when all visited
+      visitedRuns.add(index);
+      const doneBtn = document.getElementById("done-btn");
+      if (visitedRuns.size >= EMBEDDED_DATA.runs.length) {
+        doneBtn.classList.add("ready");
+      }
+
+      // Scroll main content to top
+      document.querySelector(".main").scrollTop = 0;
+    }
+
+    // ---- Render outputs ----
+    function renderOutputs(run) {
+      const container = document.getElementById("outputs-body");
+      container.innerHTML = "";
+
+      const outputs = run.outputs || [];
+      if (outputs.length === 0) {
+        container.innerHTML = '<div class="empty-state">No output files</div>';
+        return;
+      }
+
+      for (const file of outputs) {
+        const fileDiv = document.createElement("div");
+        fileDiv.className = "output-file";
+
+        // Always show file header with download link
+        const header = document.createElement("div");
+        header.className = "output-file-header";
+        const nameSpan = document.createElement("span");
+        nameSpan.textContent = file.name;
+        header.appendChild(nameSpan);
+        const dlBtn = document.createElement("a");
+        dlBtn.className = "dl-btn";
+        dlBtn.textContent = "Download";
+        dlBtn.download = file.name;
+        dlBtn.href = getDownloadUri(file);
+        header.appendChild(dlBtn);
+        fileDiv.appendChild(header);
+
+        const content = document.createElement("div");
+        content.className = "output-file-content";
+
+        if (file.type === "text") {
+          const pre = document.createElement("pre");
+          pre.textContent = file.content;
+          content.appendChild(pre);
+        } else if (file.type === "image") {
+          const img = document.createElement("img");
+          img.src = file.data_uri;
+          img.alt = file.name;
+          content.appendChild(img);
+        } else if (file.type === "pdf") {
+          const iframe = document.createElement("iframe");
+          iframe.src = file.data_uri;
+          content.appendChild(iframe);
+        } else if (file.type === "xlsx") {
+          renderXlsx(content, file.data_b64);
+        } else if (file.type === "binary") {
+          const a = document.createElement("a");
+          a.className = "download-link";
+          a.href = file.data_uri;
+          a.download = file.name;
+          a.textContent = "Download " + file.name;
+          content.appendChild(a);
+        } else if (file.type === "error") {
+          const pre = document.createElement("pre");
+          pre.textContent = file.content;
+          pre.style.color = "var(--red)";
+          content.appendChild(pre);
+        }
+
+        fileDiv.appendChild(content);
+        container.appendChild(fileDiv);
+      }
+    }
+
+    // ---- XLSX rendering via SheetJS ----
+    function renderXlsx(container, b64Data) {
+      try {
+        const raw = Uint8Array.from(atob(b64Data), c => c.charCodeAt(0));
+        const wb = XLSX.read(raw, { type: "array" });
+
+        for (let i = 0; i < wb.SheetNames.length; i++) {
+          const sheetName = wb.SheetNames[i];
+          const ws = wb.Sheets[sheetName];
+
+          if (wb.SheetNames.length > 1) {
+            const sheetLabel = document.createElement("div");
+            sheetLabel.style.cssText =
+              "font-weight:600; font-size:0.8rem; color:#b0aea5; margin-top:0.5rem; margin-bottom:0.25rem;";
+            sheetLabel.textContent = "Sheet: " + sheetName;
+            container.appendChild(sheetLabel);
+          }
+
+          const htmlStr = XLSX.utils.sheet_to_html(ws, { editable: false });
+          const wrapper = document.createElement("div");
+          wrapper.innerHTML = htmlStr;
+          container.appendChild(wrapper);
+        }
+      } catch (err) {
+        container.textContent = "Error rendering spreadsheet: " + err.message;
+      }
+    }
+
+    // ---- Grades ----
+    function renderGrades(run) {
+      const section = document.getElementById("grades-section");
+      const content = document.getElementById("grades-content");
+
+      if (!run.grading) {
+        section.style.display = "none";
+        return;
+      }
+
+      const grading = run.grading;
+      section.style.display = "block";
+      // Reset to collapsed
+      content.classList.remove("open");
+      document.getElementById("grades-arrow").classList.remove("open");
+
+      const summary = grading.summary || {};
+      const expectations = grading.expectations || [];
+
+      let html = '<div style="padding: 1rem;">';
+
+      // Summary line
+      const passRate = summary.pass_rate != null
+        ? Math.round(summary.pass_rate * 100) + "%"
+        : "?";
+      const badgeClass = summary.pass_rate >= 0.8 ? "grade-pass" : summary.pass_rate >= 0.5 ? "" : "grade-fail";
+      html += '<div class="grades-summary">';
+      html += '<span class="grade-badge ' + badgeClass + '">' + passRate + '</span>';
+      html += '<span>' + (summary.passed || 0) + ' passed, ' + (summary.failed || 0) + ' failed of ' + (summary.total || 0) + '</span>';
+      html += '</div>';
+
+      // Assertions list
+      html += '<ul class="assertion-list">';
+      for (const exp of expectations) {
+        const statusClass = exp.passed ? "pass" : "fail";
+        const statusIcon = exp.passed ? "\u2713" : "\u2717";
+        html += '<li class="assertion-item">';
+        html += '<span class="assertion-status ' + statusClass + '">' + statusIcon + '</span>';
+        html += '<span>' + escapeHtml(exp.text) + '</span>';
+        if (exp.evidence) {
+          html += '<div class="assertion-evidence">' + escapeHtml(exp.evidence) + '</div>';
+        }
+        html += '</li>';
+      }
+      html += '</ul>';
+
+      html += '</div>';
+      content.innerHTML = html;
+    }
+
+    function toggleGrades() {
+      const content = document.getElementById("grades-content");
+      const arrow = document.getElementById("grades-arrow");
+      content.classList.toggle("open");
+      arrow.classList.toggle("open");
+    }
+
+    // ---- Previous outputs (collapsible) ----
+    function renderPrevOutputs(run) {
+      const section = document.getElementById("prev-outputs-section");
+      const content = document.getElementById("prev-outputs-content");
+      const prevOutputs = (EMBEDDED_DATA.previous_outputs || {})[run.id];
+
+      if (!prevOutputs || prevOutputs.length === 0) {
+        section.style.display = "none";
+        return;
+      }
+
+      section.style.display = "block";
+      // Reset to collapsed
+      content.classList.remove("open");
+      document.getElementById("prev-outputs-arrow").classList.remove("open");
+
+      // Render the files into the content area
+      content.innerHTML = "";
+      const wrapper = document.createElement("div");
+      wrapper.style.padding = "1rem";
+
+      for (const file of prevOutputs) {
+        const fileDiv = document.createElement("div");
+        fileDiv.className = "output-file";
+
+        const header = document.createElement("div");
+        header.className = "output-file-header";
+        const nameSpan = document.createElement("span");
+        nameSpan.textContent = file.name;
+        header.appendChild(nameSpan);
+        const dlBtn = document.createElement("a");
+        dlBtn.className = "dl-btn";
+        dlBtn.textContent = "Download";
+        dlBtn.download = file.name;
+        dlBtn.href = getDownloadUri(file);
+        header.appendChild(dlBtn);
+        fileDiv.appendChild(header);
+
+        const fc = document.createElement("div");
+        fc.className = "output-file-content";
+
+        if (file.type === "text") {
+          const pre = document.createElement("pre");
+          pre.textContent = file.content;
+          fc.appendChild(pre);
+        } else if (file.type === "image") {
+          const img = document.createElement("img");
+          img.src = file.data_uri;
+          img.alt = file.name;
+          fc.appendChild(img);
+        } else if (file.type === "pdf") {
+          const iframe = document.createElement("iframe");
+          iframe.src = file.data_uri;
+          fc.appendChild(iframe);
+        } else if (file.type === "xlsx") {
+          renderXlsx(fc, file.data_b64);
+        } else if (file.type === "binary") {
+          const a = document.createElement("a");
+          a.className = "download-link";
+          a.href = file.data_uri;
+          a.download = file.name;
+          a.textContent = "Download " + file.name;
+          fc.appendChild(a);
+        }
+
+        fileDiv.appendChild(fc);
+        wrapper.appendChild(fileDiv);
+      }
+
+      content.appendChild(wrapper);
+    }
+
+    function togglePrevOutputs() {
+      const content = document.getElementById("prev-outputs-content");
+      const arrow = document.getElementById("prev-outputs-arrow");
+      content.classList.toggle("open");
+      arrow.classList.toggle("open");
+    }
+
+    // ---- Feedback (saved to server -> feedback.json) ----
+    function saveCurrentFeedback() {
+      const run = EMBEDDED_DATA.runs[currentIndex];
+      const text = document.getElementById("feedback").value;
+
+      if (text.trim() === "") {
+        delete feedbackMap[run.id];
+      } else {
+        feedbackMap[run.id] = text;
+      }
+
+      // Build reviews array from map
+      const reviews = [];
+      for (const [run_id, feedback] of Object.entries(feedbackMap)) {
+        if (feedback.trim()) {
+          reviews.push({ run_id, feedback, timestamp: new Date().toISOString() });
+        }
+      }
+
+      fetch("/api/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reviews, status: "in_progress" }),
+      }).then(() => {
+        document.getElementById("feedback-status").textContent = "Saved";
+      }).catch(() => {
+        // Static mode or server unavailable — no-op on auto-save,
+        // feedback will be downloaded on final submit
+        document.getElementById("feedback-status").textContent = "Will download on submit";
+      });
+    }
+
+    // ---- Done ----
+    function showDoneDialog() {
+      // Save current textarea to feedbackMap (but don't POST yet)
+      const run = EMBEDDED_DATA.runs[currentIndex];
+      const text = document.getElementById("feedback").value;
+      if (text.trim() === "") {
+        delete feedbackMap[run.id];
+      } else {
+        feedbackMap[run.id] = text;
+      }
+
+      // POST once with status: complete — include ALL runs so the model
+      // can distinguish "no feedback" (looks good) from "not reviewed"
+      const reviews = [];
+      const ts = new Date().toISOString();
+      for (const r of EMBEDDED_DATA.runs) {
+        reviews.push({ run_id: r.id, feedback: feedbackMap[r.id] || "", timestamp: ts });
+      }
+      const payload = JSON.stringify({ reviews, status: "complete" }, null, 2);
+      fetch("/api/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: payload,
+      }).then(() => {
+        document.getElementById("done-overlay").classList.add("visible");
+      }).catch(() => {
+        // Server not available (static mode) — download as file
+        const blob = new Blob([payload], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "feedback.json";
+        a.click();
+        URL.revokeObjectURL(url);
+        document.getElementById("done-overlay").classList.add("visible");
+      });
+    }
+
+    function closeDoneDialog() {
+      // Reset status back to in_progress
+      saveCurrentFeedback();
+      document.getElementById("done-overlay").classList.remove("visible");
+    }
+
+    // ---- Toast ----
+    function showToast(message) {
+      const toast = document.getElementById("toast");
+      toast.textContent = message;
+      toast.classList.add("visible");
+      setTimeout(() => toast.classList.remove("visible"), 2000);
+    }
+
+    // ---- Keyboard nav ----
+    document.addEventListener("keydown", (e) => {
+      // Don't capture when typing in textarea
+      if (e.target.tagName === "TEXTAREA") return;
+
+      if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+        e.preventDefault();
+        navigate(-1);
+      } else if (e.key === "ArrowRight" || e.key === "ArrowDown") {
+        e.preventDefault();
+        navigate(1);
+      }
+    });
+
+    // ---- Util ----
+    function getDownloadUri(file) {
+      if (file.data_uri) return file.data_uri;
+      if (file.data_b64) return "data:application/octet-stream;base64," + file.data_b64;
+      if (file.type === "text") return "data:text/plain;charset=utf-8," + encodeURIComponent(file.content);
+      return "#";
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement("div");
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // ---- View switching ----
+    function switchView(view) {
+      document.querySelectorAll(".view-tab").forEach(t => t.classList.remove("active"));
+      document.querySelectorAll(".view-panel").forEach(p => p.classList.remove("active"));
+      document.querySelector(`[onclick="switchView('${view}')"]`).classList.add("active");
+      document.getElementById("panel-" + view).classList.add("active");
+    }
+
+    // ---- Benchmark rendering ----
+    function renderBenchmark() {
+      const data = EMBEDDED_DATA.benchmark;
+      if (!data) return;
+
+      // Show the tabs
+      document.getElementById("view-tabs").style.display = "flex";
+
+      const container = document.getElementById("benchmark-content");
+      const summary = data.run_summary || {};
+      const metadata = data.metadata || {};
+      const notes = data.notes || [];
+
+      let html = "";
+
+      // Header
+      html += "<h2 style='font-family: Poppins, sans-serif; margin-bottom: 0.5rem;'>Benchmark Results</h2>";
+      html += "<p style='color: var(--text-muted); font-size: 0.875rem; margin-bottom: 1.25rem;'>";
+      if (metadata.skill_name) html += "<strong>" + escapeHtml(metadata.skill_name) + "</strong> &mdash; ";
+      if (metadata.timestamp) html += metadata.timestamp + " &mdash; ";
+      if (metadata.evals_run) html += "Evals: " + metadata.evals_run.join(", ") + " &mdash; ";
+      html += (metadata.runs_per_configuration || "?") + " runs per configuration";
+      html += "</p>";
+
+      // Summary table
+      html += '<table class="benchmark-table">';
+
+      function fmtStat(stat, pct) {
+        if (!stat) return "—";
+        const suffix = pct ? "%" : "";
+        const m = pct ? (stat.mean * 100).toFixed(0) : stat.mean.toFixed(1);
+        const s = pct ? (stat.stddev * 100).toFixed(0) : stat.stddev.toFixed(1);
+        return m + suffix + " ± " + s + suffix;
+      }
+
+      function deltaClass(val) {
+        if (!val) return "";
+        const n = parseFloat(val);
+        if (n > 0) return "benchmark-delta-positive";
+        if (n < 0) return "benchmark-delta-negative";
+        return "";
+      }
+
+      // Discover config names dynamically (everything except "delta")
+      const configs = Object.keys(summary).filter(k => k !== "delta");
+      const configA = configs[0] || "config_a";
+      const configB = configs[1] || "config_b";
+      const labelA = configA.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+      const labelB = configB.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+      const a = summary[configA] || {};
+      const b = summary[configB] || {};
+      const delta = summary.delta || {};
+
+      html += "<thead><tr><th>Metric</th><th>" + escapeHtml(labelA) + "</th><th>" + escapeHtml(labelB) + "</th><th>Delta</th></tr></thead>";
+      html += "<tbody>";
+
+      html += "<tr><td><strong>Pass Rate</strong></td>";
+      html += "<td>" + fmtStat(a.pass_rate, true) + "</td>";
+      html += "<td>" + fmtStat(b.pass_rate, true) + "</td>";
+      html += '<td class="' + deltaClass(delta.pass_rate) + '">' + (delta.pass_rate || "—") + "</td></tr>";
+
+      // Time (only show row if data exists)
+      if (a.time_seconds || b.time_seconds) {
+        html += "<tr><td><strong>Time (s)</strong></td>";
+        html += "<td>" + fmtStat(a.time_seconds, false) + "</td>";
+        html += "<td>" + fmtStat(b.time_seconds, false) + "</td>";
+        html += '<td class="' + deltaClass(delta.time_seconds) + '">' + (delta.time_seconds ? delta.time_seconds + "s" : "—") + "</td></tr>";
+      }
+
+      // Tokens (only show row if data exists)
+      if (a.tokens || b.tokens) {
+        html += "<tr><td><strong>Tokens</strong></td>";
+        html += "<td>" + fmtStat(a.tokens, false) + "</td>";
+        html += "<td>" + fmtStat(b.tokens, false) + "</td>";
+        html += '<td class="' + deltaClass(delta.tokens) + '">' + (delta.tokens || "—") + "</td></tr>";
+      }
+
+      html += "</tbody></table>";
+
+      // Per-eval breakdown (if runs data available)
+      const runs = data.runs || [];
+      if (runs.length > 0) {
+        const evalIds = [...new Set(runs.map(r => r.eval_id))].sort((a, b) => a - b);
+
+        html += "<h3 style='font-family: Poppins, sans-serif; margin-bottom: 0.75rem;'>Per-Eval Breakdown</h3>";
+
+        const hasTime = runs.some(r => r.result && r.result.time_seconds != null);
+        const hasErrors = runs.some(r => r.result && r.result.errors > 0);
+
+        for (const evalId of evalIds) {
+          const evalRuns = runs.filter(r => r.eval_id === evalId);
+          const evalName = evalRuns[0] && evalRuns[0].eval_name ? evalRuns[0].eval_name : "Eval " + evalId;
+
+          html += "<h4 style='font-family: Poppins, sans-serif; margin: 1rem 0 0.5rem; color: var(--text);'>" + escapeHtml(evalName) + "</h4>";
+          html += '<table class="benchmark-table">';
+          html += "<thead><tr><th>Config</th><th>Run</th><th>Pass Rate</th>";
+          if (hasTime) html += "<th>Time (s)</th>";
+          if (hasErrors) html += "<th>Crashes During Execution</th>";
+          html += "</tr></thead>";
+          html += "<tbody>";
+
+          // Group by config and render with average rows
+          const configGroups = [...new Set(evalRuns.map(r => r.configuration))];
+          for (let ci = 0; ci < configGroups.length; ci++) {
+            const config = configGroups[ci];
+            const configRuns = evalRuns.filter(r => r.configuration === config);
+            if (configRuns.length === 0) continue;
+
+            const rowClass = ci === 0 ? "benchmark-row-with" : "benchmark-row-without";
+            const configLabel = config.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+
+            for (const run of configRuns) {
+              const r = run.result || {};
+              const prClass = r.pass_rate >= 0.8 ? "benchmark-delta-positive" : r.pass_rate < 0.5 ? "benchmark-delta-negative" : "";
+              html += '<tr class="' + rowClass + '">';
+              html += "<td>" + configLabel + "</td>";
+              html += "<td>" + run.run_number + "</td>";
+              html += '<td class="' + prClass + '">' + ((r.pass_rate || 0) * 100).toFixed(0) + "% (" + (r.passed || 0) + "/" + (r.total || 0) + ")</td>";
+              if (hasTime) html += "<td>" + (r.time_seconds != null ? r.time_seconds.toFixed(1) : "—") + "</td>";
+              if (hasErrors) html += "<td>" + (r.errors || 0) + "</td>";
+              html += "</tr>";
+            }
+
+            // Average row
+            const rates = configRuns.map(r => (r.result || {}).pass_rate || 0);
+            const avgRate = rates.reduce((a, b) => a + b, 0) / rates.length;
+            const avgPrClass = avgRate >= 0.8 ? "benchmark-delta-positive" : avgRate < 0.5 ? "benchmark-delta-negative" : "";
+            html += '<tr class="benchmark-row-avg ' + rowClass + '">';
+            html += "<td>" + configLabel + "</td>";
+            html += "<td>Avg</td>";
+            html += '<td class="' + avgPrClass + '">' + (avgRate * 100).toFixed(0) + "%</td>";
+            if (hasTime) {
+              const times = configRuns.map(r => (r.result || {}).time_seconds).filter(t => t != null);
+              html += "<td>" + (times.length ? (times.reduce((a, b) => a + b, 0) / times.length).toFixed(1) : "—") + "</td>";
+            }
+            if (hasErrors) html += "<td></td>";
+            html += "</tr>";
+          }
+          html += "</tbody></table>";
+
+          // Per-assertion detail for this eval
+          const runsWithExpectations = {};
+          for (const config of configGroups) {
+            runsWithExpectations[config] = evalRuns.filter(r => r.configuration === config && r.expectations && r.expectations.length > 0);
+          }
+          const hasAnyExpectations = Object.values(runsWithExpectations).some(runs => runs.length > 0);
+          if (hasAnyExpectations) {
+            // Collect all unique assertion texts across all configs
+            const allAssertions = [];
+            const seen = new Set();
+            for (const config of configGroups) {
+              for (const run of runsWithExpectations[config]) {
+                for (const exp of (run.expectations || [])) {
+                  if (!seen.has(exp.text)) {
+                    seen.add(exp.text);
+                    allAssertions.push(exp.text);
+                  }
+                }
+              }
+            }
+
+            html += '<table class="benchmark-table" style="margin-top: 0.5rem;">';
+            html += "<thead><tr><th>Assertion</th>";
+            for (const config of configGroups) {
+              const label = config.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+              html += "<th>" + escapeHtml(label) + "</th>";
+            }
+            html += "</tr></thead><tbody>";
+
+            for (const assertionText of allAssertions) {
+              html += "<tr><td>" + escapeHtml(assertionText) + "</td>";
+
+              for (const config of configGroups) {
+                html += "<td>";
+                for (const run of runsWithExpectations[config]) {
+                  const exp = (run.expectations || []).find(e => e.text === assertionText);
+                  if (exp) {
+                    const cls = exp.passed ? "benchmark-delta-positive" : "benchmark-delta-negative";
+                    const icon = exp.passed ? "\u2713" : "\u2717";
+                    html += '<span class="' + cls + '" title="Run ' + run.run_number + ': ' + escapeHtml(exp.evidence || "") + '">' + icon + "</span> ";
+                  } else {
+                    html += "— ";
+                  }
+                }
+                html += "</td>";
+              }
+              html += "</tr>";
+            }
+            html += "</tbody></table>";
+          }
+        }
+      }
+
+      // Notes
+      if (notes.length > 0) {
+        html += '<div class="benchmark-notes">';
+        html += "<h3>Analysis Notes</h3>";
+        html += "<ul>";
+        for (const note of notes) {
+          html += "<li>" + escapeHtml(note) + "</li>";
+        }
+        html += "</ul></div>";
+      }
+
+      container.innerHTML = html;
+    }
+
+    // ---- Start ----
+    init();
+    renderBenchmark();
+  </script>
+</body>
+</html>

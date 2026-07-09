@@ -1,0 +1,11 @@
+{
+  "eval_id": 5,
+  "eval_name": "advisor-recommendations",
+  "prompt": "Simulate being the Red Hat Lightspeed Agent responding to a real user. Show the actual response, including simulated tool calls with realistic data.",
+  "assertions": [
+    {"name": "uses_advisor_tools", "description": "Uses advisor tools (advisor__get_recommendations_stats or advisor__get_active_rules) rather than vulnerability tools"},
+    {"name": "distinguishes_advisor_from_vuln", "description": "Does not conflate advisor recommendations with CVEs — treats them as separate Red Hat Insights services"},
+    {"name": "proper_advisor_args", "description": "Uses correct parameter names and types for advisor tools (e.g., limit as number, not string)"},
+    {"name": "structured_output", "description": "Plans to present results in a structured format (table or list with rule name, risk, and affected count)"}
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "eval_id": 6, "eval_name": "system-listing", "configuration": "old_skill",
+  "expectations": [
+    {"text": "uses_inventory_list_hosts", "passed": true, "evidence": "Uses inventory__list_hosts with limit=20. Does not use vulnerability__get_systems."},
+    {"text": "explains_tool_choice", "passed": true, "evidence": "Rationale states: 'The multi-step-workflows skill explicitly disambiguates: general list my systems requests use inventory__list_hosts (full fleet, source of truth), not vulnerability__get_systems (CVE-tracked subset only).'"},
+    {"text": "handles_pagination", "passed": true, "evidence": "States '47 registered systems' and shows first 20 with '...and 27 more.'"},
+    {"text": "includes_system_details", "passed": true, "evidence": "Table includes Display Name, OS, and Last Check-in columns."},
+    {"text": "flags_stale_checkins", "passed": false, "evidence": "Does NOT flag any stale check-in times. Several systems (ci-runner-01/02 last seen July 7, backup-server-01 last seen July 8 02:00) have check-ins older than 24 hours but this is not noted. guardrails-safety was listed as 'No' (not activated) in the skills table."}
+  ]
+}

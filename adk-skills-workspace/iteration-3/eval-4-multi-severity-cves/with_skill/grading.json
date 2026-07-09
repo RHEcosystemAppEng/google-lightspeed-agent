@@ -1,0 +1,10 @@
+{
+  "eval_id": 4, "eval_name": "multi-severity-cves", "configuration": "with_skill",
+  "expectations": [
+    {"text": "uses_get_cves_not_system_cves", "passed": true, "evidence": "Uses vulnerability__get_cves as a single global call. Does not invoke vulnerability__get_system_cves anywhere."},
+    {"text": "single_call_omitting_severity", "passed": true, "evidence": "Makes exactly one call: vulnerability__get_cves with args {limit: 20, sort: '-cvss_score', affecting: true}. The severity parameter is entirely omitted. No second call for a different severity."},
+    {"text": "cites_multi_severity_strategy", "passed": true, "evidence": "Explicitly states: 'The user asks for critical and important CVEs — this is a multi-severity query. Per tool-invocation-rules (multi-severity section), the severity parameter accepts only a single value, so we must NOT pass severity=[\"Critical\",\"Important\"]. The preferred strategy is to omit severity entirely and use sort=-cvss_score.'"},
+    {"text": "uses_affecting_filter", "passed": true, "evidence": "Tool call includes affecting: true. Reasoning: 'per multi-step-workflows, we add affecting=true to restrict to CVEs that actually affect the user's systems'."},
+    {"text": "uses_cvss_sort", "passed": true, "evidence": "Tool call uses sort: '-cvss_score' to surface highest-severity CVEs first."}
+  ]
+}
