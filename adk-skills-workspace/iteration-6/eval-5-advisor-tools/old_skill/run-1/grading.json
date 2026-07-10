@@ -1,0 +1,37 @@
+{
+  "eval_id": 5,
+  "eval_name": "advisor-tools",
+  "configuration": "old_skill",
+  "expectations": [
+    {
+      "text": "Uses advisor tools (advisor__get_recommendations_stats or advisor__get_active_rules) rather than vulnerability tools",
+      "passed": true,
+      "evidence": "Step 1 uses advisor__get_recommendations_stats, Step 2 uses advisor__get_active_rules. No vulnerability tools are called."
+    },
+    {
+      "text": "Does not conflate advisor recommendations with CVEs — treats them as separate Red Hat Insights services",
+      "passed": true,
+      "evidence": "The response uses only advisor tools and treats them as a distinct service. Skill reference 7 (guardrails-safety) notes: 'the overlap between Advisor recommendations (configuration best practices) and Vulnerability data (known CVEs)' — showing awareness that they are separate services."
+    },
+    {
+      "text": "Uses correct parameter names and types for advisor tools (e.g., limit as number, not string)",
+      "passed": true,
+      "evidence": "Step 2 args: limit=20 (number), sort='-total_risk' (string). Types are correct."
+    },
+    {
+      "text": "When using the impacting parameter, passes it as a string 'true' — NOT as a JSON boolean",
+      "passed": false,
+      "evidence": "The old_skill response does NOT use the impacting parameter at all. Step 2 args are only {\"limit\": 20, \"sort\": \"-total_risk\"} — impacting is omitted entirely. Per the expected output, impacting='true' (as string) must be included to filter to only rules that are actively impacting the user's systems. Without it, the query returns all rules including non-impacting ones."
+    },
+    {
+      "text": "Sorts advisor recommendations by total risk descending (sort='-total_risk')",
+      "passed": true,
+      "evidence": "Step 2 includes sort='-total_risk'. The response states: 'sorted by total risk descending so the most impactful recommendations appear first.'"
+    },
+    {
+      "text": "Plans to present results in a structured format (table or list with rule name, risk, and affected count)",
+      "passed": true,
+      "evidence": "The 'Example Response Format' section shows results grouped by severity (Critical Risk, Important Risk) with tables containing Rule, Category, Affected Systems columns."
+    }
+  ]
+}

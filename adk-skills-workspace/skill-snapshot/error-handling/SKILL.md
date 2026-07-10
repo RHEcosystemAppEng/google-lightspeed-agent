@@ -7,7 +7,7 @@ description: |
   strategies, narrowing queries, and interpreting error codes. [PREFERRED]
 metadata:
   author: red-hat
-  version: "1.1"
+  version: "1.2"
 ---
 
 ## Oversized Tool Results
@@ -18,8 +18,8 @@ narrower query. Apply these strategies in order:
 
 1. **Reduce page size**: If the tool supports `limit`/`per_page`, reduce it
    (e.g., from 100 to 20).
-2. **Add filters**: Apply severity, date range, status, or other filters to narrow
-   the result set (e.g., `severity=Critical`, `status=Applicable`).
+2. **Add filters**: Apply impact level, date range, or other filters to narrow
+   the result set (e.g., `impact="7"` for Critical-only, `advisory_available="true"`).
 3. **Scope to specific systems**: Instead of querying all systems, target a specific
    host or group.
 4. **Filter fields**: If the tool supports field selection, request only the fields
@@ -28,7 +28,7 @@ narrower query. Apply these strategies in order:
    explain that the result set is very large and ask the user to narrow their request.
 
 Example: If `vulnerability__get_cves` returns `tool_result_too_large`, retry with
-`limit=20, severity=Critical` before falling back to asking the user.
+`limit=20, impact="7"` before falling back to asking the user.
 
 ## HTTP Status Codes
 

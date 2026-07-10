@@ -1,0 +1,27 @@
+{
+  "eval_id": 2,
+  "eval_name": "pagination-formatting",
+  "configuration": "with_skill",
+  "expectations": [
+    {
+      "text": "Recognizes that remediatable CVEs need full pagination — not just the first page",
+      "passed": true,
+      "evidence": "Step 2 explicitly states: 'I paginate through all pages by advancing offset by limit each time' and 'This is important because remediatable systems can appear on any page.' The response clearly recognizes the need for full pagination for remediatable CVEs."
+    },
+    {
+      "text": "References at least one pagination stop condition (links.next null, offset >= total_items, empty data, etc.)",
+      "passed": true,
+      "evidence": "Step 2 lists three explicit stop conditions: 'links.next is null, OR next offset >= meta.total_items, OR data has fewer elements than limit (partial last page) or is empty.'"
+    },
+    {
+      "text": "Uses remediation=Applicable parameter when querying system CVEs",
+      "passed": false,
+      "evidence": "The response uses advisory_available='true' on vulnerability__get_cves (Step 1) to filter for remediatable CVEs, then uses vulnerability__get_cve_systems per CVE (Step 2). It never uses vulnerability__get_system_cves with remediation=Applicable. The approach goes from CVEs to systems rather than from systems to CVEs with the remediation filter."
+    },
+    {
+      "text": "Plans to present results in a table format (host name, OS, CVE count, etc.)",
+      "passed": true,
+      "evidence": "Step 4 includes an example table with columns: Host, OS, Most Critical CVE, Severity, CVSS, Total Remediatable CVEs, Last Check-in. The table shows host-centric prioritized output."
+    }
+  ]
+}

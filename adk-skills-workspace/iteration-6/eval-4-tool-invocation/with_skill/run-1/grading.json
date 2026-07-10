@@ -1,0 +1,32 @@
+{
+  "eval_id": 4,
+  "eval_name": "tool-invocation",
+  "configuration": "with_skill",
+  "expectations": [
+    {
+      "text": "Uses vulnerability__get_cves (global) rather than vulnerability__get_system_cves (per-system) since no specific system is named",
+      "passed": true,
+      "evidence": "Step 1 uses vulnerability__get_cves. The response explicitly states: 'Per the multi-step-workflows skill (CVE query disambiguation), when no specific system is named, use vulnerability__get_cves -- not vulnerability__get_system_cves.'"
+    },
+    {
+      "text": "Uses the 'impact' parameter (numeric string like '5,7') instead of the nonexistent 'severity' parameter",
+      "passed": true,
+      "evidence": "Step 1 uses impact='5,7'. The response explains: 'Per the tool-invocation-rules skill, the impact parameter uses comma-separated numeric IDs. 7 = Critical, 5 = Important. This single parameter covers both severity levels in one call.'"
+    },
+    {
+      "text": "All parameter names match the actual MCP tool schema. Does NOT use any nonexistent parameter names",
+      "passed": true,
+      "evidence": "Parameters used: impact, sort, advisory_available, limit. All match the MCP schema. No use of nonexistent parameters like 'severity', 'affecting', or other invalid names. The response even notes it matches 'the recommended defaults for common queries pattern from the tool-invocation-rules skill.'"
+    },
+    {
+      "text": "Sorts by CVSS score descending (sort='-cvss_score')",
+      "passed": true,
+      "evidence": "Step 1 includes sort='-cvss_score'. The response states: 'Sorting by descending CVSS score surfaces the most severe vulnerabilities first. The tool-invocation-rules skill states: always include sort for top or severity queries.'"
+    },
+    {
+      "text": "Uses advisory_available='true' (as a string, not boolean)",
+      "passed": true,
+      "evidence": "Step 1 includes advisory_available='true'. The response explicitly notes: 'This is a string \"true\", not a JSON boolean true -- the MCP schema requires string-typed booleans for this parameter.'"
+    }
+  ]
+}

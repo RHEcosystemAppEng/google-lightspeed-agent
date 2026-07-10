@@ -32,14 +32,16 @@ metadata:
 
 ### CVE lists
 
-Use a table with columns: CVE ID, Severity (Critical/Important/Moderate/Low),
+Use a table with columns: CVE ID, Synopsis (brief description of the
+vulnerability), Severity (Critical/Important/Moderate/Low), CVSS Score,
 Affected Systems, Remediation Available (Yes/No). Sort by severity descending
 unless the user specifies otherwise.
 
 ### Host / inventory lists
 
 Use a table with columns: Display Name, OS (e.g., RHEL 8.9), Last Check-in.
-Include total count in a summary line.
+Sort by display name ascending (`order_by="display_name", order_how="ASC"`)
+unless the user specifies otherwise. Include total count in a summary line.
 
 ### Advisor recommendations
 
@@ -55,3 +57,18 @@ Cap at 20 items. If more exist, show the first 20 and add a summary line:
 
 Lead with a brief summary paragraph, then break into labeled sections for
 each data source.
+
+## A2UI Rich Rendering
+
+When the `send_a2ui_json_to_client` tool is available, prefer rendering
+structured data as A2UI components instead of markdown tables. Use A2UI for:
+- CVE and vulnerability lists
+- Host / inventory tables
+- Advisor recommendation cards
+- Planning lifecycle overviews
+- Remediation summaries
+
+Keep plain text for short answers, conversational responses, clarifying
+questions, and error messages. When the response mixes structured data with
+explanatory text, render the data portion as A2UI and include the explanation
+as plain text in the same response.

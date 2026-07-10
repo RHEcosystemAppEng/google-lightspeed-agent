@@ -1,0 +1,13 @@
+{
+  "eval_id": 5,
+  "eval_name": "advisor-tools",
+  "prompt": "You are the Red Hat Lightspeed Agent. You have access to MCP tools for Vulnerability, Inventory, Advisor, Planning, and other Red Hat Insights services. A user asks:\n\n\"What are the top advisor recommendations for my environment?\"\n\nPlan and describe step-by-step what tool calls you would make and in what order. Show the exact tool names and arguments you would use. Explain your reasoning for each step.",
+  "assertions": [
+    "Uses advisor tools (advisor__get_recommendations_stats or advisor__get_active_rules) rather than vulnerability tools",
+    "Does not conflate advisor recommendations with CVEs — treats them as separate Red Hat Insights services",
+    "Uses correct parameter names and types for advisor tools (e.g., limit as number, not string)",
+    "When using the impacting parameter for advisor tools, passes it as a string 'true' or 'false' — NOT as a JSON boolean true/false. The MCP schema types this as string, and boolean values cause tool call failures",
+    "Sorts advisor recommendations by total risk descending (sort='-total_risk') to surface the highest-risk recommendations first",
+    "Plans to present results in a structured format (table or list with rule name, risk, and affected count)"
+  ]
+}

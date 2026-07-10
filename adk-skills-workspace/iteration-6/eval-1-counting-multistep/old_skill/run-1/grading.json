@@ -1,0 +1,32 @@
+{
+  "eval_id": 1,
+  "eval_name": "counting-multistep",
+  "configuration": "old_skill",
+  "expectations": [
+    {
+      "text": "Uses limit=1 to get count from response metadata instead of fetching all pages",
+      "passed": true,
+      "evidence": "Step 1 uses vulnerability__get_cves with limit=1 and states: 'Per the efficient-counting skill, I should use limit=1 and read meta.total_items from the response metadata rather than fetching all pages.' Step 2 also uses limit=1 for inventory counting."
+    },
+    {
+      "text": "Uses inventory__list_hosts first to find RHEL 8 systems, then vulnerability tools for CVE data",
+      "passed": false,
+      "evidence": "The response uses inventory__list_hosts (Step 2) to find RHEL 8 systems, but NOT first — vulnerability__get_cves is called first (Step 1). The tool chain order is: (1) vulnerability__get_cves, (2) inventory__list_hosts, (3) vulnerability__get_cves again, (4) vulnerability__get_cve_systems. inventory__list_hosts is not the first tool called."
+    },
+    {
+      "text": "Arguments use correct JSON types — numbers as numbers, booleans as booleans, not strings",
+      "passed": true,
+      "evidence": "Numbers are passed as numbers: limit=1, limit=5. Booleans are passed as JSON booleans: known_exploit=true, affecting=true. Strings as strings: severity='Critical'. The types are consistent with the assertion's requirement."
+    },
+    {
+      "text": "Applies known_exploit=true (or equivalent) filter parameter",
+      "passed": true,
+      "evidence": "Step 1 includes known_exploit: true in the arguments. Step 3 also carries the same filter."
+    },
+    {
+      "text": "Applies severity=Critical filter parameter",
+      "passed": true,
+      "evidence": "Step 1 uses severity='Critical' as a filter parameter. The response states: 'severity=Critical, known_exploit=true' in the tool call arguments."
+    }
+  ]
+}

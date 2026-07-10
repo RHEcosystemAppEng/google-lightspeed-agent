@@ -1,0 +1,37 @@
+{
+  "eval_id": 6,
+  "eval_name": "inventory-listing",
+  "configuration": "with_skill",
+  "expectations": [
+    {
+      "text": "Uses inventory__list_hosts as the primary tool — not vulnerability__get_systems",
+      "passed": true,
+      "evidence": "Step 1 uses inventory__list_hosts. The response explicitly rejects vulnerability__get_systems: 'Two tools list systems: inventory__list_hosts (all registered systems) and vulnerability__get_systems (only CVE-tracked systems)... This is a general listing request with no vulnerability context, so inventory__list_hosts is the correct tool.'"
+    },
+    {
+      "text": "Uses per_page (not limit) and page (not offset) as the pagination parameters",
+      "passed": true,
+      "evidence": "Step 1 args: per_page=10, page=1. The response explains: 'per_page: 10 — The tool-invocation-rules skill mandates: use 10 on first call' and 'page: 1 — Start at the beginning (pages are 1-indexed per the schema).'"
+    },
+    {
+      "text": "Uses order_by='display_name' and order_how='ASC' to sort systems alphabetically",
+      "passed": true,
+      "evidence": "Step 1 includes order_by='display_name' and order_how='ASC'. The response states: 'order_by: \"display_name\" — The tool-invocation-rules skill says: always include display_name for user-facing listings.'"
+    },
+    {
+      "text": "Mentions or plans for pagination if the system count exceeds the page size",
+      "passed": true,
+      "evidence": "Step 3 covers pagination: 'If total > 10: Present the first 10 systems in a table, then add a summary like: Showing 10 of 247 registered systems (sorted by name). Would you like me to show the next page or filter by a specific criteria?'"
+    },
+    {
+      "text": "Plans to show useful system attributes (display name, OS, last check-in, or similar)",
+      "passed": true,
+      "evidence": "Step 2 shows a table with columns: Display Name, OS, Last Check-in. The response states: 'For each host in the results: display name, OS version, and last check-in timestamp.'"
+    },
+    {
+      "text": "Flags or notes systems whose last check-in is older than 24 hours",
+      "passed": false,
+      "evidence": "The response does NOT mention flagging stale check-ins. The guardrails-safety analysis in the Skill Analysis section (point 7) explicitly dismisses this: 'guardrails-safety — No edge cases triggered. This is a straightforward, in-scope inventory query.' There is no mention of the 24-hour stale data check anywhere in the response."
+    }
+  ]
+}

@@ -8,7 +8,7 @@ description: |
   system, or joining data across Red Hat Insights services. [PREFERRED]
 metadata:
   author: red-hat
-  version: "1.1"
+  version: "1.2"
 ---
 
 ## Multi-Step Tool Usage
@@ -21,7 +21,7 @@ For example:
 - "CVEs with known exploits affecting system X" -> find the host (Inventory),
   then query its CVEs with the appropriate filter parameters (Vulnerability).
 - "What critical CVEs affect my RHEL 8 systems?" -> find RHEL 8 systems
-  (Inventory), then get CVEs for those systems filtered by severity (Vulnerability).
+  (Inventory), then get CVEs for those systems filtered by impact (Vulnerability).
 
 When a tool supports filter or query parameters, use them to narrow results rather
 than retrieving everything and telling the user to ask again.
@@ -55,18 +55,18 @@ Two tools query CVEs — choose based on scope:
 | `vulnerability__get_system_cves` | CVEs for a **specific** system (requires system ID) | "CVEs on host X", "vulnerabilities affecting pool0-infra212" |
 
 **Selection rule:**
-- No specific system named -> `vulnerability__get_cves` (add `affecting=true`
-  to restrict to CVEs that affect at least one of the user's systems).
-- Specific system or hostname named -> resolve to a system ID first
+- No specific system named -> `vulnerability__get_cves` (add
+  `advisory_available="true"` to restrict to CVEs with available advisories).
+- Specific system or hostname named -> resolve to a system UUID first
   (via `inventory__list_hosts` or `inventory__find_host_by_name`), then
-  `vulnerability__get_system_cves`.
+  `vulnerability__get_system_cves` with the `system_uuid` parameter.
 
 ## Workflow Examples
 
 **"What are the most critical vulnerabilities on my systems?"**
--> `vulnerability__get_cves` with `sort=-cvss_score, affecting=true, limit=20`
-(do NOT pass `severity` when the user wants multiple severity levels — sorting by
-CVSS score returns the most critical results first) ->
+-> `vulnerability__get_cves` with `sort="-cvss_score", advisory_available="true",
+limit=20` (use `impact="5,7"` to filter to Important+Critical, or omit `impact`
+and let the CVSS sort surface the most severe first) ->
 for top CVEs, `vulnerability__get_cve_systems` -> cross-reference with
 `inventory__get_host_details` for system context -> synthesize prioritized report
 
@@ -78,7 +78,8 @@ summarize affected systems and advise on remediation steps
 
 **"Give me an overview of my infrastructure health"**
 -> `advisor__get_recommendations_stats` (advisor summary) ->
-`vulnerability__get_cves` with `sort=-cvss_score, affecting=true, limit=10` (top vulns) ->
+`vulnerability__get_cves` with `sort="-cvss_score", advisory_available="true",
+limit=10` (top vulns) ->
 `inventory__list_hosts` (fleet size) -> synthesize health report
 
 **"Am I ready to upgrade to RHEL 10?"**

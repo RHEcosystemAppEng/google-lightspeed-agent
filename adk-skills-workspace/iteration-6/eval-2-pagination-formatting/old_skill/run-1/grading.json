@@ -1,0 +1,27 @@
+{
+  "eval_id": 2,
+  "eval_name": "pagination-formatting",
+  "configuration": "old_skill",
+  "expectations": [
+    {
+      "text": "Recognizes that remediatable CVEs need full pagination — not just the first page",
+      "passed": true,
+      "evidence": "Step 4 explicitly quotes the pagination-handling skill: 'When the user asks for remediatable CVEs on a specific system, fetch all pages automatically. Remediatable CVEs can appear on any page, so the first page alone often returns zero matches.' The response paginates through all pages for each system."
+    },
+    {
+      "text": "References at least one pagination stop condition (links.next null, offset >= total_items, empty data, etc.)",
+      "passed": true,
+      "evidence": "Step 2 lists three stop conditions: 'links.next is null, OR next offset >= meta.total_items, OR data has fewer elements than limit (last partial page) or is empty.' Step 4 also references 'stop conditions are met (per pagination-handling skill).'"
+    },
+    {
+      "text": "Uses remediation=Applicable parameter when querying system CVEs",
+      "passed": true,
+      "evidence": "Step 3 uses vulnerability__get_system_cves with remediation='Applicable': 'args: {\"limit\": 1, \"offset\": 0, \"remediation\": \"Applicable\", \"sort\": \"-cvss_score\"}'. Step 4 repeats the same filter for full data fetch."
+    },
+    {
+      "text": "Plans to present results in a table format (host name, OS, CVE count, etc.)",
+      "passed": true,
+      "evidence": "Step 5 includes a per-system table with columns: CVE ID, Severity, CVSS Score, Remediation Available. Also mentions leading with a summary paragraph stating total systems and CVE counts."
+    }
+  ]
+}

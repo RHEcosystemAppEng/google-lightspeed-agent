@@ -1,0 +1,32 @@
+{
+  "eval_id": 1,
+  "eval_name": "counting-multistep",
+  "configuration": "with_skill",
+  "expectations": [
+    {
+      "text": "Uses limit=1 to get count from response metadata instead of fetching all pages",
+      "passed": true,
+      "evidence": "Step 1 uses vulnerability__get_cves with limit=1 and explicitly states: 'limit=1 means we only fetch 1 record but get the full count from meta.total_items — per the efficient-counting skill.' Step 2a also uses limit=1 for counting RHEL 8 systems."
+    },
+    {
+      "text": "Uses inventory__list_hosts first to find RHEL 8 systems, then vulnerability tools for CVE data",
+      "passed": false,
+      "evidence": "The response does NOT use inventory__list_hosts at all. Step 2 uses vulnerability__get_systems with rhel_versions='8' instead, explicitly stating: 'this requires using vulnerability__get_systems (which has the rhel_versions filter), not inventory__list_hosts (which does not filter by RHEL version directly).' The tool chain starts with vulnerability__get_cves (Step 1), then vulnerability__get_systems (Step 2)."
+    },
+    {
+      "text": "Arguments use correct JSON types — numbers as numbers, booleans as booleans, not strings",
+      "passed": true,
+      "evidence": "Numbers are passed as numbers: limit=1, offset=0, limit=5, limit=20. String-typed parameters (impact, known_exploit, advisory_available) are passed as strings per the MCP schema — the response explicitly explains: 'known_exploit=\"true\" is passed as a string, not a JSON boolean — this is a string-typed boolean per the tool-invocation-rules skill.' This matches the actual MCP tool schema types."
+    },
+    {
+      "text": "Applies known_exploit=true (or equivalent) filter parameter",
+      "passed": true,
+      "evidence": "Step 1: known_exploit='true' is applied. The response states: 'known_exploit=\"true\"' in the arguments for vulnerability__get_cves."
+    },
+    {
+      "text": "Applies severity=Critical filter parameter",
+      "passed": true,
+      "evidence": "Step 1 uses impact='7' which maps to Critical severity. The response explains: 'impact=\"7\" filters to Critical severity only (per tool-invocation-rules: \"7\" = Critical).' This is the correct MCP parameter name for severity filtering."
+    }
+  ]
+}

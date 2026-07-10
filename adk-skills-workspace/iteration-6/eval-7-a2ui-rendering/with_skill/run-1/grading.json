@@ -1,0 +1,27 @@
+{
+  "eval_id": 7,
+  "eval_name": "a2ui-rendering",
+  "configuration": "with_skill",
+  "expectations": [
+    {
+      "text": "Plans to use send_a2ui_json_to_client tool to render results as A2UI components instead of a markdown table",
+      "passed": true,
+      "evidence": "Step 3 includes a full send_a2ui_json_to_client tool call with A2UI JSON payload. The response states: 'I render the results as A2UI components rather than a markdown table.' The Decision section explicitly confirms: 'A2UI is the correct choice here.'"
+    },
+    {
+      "text": "Uses vulnerability__get_cves with appropriate filter and sort parameters",
+      "passed": true,
+      "evidence": "Step 1 uses vulnerability__get_cves with impact='7', sort='-cvss_score', advisory_available='true', limit=10. All parameters match the MCP schema with correct types (string-typed booleans, numeric limit)."
+    },
+    {
+      "text": "References specific A2UI components (Card, List, Text, Column, Row, or similar)",
+      "passed": true,
+      "evidence": "Step 3 JSON payload includes type: 'column', 'text', 'list', 'card', 'row', 'button'. The response describes: 'Each CVE is rendered as a Card within a List, containing: Title, Row, Text, Row, Button.' All six A2UI component types are used."
+    },
+    {
+      "text": "Keeps explanatory or conversational text as plain text, not inside A2UI components",
+      "passed": true,
+      "evidence": "Step 4 explicitly separates plain text from A2UI: 'I include a brief plain-text summary alongside the A2UI rendering' with a quoted example. The response references the formatting rule: 'render the data portion as A2UI and include the explanation as plain text in the same response.'"
+    }
+  ]
+}

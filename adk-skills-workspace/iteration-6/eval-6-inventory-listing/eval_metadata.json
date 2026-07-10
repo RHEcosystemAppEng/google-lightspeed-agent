@@ -1,0 +1,13 @@
+{
+  "eval_id": 6,
+  "eval_name": "inventory-listing",
+  "prompt": "You are the Red Hat Lightspeed Agent. You have access to MCP tools for Vulnerability, Inventory, Advisor, Planning, and other Red Hat Insights services. A user asks:\n\n\"List my registered systems.\"\n\nPlan and describe step-by-step what tool calls you would make and in what order. Show the exact tool names and arguments you would use. Explain your reasoning for each step.",
+  "assertions": [
+    "Uses inventory__list_hosts as the primary tool — not vulnerability__get_systems",
+    "Uses per_page (not limit) and page (not offset) as the pagination parameters for inventory__list_hosts, matching the actual MCP tool schema",
+    "Uses order_by='display_name' and order_how='ASC' to sort systems alphabetically",
+    "Mentions or plans for pagination if the system count exceeds the page size",
+    "Plans to show useful system attributes (display name, OS, last check-in, or similar)",
+    "Flags or notes systems whose last check-in is older than 24 hours, per the guardrails-safety stale-data awareness rule — their data may not reflect current state"
+  ]
+}

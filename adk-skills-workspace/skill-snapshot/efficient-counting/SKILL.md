@@ -30,9 +30,9 @@ Pass the user's filters as normal tool arguments alongside `limit=1`.
 ### Examples
 
 - "How many CVEs?" -> `vulnerability__get_cves` with `limit=1` -> report `meta.total_items`
-- "How many critical CVEs?" -> `vulnerability__get_cves` with `limit=1, severity=Critical` -> report `meta.total_items`
-- "How many hosts?" -> `inventory__list_hosts` with `limit=1` -> report `total`
-- "How many hosts running RHEL 9?" -> `inventory__list_hosts` with `limit=1, operating_system=RHEL 9` -> report `total`
+- "How many critical CVEs?" -> `vulnerability__get_cves` with `limit=1, impact="7"` -> report `meta.total_items`
+- "How many hosts?" -> `inventory__list_hosts` with `per_page=1, page=1` -> report `total`
+- "How many hosts running RHEL 9?" -> `inventory__list_hosts` with `per_page=1, page=1` and a filter -> report `total`
 - "How many advisor rules?" -> `advisor__get_active_rules` with `limit=1` -> report `meta.count`
 - "How many blueprints?" -> `image-builder__get_blueprints` with `limit=1` -> report `meta.count`
 
@@ -40,13 +40,13 @@ Pass the user's filters as normal tool arguments alongside `limit=1`.
 
 Some counting queries require chaining tools — resolve identifiers first, then count:
 
-**"How many critical remediable CVEs are on host X?"**
--> `inventory__list_hosts` (hostname_or_id=X) -> get the host ID ->
-`vulnerability__get_system_cves` (severity=Critical, remediation=Applicable, limit=1) ->
+**"How many critical CVEs are on host X?"**
+-> `inventory__list_hosts` (hostname_or_id=X) -> get the host UUID ->
+`vulnerability__get_system_cves` (system_uuid=UUID, limit=1) ->
 read `meta.total_items` -> report the count.
 
 **"How many systems are in my inventory?"**
--> `inventory__list_hosts` (limit=1) -> read `total` -> report the count.
+-> `inventory__list_hosts` (per_page=1, page=1) -> read `total` -> report the count.
 Do NOT use `vulnerability__get_systems` for general system counts — that endpoint
 returns only systems tracked for CVE analysis, excluding immutable systems.
 

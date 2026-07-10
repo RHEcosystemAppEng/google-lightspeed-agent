@@ -1,0 +1,27 @@
+{
+  "eval_id": 7,
+  "eval_name": "a2ui-rendering",
+  "configuration": "old_skill",
+  "expectations": [
+    {
+      "text": "Plans to use send_a2ui_json_to_client tool to render results as A2UI components instead of a markdown table",
+      "passed": false,
+      "evidence": "The response explicitly states: 'The old skill set has no A2UI skill... Therefore, the response would be rendered entirely in markdown format, not using the send_a2ui_json_to_client tool.' It uses a markdown table for CVE output instead of A2UI components."
+    },
+    {
+      "text": "Uses vulnerability__get_cves with appropriate filter and sort parameters",
+      "passed": true,
+      "evidence": "Step 1 uses vulnerability__get_cves with limit=10, severity='Critical', sort='-cvss_score', affecting=true. The tool is correct and filters/sort are appropriate, though parameter names differ from the MCP schema (severity instead of impact, affecting instead of advisory_available)."
+    },
+    {
+      "text": "References specific A2UI components (Card, List, Text, Column, Row, or similar) when describing the rendering",
+      "passed": false,
+      "evidence": "The response does NOT reference any A2UI components for use. The A2UI Assessment section confirms: 'The agent has no instructions or awareness of the send_a2ui_json_to_client tool or A2UI components (Card, List, Column, Row, Text, Button).' These are mentioned only in the assessment, not as planned rendering components."
+    },
+    {
+      "text": "Keeps explanatory or conversational text as plain text, not inside A2UI components",
+      "passed": true,
+      "evidence": "Since no A2UI components are used at all, all text (including explanatory text) is rendered as plain text / markdown by default. The response uses plain text for all explanatory content."
+    }
+  ]
+}

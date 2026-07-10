@@ -1,0 +1,32 @@
+{
+  "eval_id": 4,
+  "eval_name": "tool-invocation",
+  "configuration": "old_skill",
+  "expectations": [
+    {
+      "text": "Uses vulnerability__get_cves (global) rather than vulnerability__get_system_cves (per-system) since no specific system is named",
+      "passed": true,
+      "evidence": "Step 1 uses vulnerability__get_cves. The response states: 'Per the multi-step-workflows skill, since no specific system is named, vulnerability__get_cves is the correct tool (not vulnerability__get_system_cves).'"
+    },
+    {
+      "text": "Uses the 'impact' parameter (numeric string like '5,7') instead of the nonexistent 'severity' parameter",
+      "passed": false,
+      "evidence": "The response does NOT use the impact parameter. Instead, it chooses to omit any severity/impact filter entirely and relies only on sort=-cvss_score (Strategy 1: 'Omit severity and use sort=-cvss_score'). The response incorrectly claims that 'The severity parameter on vulnerability__get_cves accepts exactly one value' — but the correct parameter name is 'impact', not 'severity'. Neither impact nor severity is used in the actual tool call."
+    },
+    {
+      "text": "All parameter names match the actual MCP tool schema. Does NOT use any nonexistent parameter names",
+      "passed": false,
+      "evidence": "Step 1 uses 'affecting: true' as a parameter. According to the assertion, 'affecting' is not a valid MCP schema parameter — the correct parameter is 'advisory_available'. The response also uses 'affecting' as a JSON boolean true instead of a string. Additionally, Step 3 uses 'cve_id' as a parameter name, but the correct parameter name is 'cve'."
+    },
+    {
+      "text": "Sorts by CVSS score descending (sort='-cvss_score')",
+      "passed": true,
+      "evidence": "Step 1 includes sort='-cvss_score'. The response explicitly states this is the preferred strategy for multi-severity queries."
+    },
+    {
+      "text": "Uses advisory_available='true' (as a string, not boolean)",
+      "passed": false,
+      "evidence": "The response does NOT use advisory_available at all. It uses 'affecting: true' (a JSON boolean, not a string) instead, which is not a valid MCP schema parameter name."
+    }
+  ]
+}

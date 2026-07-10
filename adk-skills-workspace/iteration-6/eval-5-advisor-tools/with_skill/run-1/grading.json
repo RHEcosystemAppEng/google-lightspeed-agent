@@ -1,0 +1,37 @@
+{
+  "eval_id": 5,
+  "eval_name": "advisor-tools",
+  "configuration": "with_skill",
+  "expectations": [
+    {
+      "text": "Uses advisor tools (advisor__get_recommendations_stats or advisor__get_active_rules) rather than vulnerability tools",
+      "passed": true,
+      "evidence": "Step 1 uses advisor__get_active_rules, Step 2 uses advisor__get_recommendations_stats. No vulnerability tools are called. The response explicitly states: 'The user asked specifically about advisor recommendations, so I do not call vulnerability or inventory tools.'"
+    },
+    {
+      "text": "Does not conflate advisor recommendations with CVEs — treats them as separate Red Hat Insights services",
+      "passed": true,
+      "evidence": "The response treats advisor recommendations as distinct from CVEs throughout. Point 2 in 'Why This Approach' states: 'The user asked specifically about advisor recommendations, so I do not call vulnerability or inventory tools — those would be appropriate for broader health overview questions but are not needed here.'"
+    },
+    {
+      "text": "Uses correct parameter names and types for advisor tools (e.g., limit as number, not string)",
+      "passed": true,
+      "evidence": "Step 1 args: impacting='true' (string), sort='-total_risk' (string), limit=20 (number). All types are correct: limit is a number, sort is a string, impacting is a string."
+    },
+    {
+      "text": "When using the impacting parameter, passes it as a string 'true' — NOT as a JSON boolean",
+      "passed": true,
+      "evidence": "Step 1 explicitly passes impacting='true' as a string. The response states: 'Set to \"true\" (as a string, not a JSON boolean — the MCP server rejects JSON booleans for this parameter, per the \"String-typed booleans — CRITICAL\" section of tool-invocation-rules).'"
+    },
+    {
+      "text": "Sorts advisor recommendations by total risk descending (sort='-total_risk')",
+      "passed": true,
+      "evidence": "Step 1 includes sort='-total_risk'. The response explains: 'Set to \"-total_risk\" to surface the highest-risk recommendations first. The minus prefix indicates descending order.'"
+    },
+    {
+      "text": "Plans to present results in a structured format (table or list with rule name, risk, and affected count)",
+      "passed": true,
+      "evidence": "The 'Example Synthesized Response' section shows a table with columns: #, Rule Description, Total Risk, Category, Affected Systems, Remediation. Also includes a severity-level summary breakdown (Critical: X, Important: Y, Moderate: Z)."
+    }
+  ]
+}

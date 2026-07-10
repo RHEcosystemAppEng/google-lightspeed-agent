@@ -1,0 +1,37 @@
+{
+  "eval_id": 6,
+  "eval_name": "inventory-listing",
+  "configuration": "old_skill",
+  "expectations": [
+    {
+      "text": "Uses inventory__list_hosts as the primary tool — not vulnerability__get_systems",
+      "passed": true,
+      "evidence": "Step 1 uses inventory__list_hosts. The response states: 'the tool disambiguation table specifies: General \"how many systems/hosts?\" or \"list my systems\" -> inventory__list_hosts (source of truth for the full fleet).' Also explicitly rejects vulnerability__get_systems."
+    },
+    {
+      "text": "Uses per_page (not limit) and page (not offset) as the pagination parameters",
+      "passed": false,
+      "evidence": "Step 1 uses 'limit: 50' and Step 3 uses 'offset: 50' — these are NOT the correct parameter names for inventory__list_hosts. The assertion requires per_page and page. The response even refers to order_by and order_how correctly but uses the wrong pagination parameter names (limit/offset instead of per_page/page)."
+    },
+    {
+      "text": "Uses order_by='display_name' and order_how='ASC' to sort systems alphabetically",
+      "passed": true,
+      "evidence": "Step 1 includes order_by='display_name' and order_how='ASC'. The response states: 'I sort by display_name ascending for a clean, alphabetical presentation.'"
+    },
+    {
+      "text": "Mentions or plans for pagination if the system count exceeds the page size",
+      "passed": true,
+      "evidence": "Step 2 describes pagination: 'If total > 50: present the first 50 results and offer to fetch more.' Step 3 shows subsequent calls with advancing offset. Stop conditions are listed."
+    },
+    {
+      "text": "Plans to show useful system attributes (display name, OS, last check-in, or similar)",
+      "passed": true,
+      "evidence": "The example output format shows a table with columns: Display Name, OS, Last Check-in. The response states: 'Columns: Display Name, OS (e.g., RHEL 8.9), Last Check-in.'"
+    },
+    {
+      "text": "Flags or notes systems whose last check-in is older than 24 hours",
+      "passed": true,
+      "evidence": "Step 2, point 4 explicitly states: 'Check for stale data per the guardrails-safety skill: if any system's last_seen/updated timestamp is older than 24 hours, note this in the response so the user knows the information may be outdated.'"
+    }
+  ]
+}
