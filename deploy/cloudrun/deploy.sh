@@ -255,9 +255,9 @@ deploy_agent() {
         deploy/cloudrun/service.yaml > "$tmp_yaml"
 
     if [[ "$MCP_DEBUG" == "true" ]]; then
-        sed -i 's|            # ${MCP_DEBUG_FLAG}|            - "--debug"|' "$tmp_yaml"
+        sed -i "s|            # \${MCP_DEBUG_FLAG}|            - \"--debug\"|" "$tmp_yaml"
     else
-        sed -i '/# ${MCP_DEBUG_FLAG}/d' "$tmp_yaml"
+        sed -i "/# \${MCP_DEBUG_FLAG}/d" "$tmp_yaml"
     fi
 
     # Deploy using the YAML
