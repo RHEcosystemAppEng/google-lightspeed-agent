@@ -95,6 +95,7 @@ spec:
               SUBSTITUTIONS="${SUBSTITUTIONS},_GEMINI_MODEL=${_GEMINI_MODEL}"
               SUBSTITUTIONS="${SUBSTITUTIONS},_AGENT_LOGGING_DETAIL=${_AGENT_LOGGING_DETAIL}"
               SUBSTITUTIONS="${SUBSTITUTIONS},_MCP_DEBUG=${_MCP_DEBUG}"
+              SUBSTITUTIONS="${SUBSTITUTIONS},_A2UI_ENABLED=${_A2UI_ENABLED}"
 
               # _SCAN_SEVERITY may contain commas (e.g., "CRITICAL,HIGH") which
               # conflict with gcloud --substitutions delimiter. Patch the

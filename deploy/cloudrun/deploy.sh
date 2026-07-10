@@ -95,6 +95,7 @@ SERVICE_CONTROL_SERVICE_NAME="${SERVICE_CONTROL_SERVICE_NAME:-}"
 GEMINI_MODEL="${GEMINI_MODEL:-gemini-3.5-flash}"
 AGENT_LOGGING_DETAIL="${AGENT_LOGGING_DETAIL:-basic}"
 MCP_DEBUG="${MCP_DEBUG:-false}"
+A2UI_ENABLED="${A2UI_ENABLED:-false}"
 PUBSUB_TOPIC="${PUBSUB_TOPIC:-marketplace-entitlements}"
 
 # When PUBSUB_TOPIC is a fully-qualified path (projects/.../topics/...),
@@ -252,6 +253,7 @@ deploy_agent() {
         -e "s|\${VPC_CONNECTOR_NAME}|${VPC_CONNECTOR_NAME}|g" \
         -e "s|\${GEMINI_MODEL}|${GEMINI_MODEL}|g" \
         -e "s|\${AGENT_LOGGING_DETAIL}|${AGENT_LOGGING_DETAIL}|g" \
+        -e "s|\${A2UI_ENABLED}|${A2UI_ENABLED}|g" \
         deploy/cloudrun/service.yaml > "$tmp_yaml"
 
     if [[ "$MCP_DEBUG" == "true" ]]; then

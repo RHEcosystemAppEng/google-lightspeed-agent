@@ -51,6 +51,7 @@ data:
   AGENT_PROVIDER_ORGANIZATION_URL: {{ .Values.agent.providerOrganizationUrl | quote }}
   AGENT_LOGGING_DETAIL: {{ .Values.agent.loggingDetail | quote }}
   TOOL_RESULT_MAX_CHARS: {{ .Values.agent.toolResultMaxChars | quote }}
+  A2UI_ENABLED: {{ .Values.agent.a2uiEnabled | quote }}
   {{- if .Values.agent.skillsDir }}
   SKILLS_DIR: {{ .Values.agent.skillsDir | quote }}
   {{- end }}

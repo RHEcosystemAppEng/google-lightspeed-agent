@@ -95,6 +95,9 @@ spec:
               value: "json"
             - name: AGENT_LOGGING_DETAIL
               value: "${AGENT_LOGGING_DETAIL}"
+            # A2UI Configuration
+            - name: A2UI_ENABLED
+              value: "${A2UI_ENABLED}"
             # Red Hat SSO Configuration
             - name: RED_HAT_SSO_ISSUER
               value: "https://sso.redhat.com/auth/realms/redhat-external"

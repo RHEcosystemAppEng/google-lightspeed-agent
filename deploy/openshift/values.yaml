@@ -44,6 +44,7 @@ agent:
   forwardedAllowIps: "*"
   loggingDetail: basic
   toolResultMaxChars: 204800
+  a2uiEnabled: false
   # ADK AI Skills — optional external skills directory.
   # Bundled skills (tool-invocation-rules, multi-step-workflows, pagination-handling,
   # error-handling, guardrails-safety, response-formatting) always load from the

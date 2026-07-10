@@ -23,6 +23,7 @@ images:
 agent:
   geminiModel: "gemini-3.5-flash"
   loggingDetail: "basic"
+  a2uiEnabled: "false"
 
 # -- MCP server configuration
 mcp:

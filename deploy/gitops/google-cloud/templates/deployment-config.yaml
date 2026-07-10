@@ -36,5 +36,6 @@ data:
   _GEMINI_MODEL: {{ .Values.agent.geminiModel | quote }}
   _AGENT_LOGGING_DETAIL: {{ .Values.agent.loggingDetail | quote }}
   _MCP_DEBUG: {{ .Values.mcp.debug | quote }}
+  _A2UI_ENABLED: {{ .Values.agent.a2uiEnabled | quote }}
   GIT_REPO: {{ .Values.deploy.gitRepo | quote }}
   GIT_BRANCH: {{ .Values.deploy.gitBranch | quote }}

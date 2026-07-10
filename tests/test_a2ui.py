@@ -202,8 +202,9 @@ class TestAgentCreationA2ui:
         try:
             create_agent()
             call_kwargs = mock_llm_agent.call_args[1]
-            # Instruction should be the plain AGENT_INSTRUCTION (not augmented)
-            assert call_kwargs["static_instruction"] == AGENT_INSTRUCTION
+            # Instruction should start with AGENT_INSTRUCTION (may include
+            # pre-loaded strict skill bodies appended by _preload_strict_skills)
+            assert call_kwargs["static_instruction"].startswith(AGENT_INSTRUCTION)
             # Tools should include a SendA2uiToClientToolset instance
             tools = call_kwargs["tools"]
             a2ui_tools = [t for t in tools if isinstance(t, SendA2uiToClientToolset)]
@@ -226,6 +227,6 @@ class TestAgentCreationA2ui:
         try:
             create_agent()
             call_kwargs = mock_llm_agent.call_args[1]
-            assert call_kwargs["static_instruction"] == AGENT_INSTRUCTION
+            assert call_kwargs["static_instruction"].startswith(AGENT_INSTRUCTION)
         finally:
             settings.a2ui_enabled = original

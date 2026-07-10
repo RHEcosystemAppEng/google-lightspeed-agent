@@ -69,6 +69,7 @@ substitutions:
   _GEMINI_MODEL: "gemini-3.5-flash"
   _AGENT_LOGGING_DETAIL: "basic"
   _MCP_DEBUG: "false"
+  _A2UI_ENABLED: "false"
 
 timeout: 1800s
 
@@ -287,6 +288,7 @@ steps:
             -e 's|$${VPC_CONNECTOR_NAME}|${_VPC_CONNECTOR_NAME}|g' \
             -e 's|$${GEMINI_MODEL}|${_GEMINI_MODEL}|g' \
             -e 's|$${AGENT_LOGGING_DETAIL}|${_AGENT_LOGGING_DETAIL}|g' \
+            -e 's|$${A2UI_ENABLED}|${_A2UI_ENABLED}|g' \
             deploy/cloudrun/service.yaml > /workspace/service.yaml
 
         if [ "${_MCP_DEBUG}" = "true" ]; then

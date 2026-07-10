@@ -340,7 +340,7 @@ def create_agent() -> LlmAgent:
         name=settings.agent_name,
         model=model,
         description=settings.agent_description,
-        static_instruction=AGENT_INSTRUCTION,
+        static_instruction=instruction,
         tools=tools,
         planner=PlanReActPlanner(),
     )
