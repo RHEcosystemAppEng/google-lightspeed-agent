@@ -66,15 +66,64 @@ successive tool calls advancing pagination parameters until no further pages rem
 
 You have access to ADK AI Skills that provide detailed behavioral instructions. \
 Load and apply skills according to their priority level:
-- **[STRICT] skills** (`guardrails-safety`, `tool-invocation-rules`): You MUST load \
-these skills on EVERY request before responding. They contain detailed rules that \
-complement the summary above and must always be enforced.
+- **[STRICT] skills** (`guardrails-safety`, `tool-invocation-rules`): Already \
+pre-loaded below — do NOT call `load_skill` for these. Their full instructions \
+are included in this prompt and must always be enforced.
 - **[PREFERRED] skills** (`efficient-counting`, `error-handling`, \
 `multi-step-workflows`, `pagination-handling`): Load and consult these when the \
 request involves tool calls, multi-step operations, counting, or paginated results.
 - **[GUIDANCE] skills** (`response-formatting`): Follow for style and formatting \
 preferences.
 """
+
+STRICT_SKILLS = ("guardrails-safety", "tool-invocation-rules")
+
+
+def _read_skill_body(skill_dir: pathlib.Path) -> str:
+    """Read the body of a SKILL.md file (everything after the YAML frontmatter)."""
+    skill_file = skill_dir / "SKILL.md"
+    if not skill_file.is_file():
+        return ""
+    content = skill_file.read_text(encoding="utf-8")
+    # Split on '---' delimiters: frontmatter is between first and second '---'
+    parts = content.split("---", 2)
+    if len(parts) >= 3:
+        return parts[2].strip()
+    return content.strip()
+
+
+def _preload_strict_skills(skills_dir: str | None) -> str:
+    """Read STRICT skill bodies and return them for injection into the system prompt.
+
+    Respects external skill overrides: if SKILLS_DIR contains a skill with
+    the same name as a bundled STRICT skill, the external version is used.
+    """
+    bundled_dir = pathlib.Path(__file__).parent / "skills"
+    skill_dirs: dict[str, pathlib.Path] = {}
+
+    for name in STRICT_SKILLS:
+        bundled_path = bundled_dir / name
+        if bundled_path.is_dir():
+            skill_dirs[name] = bundled_path
+
+    if skills_dir:
+        external_dir = pathlib.Path(skills_dir)
+        if external_dir.is_dir():
+            for name in STRICT_SKILLS:
+                external_path = external_dir / name
+                if external_path.is_dir() and (external_path / "SKILL.md").exists():
+                    skill_dirs[name] = external_path
+                    logger.info("Pre-loading external override for STRICT skill '%s'", name)
+
+    sections = []
+    for name in STRICT_SKILLS:
+        if name in skill_dirs:
+            body = _read_skill_body(skill_dirs[name])
+            if body:
+                sections.append(f"## Pre-loaded skill: {name}\n\n{body}")
+                logger.info("Pre-loaded STRICT skill '%s' into system prompt", name)
+
+    return "\n\n".join(sections)
 
 
 def _load_skills_from_dir(directory: pathlib.Path) -> dict[str, Any]:
@@ -261,11 +310,18 @@ def create_agent() -> LlmAgent:
     if skill_toolset:
         tools.append(skill_toolset)
 
+    # Pre-load STRICT skill bodies into the system prompt so the LLM
+    # always has them in context without needing to call load_skill.
+    instruction = AGENT_INSTRUCTION
+    strict_bodies = _preload_strict_skills(settings.skills_dir)
+    if strict_bodies:
+        instruction = f"{AGENT_INSTRUCTION}\n\n{strict_bodies}"
+
     return LlmAgent(
         name=settings.agent_name,
         model=model,
         description=settings.agent_description,
-        static_instruction=AGENT_INSTRUCTION,
+        static_instruction=instruction,
         tools=tools,
         planner=PlanReActPlanner(),
     )
