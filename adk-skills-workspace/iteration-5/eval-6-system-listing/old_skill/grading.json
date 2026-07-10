@@ -1,0 +1,13 @@
+{
+  "eval_id": 6,
+  "eval_name": "system-listing",
+  "configuration": "old_skill",
+  "expectations": [
+    {"text": "uses_inventory_list_hosts", "passed": true, "evidence": "Uses inventory__list_hosts, correctly per multi-step-workflows disambiguation table"},
+    {"text": "uses_correct_inventory_params", "passed": false, "evidence": "Uses limit=20 instead of per_page. The MCP schema uses per_page (not limit) and page (not offset) for inventory pagination. Old skill v1.2 documents limit/offset which are the wrong parameter names."},
+    {"text": "sorts_by_display_name", "passed": true, "evidence": "Uses order_by='display_name' and order_how='ASC'"},
+    {"text": "handles_pagination", "passed": true, "evidence": "Discusses showing first 20 with '...and N more' suffix, and showing all if ≤20"},
+    {"text": "includes_system_details", "passed": true, "evidence": "Plans table with Display Name, OS, Last Check-in columns"},
+    {"text": "flags_stale_checkins", "passed": false, "evidence": "Does not mention flagging systems with stale check-ins"}
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "eval_id": 5,
+  "eval_name": "advisor-recommendations",
+  "configuration": "with_skill",
+  "expectations": [
+    {"text": "uses_advisor_tools", "passed": true, "evidence": "Uses advisor__get_recommendations_stats and advisor__get_active_rules"},
+    {"text": "distinguishes_advisor_from_vuln", "passed": true, "evidence": "Exclusively uses advisor tools, no confusion with vulnerability tools"},
+    {"text": "proper_advisor_args", "passed": true, "evidence": "Uses limit (integer), sort (string), impacting (string) — all correct types"},
+    {"text": "uses_impacting_as_string", "passed": true, "evidence": "Explicitly uses impacting='true' as string. References 'String-typed booleans -- CRITICAL' section. States 'not a JSON boolean'."},
+    {"text": "uses_sort_total_risk", "passed": true, "evidence": "Uses sort='-total_risk' in both the counting call and the data-fetching call"},
+    {"text": "structured_output", "passed": true, "evidence": "Plans output grouped by severity/category with rule description, affected system count, auto-remediation status, and 20-item cap"}
+  ]
+}

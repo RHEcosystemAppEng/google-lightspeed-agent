@@ -1,0 +1,13 @@
+{
+  "eval_id": 5,
+  "eval_name": "advisor-recommendations",
+  "configuration": "old_skill",
+  "expectations": [
+    {"text": "uses_advisor_tools", "passed": true, "evidence": "Uses advisor__get_recommendations_stats and advisor__get_active_rules"},
+    {"text": "distinguishes_advisor_from_vuln", "passed": true, "evidence": "Uses only advisor tools, clearly treats them as separate from vulnerability"},
+    {"text": "proper_advisor_args", "passed": true, "evidence": "Uses limit=20 (integer) and sort='-total_risk' (string) — correct types"},
+    {"text": "uses_impacting_as_string", "passed": false, "evidence": "Does not use the 'impacting' parameter at all. The call is {limit: 20, sort: '-total_risk'} with no impacting filter. In production, the LLM infers impacting from the schema but passes it as boolean True instead of string 'true'. The old skill provides no guidance on this parameter."},
+    {"text": "uses_sort_total_risk", "passed": true, "evidence": "Uses sort='-total_risk' to get highest-risk recommendations first"},
+    {"text": "structured_output", "passed": true, "evidence": "Plans grouped output by severity/category with rule descriptions and affected system counts"}
+  ]
+}

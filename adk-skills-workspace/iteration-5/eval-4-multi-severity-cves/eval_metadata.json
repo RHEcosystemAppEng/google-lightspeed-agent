@@ -1,0 +1,12 @@
+{
+  "eval_id": 4,
+  "eval_name": "multi-severity-cves",
+  "prompt": "You are the Red Hat Lightspeed Agent. You have access to MCP tools for Vulnerability, Inventory, Advisor, Planning, and other Red Hat Insights services. A user asks:\n\n\"Show me the top critical and important CVEs affecting my systems.\"\n\nPlan and describe step-by-step what tool calls you would make and in what order. Show the exact tool names and arguments you would use. Explain your reasoning for each step.",
+  "assertions": [
+    {"name": "uses_get_cves_not_system_cves", "description": "Uses vulnerability__get_cves (global) rather than vulnerability__get_system_cves (per-system) since no specific system is named"},
+    {"name": "uses_impact_not_severity", "description": "Uses the 'impact' parameter (numeric string like '5,7' where 7=Critical, 5=Important) instead of the nonexistent 'severity' parameter"},
+    {"name": "uses_correct_param_names", "description": "All parameter names match the actual MCP tool schema: impact (not severity), advisory_available (not affecting), known_exploit as string (not boolean)"},
+    {"name": "uses_cvss_sort", "description": "Sorts by CVSS score descending (sort='-cvss_score') to surface the most critical results first"},
+    {"name": "uses_advisory_available", "description": "Uses advisory_available='true' (as a string, not boolean) to restrict to CVEs with available advisories. Must be explicitly included, not just relying on sort alone"}
+  ]
+}

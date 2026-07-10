@@ -1,0 +1,13 @@
+{
+  "eval_id": 6,
+  "eval_name": "system-listing",
+  "configuration": "with_skill",
+  "expectations": [
+    {"text": "uses_inventory_list_hosts", "passed": true, "evidence": "Uses inventory__list_hosts, explicitly states it is 'the source of truth for the full fleet'"},
+    {"text": "uses_correct_inventory_params", "passed": true, "evidence": "Uses per_page=10 and page=1. States 'tool-invocation-rules skill mandates: use 10 on first call for per_page'"},
+    {"text": "sorts_by_display_name", "passed": true, "evidence": "Uses order_by='display_name' and order_how='ASC'. References 'always include display_name for user-facing listings'"},
+    {"text": "handles_pagination", "passed": true, "evidence": "Discusses pagination for >20 systems (cap at 20 with continuation), 11-20 (fetch page 2), and >20 (offer filters)"},
+    {"text": "includes_system_details", "passed": true, "evidence": "Plans table with Display Name, OS, Last Check-in columns. Shows example formatted output."},
+    {"text": "flags_stale_checkins", "passed": false, "evidence": "Does not explicitly mention flagging systems with stale check-ins (>24 hours). Shows an example with a 1-day-old check-in but does not flag it."}
+  ]
+}

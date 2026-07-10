@@ -1,0 +1,130 @@
+{
+  "skill_name": "adk-bundled-skills",
+  "iteration": 5,
+  "configurations": [
+    {
+      "name": "with_skill",
+      "label": "Fixed Skills v1.5 (correct params + string-typed booleans + defaults)",
+      "results": [
+        {
+          "eval_id": 4, "eval_name": "multi-severity-cves",
+          "pass_rate": 1.0, "passed": 5, "total": 5,
+          "assertions": [
+            {"text": "uses_get_cves_not_system_cves", "passed": true},
+            {"text": "uses_impact_not_severity", "passed": true},
+            {"text": "uses_correct_param_names", "passed": true},
+            {"text": "uses_cvss_sort", "passed": true},
+            {"text": "uses_advisory_available", "passed": true}
+          ]
+        },
+        {
+          "eval_id": 5, "eval_name": "advisor-recommendations",
+          "pass_rate": 1.0, "passed": 6, "total": 6,
+          "assertions": [
+            {"text": "uses_advisor_tools", "passed": true},
+            {"text": "distinguishes_advisor_from_vuln", "passed": true},
+            {"text": "proper_advisor_args", "passed": true},
+            {"text": "uses_impacting_as_string", "passed": true},
+            {"text": "uses_sort_total_risk", "passed": true},
+            {"text": "structured_output", "passed": true}
+          ]
+        },
+        {
+          "eval_id": 6, "eval_name": "system-listing",
+          "pass_rate": 0.833, "passed": 5, "total": 6,
+          "assertions": [
+            {"text": "uses_inventory_list_hosts", "passed": true},
+            {"text": "uses_correct_inventory_params", "passed": true},
+            {"text": "sorts_by_display_name", "passed": true},
+            {"text": "handles_pagination", "passed": true},
+            {"text": "includes_system_details", "passed": true},
+            {"text": "flags_stale_checkins", "passed": false}
+          ]
+        }
+      ],
+      "aggregate": {"pass_rate": 0.941, "passed": 16, "total": 17}
+    },
+    {
+      "name": "old_skill",
+      "label": "Baseline Skills v1.2 (wrong MCP parameter names, no advisor params)",
+      "results": [
+        {
+          "eval_id": 4, "eval_name": "multi-severity-cves",
+          "pass_rate": 0.4, "passed": 2, "total": 5,
+          "assertions": [
+            {"text": "uses_get_cves_not_system_cves", "passed": true},
+            {"text": "uses_impact_not_severity", "passed": false},
+            {"text": "uses_correct_param_names", "passed": false},
+            {"text": "uses_cvss_sort", "passed": true},
+            {"text": "uses_advisory_available", "passed": false}
+          ]
+        },
+        {
+          "eval_id": 5, "eval_name": "advisor-recommendations",
+          "pass_rate": 0.833, "passed": 5, "total": 6,
+          "assertions": [
+            {"text": "uses_advisor_tools", "passed": true},
+            {"text": "distinguishes_advisor_from_vuln", "passed": true},
+            {"text": "proper_advisor_args", "passed": true},
+            {"text": "uses_impacting_as_string", "passed": false},
+            {"text": "uses_sort_total_risk", "passed": true},
+            {"text": "structured_output", "passed": true}
+          ]
+        },
+        {
+          "eval_id": 6, "eval_name": "system-listing",
+          "pass_rate": 0.667, "passed": 4, "total": 6,
+          "assertions": [
+            {"text": "uses_inventory_list_hosts", "passed": true},
+            {"text": "uses_correct_inventory_params", "passed": false},
+            {"text": "sorts_by_display_name", "passed": true},
+            {"text": "handles_pagination", "passed": true},
+            {"text": "includes_system_details", "passed": true},
+            {"text": "flags_stale_checkins", "passed": false}
+          ]
+        }
+      ],
+      "aggregate": {"pass_rate": 0.647, "passed": 11, "total": 17}
+    }
+  ],
+  "delta": {
+    "pass_rate_change": 0.294,
+    "assertions_improved": [
+      "uses_impact_not_severity",
+      "uses_correct_param_names",
+      "uses_advisory_available",
+      "uses_impacting_as_string",
+      "uses_correct_inventory_params"
+    ],
+    "assertions_regressed": []
+  },
+  "analysis": {
+    "observations": [
+      "Fixed skills v1.5 score 16/17 (94.1%) vs baseline v1.2 at 11/17 (64.7%) — a +29.4% improvement.",
+      "5 discriminating assertions all pass with fixed skills, all fail with baseline:",
+      "  - uses_impact_not_severity: v1.5 uses impact='5,7' (correct numeric IDs). v1.2 uses severity='Critical' (nonexistent param).",
+      "  - uses_correct_param_names: v1.5 uses advisory_available, impact. v1.2 uses affecting, severity (both nonexistent).",
+      "  - uses_advisory_available: v1.5 uses advisory_available='true' as string. v1.2 uses affecting=true (wrong name + wrong type).",
+      "  - uses_impacting_as_string: v1.5 explicitly passes impacting='true' (string). v1.2 doesn't use impacting at all (in production, LLM infers it from schema and passes boolean True).",
+      "  - uses_correct_inventory_params: v1.5 uses per_page=10, page=1 (correct). v1.2 uses limit=20 (wrong param name).",
+      "1 non-discriminating failure (both fail): flags_stale_checkins — neither version flags systems with stale check-ins, even though guardrails-safety instructs it.",
+      "Eval 5 (advisor) now has 6 assertions (was 4 in iteration-4). The new uses_impacting_as_string assertion is the key discriminator for the advisor boolean bug.",
+      "Root cause confirmed: v1.2 skills document wrong parameter names and lack advisor parameter guidance, causing production tool call failures."
+    ],
+    "non_discriminating_assertions": [
+      "uses_get_cves_not_system_cves", "uses_cvss_sort",
+      "uses_advisor_tools", "distinguishes_advisor_from_vuln",
+      "proper_advisor_args", "uses_sort_total_risk", "structured_output",
+      "uses_inventory_list_hosts", "sorts_by_display_name",
+      "handles_pagination", "includes_system_details"
+    ],
+    "non_discriminating_failures": ["flags_stale_checkins"],
+    "qualitative_differences": [
+      "Eval 4: v1.5 uses impact='5,7' for single-call multi-severity. v1.2 uses severity='Critical' which doesn't exist in the MCP schema — the tool call would fail in production.",
+      "Eval 4: v1.5 uses advisory_available='true' (string). v1.2 uses affecting=true (wrong name + boolean type) — silently ignored by MCP server.",
+      "Eval 5: v1.5 explicitly uses impacting='true' (string-typed boolean). v1.2 omits impacting entirely — in production the LLM infers it from schema and passes boolean True, causing intermittent failures.",
+      "Eval 6: v1.5 uses per_page=10, page=1 (correct MCP params). v1.2 uses limit=20 (wrong param, silently ignored by MCP server).",
+      "Eval 6: Both versions sort by display_name — the old response-formatting skill already had this guidance."
+    ]
+  }
+}

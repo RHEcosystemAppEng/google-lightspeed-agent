@@ -1,0 +1,12 @@
+{
+  "eval_id": 4,
+  "eval_name": "multi-severity-cves",
+  "configuration": "old_skill",
+  "expectations": [
+    {"text": "uses_get_cves_not_system_cves", "passed": true, "evidence": "Uses vulnerability__get_cves correctly for global CVE queries"},
+    {"text": "uses_impact_not_severity", "passed": false, "evidence": "Uses severity='Critical' and severity='Important' (Strategy B). The 'severity' parameter does not exist in the MCP schema — only 'impact' does."},
+    {"text": "uses_correct_param_names", "passed": false, "evidence": "Uses 'affecting=true' (nonexistent param, should be 'advisory_available') and 'severity' (nonexistent param, should be 'impact')"},
+    {"text": "uses_cvss_sort", "passed": true, "evidence": "Uses sort='-cvss_score' in Strategy A"},
+    {"text": "uses_advisory_available", "passed": false, "evidence": "Uses 'affecting=true' which is a nonexistent parameter. The correct parameter is advisory_available='true' (as string)."}
+  ]
+}
