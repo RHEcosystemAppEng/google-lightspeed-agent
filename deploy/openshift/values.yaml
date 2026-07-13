@@ -61,7 +61,7 @@ agent:
   ingressNamespace: openshift-ingress
 
 # ---------------------------------------------------------------------------
-# Red Hat Lightspeed MCP server (runs as sidecar in the agent pod)
+# Red Hat Lightspeed MCP server (sidecar or standalone, see mcpGateway)
 # ---------------------------------------------------------------------------
 mcp:
   image:
@@ -106,10 +106,49 @@ google:
     jitter: 1.0
 
 # ---------------------------------------------------------------------------
+# MCP Gateway (Red Hat Connectivity Link / Kuadrant)
+# ---------------------------------------------------------------------------
+# When enabled, the MCP server runs as a standalone Deployment+Service
+# (instead of a sidecar) and is registered with the MCP Gateway via
+# MCPServerRegistration. The agent connects to the gateway's /mcp endpoint
+# for a federated tool catalog.
+mcpGateway:
+  enabled: false
+  # Name of the existing Gateway API Gateway resource
+  gatewayName: "mcp-gateway"
+  # Namespace where the Gateway resource lives
+  gatewayNamespace: "gateway-system"
+  # URL of the MCP Gateway endpoint (the agent connects here)
+  url: "http://mcp-gateway.gateway-system.svc.cluster.local:8080/mcp"
+  # Tool prefix added to all tools from this server (prevents name collisions)
+  toolPrefix: "redhat_lightspeed_"
+
+# ---------------------------------------------------------------------------
+# OpenShell — Sandboxed Agent Execution (NVIDIA)
+# ---------------------------------------------------------------------------
+# When enabled, a SandboxTemplate CR is created so the OpenShell gateway can
+# spawn sandboxed instances of this agent via the kubernetes-sigs/agent-sandbox
+# CRD controller. The agent Deployment is labeled for OpenShell discovery.
+# A NetworkPolicy allows connectivity from the OpenShell gateway namespace.
+openshell:
+  enabled: false
+  # Namespace where the OpenShell gateway is deployed
+  gatewayNamespace: "openshell"
+  # Sandbox container image (empty = use agent image)
+  sandboxImage: ""
+  # Sandbox shutdown policy: "Delete" removes the Sandbox CR on expiry,
+  # "Retain" keeps it for debugging.
+  shutdownPolicy: "Retain"
+  # Network policy management for sandbox pods:
+  # "Managed" — the controller creates per-sandbox NetworkPolicies
+  # "Unmanaged" — no automatic NetworkPolicy for sandbox pods
+  networkPolicyManagement: "Managed"
+
+# ---------------------------------------------------------------------------
 # LLM Provider (alternative models via LiteLLM)
 # ---------------------------------------------------------------------------
 llm:
-  # "gemini" (default) — use Google AI Studio / Vertex AI.
+  # "gemini" (default) — use Google AI Studio / Vertex AI directly.
   # "litellm" — use any provider supported by LiteLLM (OpenAI, Anthropic, etc.).
   provider: "gemini"
   # Model name (works with both providers). For litellm, use "provider/model"
@@ -118,6 +157,24 @@ llm:
   model: ""
   # Custom API endpoint URL (litellm only, for self-hosted models).
   apiBase: ""
+
+# ---------------------------------------------------------------------------
+# Model as a Service (OpenShift AI MaaS / external model gateway)
+# ---------------------------------------------------------------------------
+# When enabled, configures the agent to use an external Model as a Service
+# endpoint (e.g., OpenShift AI MaaS, or any OpenAI-compatible gateway like
+# LiteLLM) instead of direct Google AI Studio / Vertex AI access.
+# The MaaS gateway handles model routing, rate limiting, and credential
+# management — the agent just sends requests to the gateway URL.
+modelService:
+  enabled: false
+  # URL of the MaaS gateway endpoint (OpenAI-compatible API)
+  # Examples:
+  #   OpenShift AI MaaS: https://maas.<cluster-domain>/llm/<model-name>/v1
+  #   LiteLLM proxy:     http://litellm-service.ai-gateway.svc.cluster.local:4000
+  url: ""
+  # Model name as the gateway expects it (e.g., "vertex_ai/gemini-2.5-flash")
+  model: "vertex_ai/gemini-2.5-flash"
 
 # ---------------------------------------------------------------------------
 # Red Hat SSO / OAuth 2.0
@@ -392,5 +449,5 @@ secrets:
   # Used by: marketplace handler and/or agent for Vertex AI authentication
   # via LiteLLM or direct Gemini when GOOGLE_API_KEY is not set.
   gcpServiceAccountKey: ""
-  # API key for non-Google LLM providers (litellm only)
+  # API key for non-Google LLM providers (litellm or MaaS gateway)
   llmApiKey: ""

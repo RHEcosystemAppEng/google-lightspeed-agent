@@ -1,0 +1,81 @@
+{{- if .Values.openshell.enabled }}
+apiVersion: agents.x-k8s.io/v1beta1
+kind: SandboxTemplate
+metadata:
+  name: {{ include "lightspeed-agent.fullname" . }}
+  labels:
+    {{- include "lightspeed-agent.labels" . | nindent 4 }}
+spec:
+  shutdownPolicy: {{ .Values.openshell.shutdownPolicy | quote }}
+  networkPolicyManagement: {{ .Values.openshell.networkPolicyManagement | quote }}
+  podTemplate:
+    metadata:
+      labels:
+        {{- include "lightspeed-agent.agentSelectorLabels" . | nindent 8 }}
+        openshell.nvidia.com/sandbox-template: {{ include "lightspeed-agent.fullname" . }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: openshell-sandbox
+      securityContext:
+        runAsNonRoot: true
+      containers:
+        - name: lightspeed-agent
+          {{- if .Values.openshell.sandboxImage }}
+          image: {{ printf "%s:%s" .Values.openshell.sandboxImage .Values.agent.image.tag }}
+          {{- else }}
+          image: {{ printf "%s:%s" .Values.agent.image.repository .Values.agent.image.tag }}
+          {{- end }}
+          imagePullPolicy: {{ .Values.agent.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.agent.port }}
+              protocol: TCP
+              name: http
+          envFrom:
+            - configMapRef:
+                name: {{ include "lightspeed-agent.fullname" . }}-config
+          env:
+            - name: GOOGLE_APPLICATION_CREDENTIALS
+              value: /var/run/secrets/gcp/sa-key.json
+            - name: GOOGLE_CLOUD_PROJECT
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "lightspeed-agent.fullname" . }}-secrets
+                  key: GOOGLE_CLOUD_PROJECT
+                  optional: true
+            - name: RED_HAT_SSO_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "lightspeed-agent.fullname" . }}-secrets
+                  key: RED_HAT_SSO_CLIENT_ID
+            - name: RED_HAT_SSO_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "lightspeed-agent.fullname" . }}-secrets
+                  key: RED_HAT_SSO_CLIENT_SECRET
+            - name: LLM_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "lightspeed-agent.fullname" . }}-secrets
+                  key: LLM_API_KEY
+                  optional: true
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "lightspeed-agent.fullname" . }}-secrets
+                  key: REDIS_PASSWORD
+            - name: RATE_LIMIT_REDIS_URL
+              value: {{ printf "redis://default:$(REDIS_PASSWORD)@%s-redis:6379/0" (include "lightspeed-agent.fullname" .) | quote }}
+          volumeMounts:
+            - name: gcp-sa-key
+              mountPath: /var/run/secrets/gcp
+              readOnly: true
+          resources:
+            {{- toYaml .Values.agent.resources | nindent 12 }}
+      volumes:
+        - name: gcp-sa-key
+          secret:
+            secretName: {{ include "lightspeed-agent.fullname" . }}-gcp-sa-key
+{{- end }}

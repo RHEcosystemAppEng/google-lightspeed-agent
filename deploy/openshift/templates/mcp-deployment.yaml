@@ -1,0 +1,93 @@
+{{- if .Values.mcpGateway.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "lightspeed-agent.mcpServiceName" . }}
+  labels:
+    {{- include "lightspeed-agent.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mcp-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "lightspeed-agent.mcpSelectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "lightspeed-agent.mcpSelectorLabels" . | nindent 8 }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+      containers:
+        - name: lightspeed-mcp
+          image: {{ printf "%s:%s" .Values.mcp.image.repository .Values.mcp.image.tag }}
+          imagePullPolicy: {{ .Values.mcp.image.pullPolicy }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+          envFrom:
+            - configMapRef:
+                name: {{ include "lightspeed-agent.fullname" . }}-config
+          args:
+            {{- if .Values.mcp.readOnly }}
+            - "--readonly"
+            {{- end }}
+            {{- if .Values.mcp.toolset }}
+            - "--toolset"
+            - {{ .Values.mcp.toolset | quote }}
+            {{- end }}
+            - "--debug"
+            - "$(MCP_SERVER_MODE)"
+            - "--port"
+            - "$(MCP_SERVER_PORT)"
+            - "--host"
+            - "$(MCP_SERVER_HOST)"
+          ports:
+            - containerPort: {{ .Values.mcp.port }}
+              protocol: TCP
+          readinessProbe:
+            tcpSocket:
+              port: {{ .Values.mcp.port }}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            tcpSocket:
+              port: {{ .Values.mcp.port }}
+            periodSeconds: 30
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.mcp.resources | nindent 12 }}
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "lightspeed-agent.mcpServiceName" . }}
+  labels:
+    {{- include "lightspeed-agent.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mcp-server
+spec:
+  selector:
+    {{- include "lightspeed-agent.mcpSelectorLabels" . | nindent 4 }}
+  ports:
+    - port: {{ .Values.mcp.port }}
+      targetPort: {{ .Values.mcp.port }}
+      protocol: TCP
+      name: http
+  type: ClusterIP
+{{- end }}

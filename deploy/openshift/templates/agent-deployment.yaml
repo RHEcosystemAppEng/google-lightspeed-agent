@@ -5,6 +5,9 @@ metadata:
   labels:
     {{- include "lightspeed-agent.labels" . | nindent 4 }}
     app.kubernetes.io/component: agent
+    {{- if .Values.openshell.enabled }}
+    openshell.nvidia.com/sandbox-template: {{ include "lightspeed-agent.fullname" . }}
+    {{- end }}
 spec:
   replicas: {{ .Values.agent.replicas }}
   selector:
@@ -14,6 +17,9 @@ spec:
     metadata:
       labels:
         {{- include "lightspeed-agent.agentSelectorLabels" . | nindent 8 }}
+        {{- if .Values.openshell.enabled }}
+        openshell.nvidia.com/sandbox-template: {{ include "lightspeed-agent.fullname" . }}
+        {{- end }}
       annotations:
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
         checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
@@ -141,6 +147,7 @@ spec:
             periodSeconds: 30
             failureThreshold: 3
 
+        {{- if not .Values.mcpGateway.enabled }}
         # ===================================================================
         # Red Hat Lightspeed MCP Server (Sidecar)
         # ===================================================================
@@ -189,11 +196,14 @@ spec:
             failureThreshold: 3
           resources:
             {{- toYaml .Values.mcp.resources | nindent 12 }}
+        {{- end }}
       volumes:
         - name: tmp
           emptyDir: {}
+        {{- if not .Values.mcpGateway.enabled }}
         - name: mcp-tmp
           emptyDir: {}
+        {{- end }}
         {{- if and .Values.agent.skillsDir .Values.agent.skillsConfigMap }}
         - name: external-skills
           configMap:
