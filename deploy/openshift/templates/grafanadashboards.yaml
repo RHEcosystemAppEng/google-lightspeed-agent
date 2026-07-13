@@ -37,7 +37,7 @@ spec:
                 ]
               },
               "color": { "mode": "fixed", "fixedColor": "blue" }
-            },
+            }
           },
           "options": {
             "displayMode": "gradient",
@@ -71,7 +71,7 @@ spec:
                 "spanNulls": true
               },
               "color": { "mode": "fixed", "fixedColor": "semi-dark-blue" }
-            },
+            }
           },
           "options": {
             "tooltip": { "mode": "single" },
@@ -268,6 +268,55 @@ spec:
               "instant": true
             }
           ]
+        },
+        {
+          "title": "DCR Client Mapping",
+          "type": "table",
+          "gridPos": { "h": 10, "w": 24, "x": 0, "y": 10 },
+          "datasource": { "type": "prometheus", "uid": "{{ $ds }}" },
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": [
+              {
+                "matcher": { "id": "byName", "options": "account_id" },
+                "properties": [{ "id": "displayName", "value": "Account" }]
+              },
+              {
+                "matcher": { "id": "byName", "options": "order_id" },
+                "properties": [{ "id": "displayName", "value": "Order ID" }]
+              },
+              {
+                "matcher": { "id": "byName", "options": "client_id" },
+                "properties": [{ "id": "displayName", "value": "Client ID" }]
+              }
+            ]
+          },
+          "options": {
+            "showHeader": true,
+            "footer": { "show": true, "reducer": ["sum"], "countRows": true }
+          },
+          "transformations": [
+            {
+              "id": "filterFieldsByName",
+              "options": {
+                "include": { "pattern": "account_id|order_id|client_id" }
+              }
+            },
+            {
+              "id": "organize",
+              "options": {
+                "indexByName": { "account_id": 0, "order_id": 1, "client_id": 2 }
+              }
+            }
+          ],
+          "targets": [
+            {
+              "expr": "dcr_client_info{job=\"{{ $job }}\"}",
+              "refId": "A",
+              "format": "table",
+              "instant": true
+            }
+          ]
         }
       ],
       "schemaVersion": 39,
@@ -314,7 +363,7 @@ spec:
                 ]
               },
               "color": { "mode": "fixed", "fixedColor": "orange" }
-            },
+            }
           },
           "options": {
             "displayMode": "gradient",
@@ -345,7 +394,7 @@ spec:
                 ]
               },
               "color": { "mode": "fixed", "fixedColor": "purple" }
-            },
+            }
           },
           "options": {
             "displayMode": "gradient",
@@ -376,7 +425,7 @@ spec:
                 ]
               },
               "color": { "mode": "fixed", "fixedColor": "semi-dark-blue" }
-            },
+            }
           },
           "options": {
             "displayMode": "gradient",

@@ -46,6 +46,14 @@ async def seeded_db(db_session):
             )
         )
         session.add(
+            DCRClientModel(
+                order_id="order-002",
+                client_id="client-bbb",
+                client_secret_encrypted="encrypted",
+                account_id="account-A",
+            )
+        )
+        session.add(
             UsageRecordModel(
                 order_id="order-001",
                 client_id="client-aaa",
@@ -70,6 +78,7 @@ class TestMetricsCache:
         cache = MetricsCache()
         assert cache.subscriptions == []
         assert cache.dcr_clients == []
+        assert cache.dcr_client_info == []
         assert cache.usage_by_order == []
         assert cache.last_updated is None
 
@@ -98,7 +107,14 @@ class TestMetricsCollector:
 
         assert len(cache.dcr_clients) == 1
         assert cache.dcr_clients[0].account_id == "account-A"
-        assert cache.dcr_clients[0].count == 1
+        assert cache.dcr_clients[0].count == 2
+
+        assert len(cache.dcr_client_info) == 2
+        info_by_order = {c.order_id: c for c in cache.dcr_client_info}
+        assert info_by_order["order-001"].client_id == "client-aaa"
+        assert info_by_order["order-001"].account_id == "account-A"
+        assert info_by_order["order-002"].client_id == "client-bbb"
+        assert info_by_order["order-002"].account_id == "account-A"
 
         assert len(cache.usage_by_order) == 1
         u = cache.usage_by_order[0]
@@ -221,6 +237,35 @@ class TestGaugeCallbacks:
         assert observations[0].value == 1
         assert observations[0].attributes["account_id"] == "acct-A"
 
+    def test_dcr_client_info_gauge_reads_cache(self):
+        from lightspeed_agent.telemetry.metrics import (
+            DCRClientInfoSnapshot,
+            MetricsCache,
+            MetricsCollector,
+            _observe_dcr_client_info,
+        )
+
+        collector = MetricsCollector(collection_interval=60)
+        collector._cache = MetricsCache(
+            dcr_client_info=[
+                DCRClientInfoSnapshot(
+                    account_id="acct-A", order_id="order-1", client_id="client-x"
+                ),
+                DCRClientInfoSnapshot(
+                    account_id="acct-A", order_id="order-2", client_id="client-y"
+                ),
+            ],
+        )
+
+        observations = list(_observe_dcr_client_info(collector))
+        assert len(observations) == 2
+        assert all(o.value == 1 for o in observations)
+
+        by_order = {o.attributes["order_id"]: o.attributes for o in observations}
+        assert by_order["order-1"]["client_id"] == "client-x"
+        assert by_order["order-1"]["account_id"] == "acct-A"
+        assert by_order["order-2"]["client_id"] == "client-y"
+
     def test_usage_gauge_reads_cache(self):
         from lightspeed_agent.telemetry.metrics import (
             MetricsCache,
@@ -336,6 +381,16 @@ class TestEndToEnd:
             ],
         )
         meter.create_observable_gauge(
+            name="dcr_client_info",
+            description="DCR client to subscription mapping",
+            callbacks=[
+                lambda _options: [
+                    otel_metrics.Observation(o.value, o.attributes)
+                    for o in metrics_mod._observe_dcr_client_info(collector)
+                ]
+            ],
+        )
+        meter.create_observable_gauge(
             name="input_tokens",
             description="Total input tokens by account",
             callbacks=[
@@ -382,6 +437,7 @@ class TestEndToEnd:
 
         assert "subscriptions_count" in metric_names
         assert "dcr_clients_active" in metric_names
+        assert "dcr_client_info" in metric_names
         assert "input_tokens" in metric_names
         assert "output_tokens" in metric_names
         assert "request_count" in metric_names
