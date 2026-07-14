@@ -14,7 +14,7 @@ images:
     tag: latest
   handler:
     source: quay.io/ecosystem-appeng/google-marketplace-handler
-    tag: latest
+    tag: latest  # Used for source image pull; GCR tag uses images.agent.tag
   mcp:
     source: quay.io/redhat-services-prod/insights-management-tenant/insights-mcp/red-hat-lightspeed-mcp
     tag: latest
@@ -55,7 +55,7 @@ services:
 # -- GCP infrastructure resource names
 infrastructure:
   dbInstanceName: lightspeed-agent-db
-  vpcConnectorName: lightspeed-redis-conn
+  vpcConnectorName: ls-redis-conn
 
 # -- Pub/Sub configuration
 pubsub:
@@ -106,7 +106,6 @@ deploy:
   gitTokenSMSecret: "git-clone-token"
   serviceAccount:
     name: lightspeed-deploy
-  namespace: ""
   resources:
     requests:
       cpu: 100m

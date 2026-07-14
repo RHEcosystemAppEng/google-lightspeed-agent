@@ -83,6 +83,7 @@ REDIS_CA_CERT_SECRET="${REDIS_CA_CERT_SECRET:-redis-ca-cert}"
 # VPC connector for Cloud Run → Redis access
 VPC_CONNECTOR_NAME="${VPC_CONNECTOR_NAME:-lightspeed-redis-conn}"
 VPC_CONNECTOR_RANGE="${VPC_CONNECTOR_RANGE:-10.8.0.0/28}"
+VPC_NETWORK="${VPC_NETWORK:-default}"
 
 # Cloud SQL configuration
 DB_TIER="${DB_TIER:-db-g1-small}"
@@ -407,7 +408,7 @@ if [[ "$ENABLE_MARKETPLACE" == "true" ]]; then
     CURRENT_DCR_VALUE=$(gcloud secrets versions access latest --secret="$DCR_ENCRYPTION_KEY_SECRET" --project="$PROJECT_ID" 2>/dev/null || echo "")
     if [[ "$CURRENT_DCR_VALUE" == "PLACEHOLDER" || -z "$CURRENT_DCR_VALUE" ]]; then
         log_info "Generating DCR encryption key..."
-        python3 -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode(), end="")' \
+        python3 -c "import os, base64; print(base64.urlsafe_b64encode(os.urandom(32)).decode(), end='')" \
             | gcloud secrets versions add "$DCR_ENCRYPTION_KEY_SECRET" --data-file=- --project="$PROJECT_ID"
         log_info "Secret '$DCR_ENCRYPTION_KEY_SECRET' populated with generated Fernet key"
     else
@@ -523,6 +524,7 @@ if ! gcloud compute networks vpc-access connectors describe "$VPC_CONNECTOR_NAME
     gcloud compute networks vpc-access connectors create "$VPC_CONNECTOR_NAME" \
         --region="$REGION" \
         --range="$VPC_CONNECTOR_RANGE" \
+        --network="$VPC_NETWORK" \
         --project="$PROJECT_ID"
     log_info "VPC connector '$VPC_CONNECTOR_NAME' created"
 else

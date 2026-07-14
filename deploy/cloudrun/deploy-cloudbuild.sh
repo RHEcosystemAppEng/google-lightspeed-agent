@@ -284,6 +284,15 @@ fi
 if [[ -n "${MCP_SSE_READ_TIMEOUT:-}" ]]; then
     SUBSTITUTIONS="${SUBSTITUTIONS},_MCP_SSE_READ_TIMEOUT=${MCP_SSE_READ_TIMEOUT}"
 fi
+if [[ -n "${GEMINI_MODEL:-}" ]]; then
+    SUBSTITUTIONS="${SUBSTITUTIONS},_GEMINI_MODEL=${GEMINI_MODEL}"
+fi
+if [[ -n "${AGENT_LOGGING_DETAIL:-}" ]]; then
+    SUBSTITUTIONS="${SUBSTITUTIONS},_AGENT_LOGGING_DETAIL=${AGENT_LOGGING_DETAIL}"
+fi
+if [[ -n "${MCP_DEBUG:-}" ]]; then
+    SUBSTITUTIONS="${SUBSTITUTIONS},_MCP_DEBUG=${MCP_DEBUG}"
+fi
 
 # =============================================================================
 # Step 4: Submit Cloud Build
