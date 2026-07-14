@@ -20,7 +20,7 @@ from google.auth import exceptions as google_auth_exceptions
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token as google_id_token
 
-from lightspeed_agent.config import get_settings
+from lightspeed_agent.config import Settings, get_settings
 from lightspeed_agent.dcr import DCRError, DCRRequest, get_dcr_service
 from lightspeed_agent.marketplace.models import ProcurementEvent, ProcurementEventType
 from lightspeed_agent.marketplace.service import get_procurement_service
@@ -200,6 +200,24 @@ async def _handle_pubsub_event(body: dict[str, Any]) -> JSONResponse:
         if entitlement_id:
             product = await _fetch_entitlement_product(entitlement_id, settings)
 
+    if product == _NOT_AUTHORIZED:
+        logger.info(
+            "Entitlement %s belongs to a different product (SA not authorized)",
+            entitlement_data.get("id", "unknown") if entitlement_data else "unknown",
+        )
+        return JSONResponse(content={"status": "ok", "message": "not for this product"})
+
+    # Fail-closed: when filtering is configured but product can't be determined,
+    # skip the event. Pub/Sub will retry on transient API failures.
+    if not product and settings.service_control_service_name and entitlement_data:
+        logger.warning(
+            "Could not determine product for entitlement %s — skipping (fail-closed)",
+            entitlement_data.get("id", "unknown"),
+        )
+        return JSONResponse(
+            content={"status": "ok", "message": "Product could not be determined, skipping"},
+        )
+
     if product and settings.service_control_service_name:
         product_id = product.removeprefix("products/")
         if product_id != settings.service_control_service_name:
@@ -319,7 +337,7 @@ def _build_procurement_event(
 _NOT_AUTHORIZED = "__not_authorized__"
 
 
-async def _fetch_entitlement_product(entitlement_id: str, settings: Any) -> str | None:
+async def _fetch_entitlement_product(entitlement_id: str, settings: Settings) -> str | None:
     """Fetch the product field for an entitlement from the Procurement API.
 
     Used for product-level filtering when the Pub/Sub message doesn't include
@@ -330,7 +348,6 @@ async def _fetch_entitlement_product(entitlement_id: str, settings: Any) -> str 
     the product could not be determined.
     """
     import google.auth
-    import google.auth.transport.requests
     import httpx
 
     project = settings.google_cloud_project
@@ -346,7 +363,7 @@ async def _fetch_entitlement_product(entitlement_id: str, settings: Any) -> str 
         credentials, _ = google.auth.default(
             scopes=["https://www.googleapis.com/auth/cloud-platform"]
         )
-        credentials.refresh(google.auth.transport.requests.Request())  # type: ignore[no-untyped-call]
+        await asyncio.to_thread(credentials.refresh, google_requests.Request())
         headers = {"Authorization": f"Bearer {credentials.token}"}
 
         async with httpx.AsyncClient() as client:
