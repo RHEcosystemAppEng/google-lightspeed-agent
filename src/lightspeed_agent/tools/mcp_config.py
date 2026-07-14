@@ -14,6 +14,8 @@ class MCPServerConfig:
     server_url: str | None = None
     read_only: bool = True
     container_image: str = "ghcr.io/redhatinsights/red-hat-lightspeed-mcp:latest"
+    timeout: float = 60.0
+    sse_read_timeout: float = 300.0
 
     @classmethod
     def from_settings(cls) -> "MCPServerConfig":
@@ -23,6 +25,8 @@ class MCPServerConfig:
             transport_mode=settings.mcp_transport_mode,
             server_url=settings.mcp_server_url,
             read_only=settings.mcp_read_only,
+            timeout=settings.mcp_timeout,
+            sse_read_timeout=settings.mcp_sse_read_timeout,
         )
 
     def get_stdio_command(self) -> str:

@@ -2,7 +2,7 @@
 
 import os
 import pathlib
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from lightspeed_agent.tools.a2a_skills import (
     ALL_SKILLS,
@@ -80,6 +80,103 @@ class TestMCPServerConfig:
         )
 
         assert config.get_http_url() == "http://localhost:8080/mcp"
+
+    def test_default_timeouts(self):
+        """Test default timeout values."""
+        config = MCPServerConfig(transport_mode="stdio")
+
+        assert config.timeout == 60.0
+        assert config.sse_read_timeout == 300.0
+
+    def test_custom_timeouts(self):
+        """Test custom timeout values."""
+        config = MCPServerConfig(
+            transport_mode="http",
+            timeout=120.0,
+            sse_read_timeout=600.0,
+        )
+
+        assert config.timeout == 120.0
+        assert config.sse_read_timeout == 600.0
+
+    def test_timeouts_from_settings(self):
+        """Test that timeouts are loaded from settings."""
+        with patch.dict(os.environ, {
+            "MCP_TRANSPORT_MODE": "http",
+            "MCP_TIMEOUT": "90",
+            "MCP_SSE_READ_TIMEOUT": "450",
+        }):
+            from lightspeed_agent.config.settings import get_settings
+            get_settings.cache_clear()
+
+            config = MCPServerConfig.from_settings()
+
+            assert config.timeout == 90.0
+            assert config.sse_read_timeout == 450.0
+
+
+class TestMCPToolsetTimeouts:
+    """Tests for timeout propagation to MCP connection params."""
+
+    def test_stdio_toolset_passes_timeout(self):
+        """Test that stdio toolset passes timeout to connection params."""
+        from lightspeed_agent.tools.insights_tools import _create_stdio_toolset
+
+        config = MCPServerConfig(transport_mode="stdio", timeout=120.0)
+
+        with patch(
+            "lightspeed_agent.tools.insights_tools.StdioConnectionParams"
+        ) as mock_params:
+            mock_params.return_value = MagicMock()
+            with patch("lightspeed_agent.tools.insights_tools.McpToolset"):
+                _create_stdio_toolset(config)
+
+            mock_params.assert_called_once()
+            assert mock_params.call_args.kwargs["timeout"] == 120.0
+
+    def test_sse_toolset_passes_timeouts(self):
+        """Test that SSE toolset passes both timeouts to connection params."""
+        from lightspeed_agent.tools.insights_tools import _create_sse_toolset
+
+        config = MCPServerConfig(
+            transport_mode="sse",
+            server_url="http://localhost:8080",
+            timeout=90.0,
+            sse_read_timeout=600.0,
+        )
+
+        with patch(
+            "lightspeed_agent.tools.insights_tools.SseConnectionParams"
+        ) as mock_params:
+            mock_params.return_value = MagicMock()
+            with patch("lightspeed_agent.tools.insights_tools.McpToolset"):
+                _create_sse_toolset(config)
+
+            mock_params.assert_called_once()
+            assert mock_params.call_args.kwargs["timeout"] == 90.0
+            assert mock_params.call_args.kwargs["sse_read_timeout"] == 600.0
+
+    def test_http_toolset_passes_timeouts(self):
+        """Test that HTTP toolset passes both timeouts to connection params."""
+        from lightspeed_agent.tools.insights_tools import _create_http_toolset
+
+        config = MCPServerConfig(
+            transport_mode="http",
+            server_url="http://localhost:8080",
+            timeout=90.0,
+            sse_read_timeout=600.0,
+        )
+
+        with patch(
+            "lightspeed_agent.tools.insights_tools.StreamableHTTPConnectionParams"
+        ) as mock_params:
+            mock_params.return_value = MagicMock()
+            with patch("lightspeed_agent.tools.insights_tools.McpToolset"):
+                _create_http_toolset(config)
+
+            mock_params.assert_called_once()
+            assert mock_params.call_args.kwargs["timeout"] == 90.0
+            assert mock_params.call_args.kwargs["sse_read_timeout"] == 600.0
 
 
 class TestA2ASkills:

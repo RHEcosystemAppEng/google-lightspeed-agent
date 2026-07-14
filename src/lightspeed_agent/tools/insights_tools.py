@@ -61,7 +61,10 @@ def _create_stdio_toolset(
         args=config.get_stdio_args(),
     )
 
-    connection_params = StdioConnectionParams(server_params=server_params)
+    connection_params = StdioConnectionParams(
+        server_params=server_params,
+        timeout=config.timeout,
+    )
 
     return McpToolset(
         connection_params=connection_params,
@@ -85,6 +88,8 @@ def _create_sse_toolset(
     """
     connection_params = SseConnectionParams(
         url=f"{config.server_url}/sse",
+        timeout=config.timeout,
+        sse_read_timeout=config.sse_read_timeout,
     )
 
     return McpToolset(
@@ -111,6 +116,8 @@ def _create_http_toolset(
     """
     connection_params = StreamableHTTPConnectionParams(
         url=config.get_http_url(),
+        timeout=config.timeout,
+        sse_read_timeout=config.sse_read_timeout,
     )
 
     return McpToolset(

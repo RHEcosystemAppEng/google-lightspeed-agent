@@ -132,6 +132,8 @@ The MCP server runs as a sidecar container and provides tools for accessing Red 
 | `MCP_TRANSPORT_MODE` | `stdio` | MCP transport: `stdio`, `http`, or `sse` |
 | `MCP_SERVER_URL` | `http://localhost:8080` | MCP server URL (use 8081 for Podman to avoid A2A Inspector conflict) |
 | `MCP_READ_ONLY` | `true` | Enable read-only mode for MCP tools |
+| `MCP_TIMEOUT` | `60` | Timeout in seconds for MCP tool calls (connection + execution) |
+| `MCP_SSE_READ_TIMEOUT` | `300` | Read timeout in seconds for MCP SSE/HTTP streaming connections |
 
 **Development (stdio mode):**
 

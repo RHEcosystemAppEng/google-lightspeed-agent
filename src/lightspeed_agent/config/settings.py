@@ -136,6 +136,14 @@ class Settings(BaseSettings):
         default=True,
         description="Enable read-only mode for MCP tools",
     )
+    mcp_timeout: float = Field(
+        default=60.0,
+        description="Timeout in seconds for MCP tool calls (connection + execution)",
+    )
+    mcp_sse_read_timeout: float = Field(
+        default=300.0,
+        description="Read timeout in seconds for MCP SSE/HTTP streaming connections",
+    )
 
     # ADK AI Skills
     skills_dir: str | None = Field(
