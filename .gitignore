@@ -105,6 +105,7 @@ my-secrets.yaml
 *-secrets.yaml
 !deploy/podman/lightspeed-agent-secret.yaml
 deploy/openshift/secrets.yaml
+deploy/gitops/google-cloud/secrets.yaml
 
 # Config directory (keep .gitkeep only)
 config/*
