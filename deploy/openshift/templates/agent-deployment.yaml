@@ -167,7 +167,9 @@ spec:
             - "--toolset"
             - {{ .Values.mcp.toolset | quote }}
             {{- end }}
+            {{- if .Values.mcp.debug }}
             - "--debug"
+            {{- end }}
             - "$(MCP_SERVER_MODE)"
             - "--port"
             - "$(MCP_SERVER_PORT)"

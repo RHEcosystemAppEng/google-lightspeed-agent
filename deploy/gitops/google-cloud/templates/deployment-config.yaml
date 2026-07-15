@@ -1,0 +1,49 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "chart.fullname" . }}-deploy-config
+  namespace: {{ include "chart.namespace" . }}
+  labels:
+    {{- include "chart.labels" . | nindent 4 }}
+data:
+  GOOGLE_CLOUD_PROJECT: {{ required "project.id is required" .Values.project.id | quote }}
+  _REGION: {{ .Values.project.region | quote }}
+  _VERTEXAI_LOCATION: {{ .Values.project.vertexaiLocation | quote }}
+  _IMAGE_TAG: {{ .Values.images.agent.tag | quote }}
+  _AGENT_SOURCE_IMAGE: {{ printf "%s:%s" .Values.images.agent.source .Values.images.agent.tag | quote }}
+  _HANDLER_SOURCE_IMAGE: {{ printf "%s:%s" .Values.images.handler.source .Values.images.handler.tag | quote }}
+  _MCP_SOURCE_IMAGE: {{ printf "%s:%s" .Values.images.mcp.source .Values.images.mcp.tag | quote }}
+  _SERVICE_NAME: {{ .Values.services.agent.name | quote }}
+  _HANDLER_SERVICE_NAME: {{ .Values.services.handler.name | quote }}
+  _SERVICE_ACCOUNT_NAME: {{ .Values.services.serviceAccountName | quote }}
+  _DB_INSTANCE_NAME: {{ .Values.infrastructure.dbInstanceName | quote }}
+  _VPC_CONNECTOR_NAME: {{ .Values.infrastructure.vpcConnectorName | quote }}
+  _PUBSUB_TOPIC: {{ .Values.pubsub.topic | quote }}
+  _PUBSUB_SUBSCRIPTION: {{ .Values.pubsub.subscription | quote }}
+  _PUBSUB_INVOKER_NAME: {{ .Values.pubsub.invokerName | quote }}
+  _SERVICE_CONTROL_SERVICE_NAME: {{ .Values.pubsub.serviceControlServiceName | quote }}
+  _ENABLE_LB_AGENT: {{ .Values.loadBalancer.agent.enabled | quote }}
+  _ENABLE_LB_HANDLER: {{ .Values.loadBalancer.handler.enabled | quote }}
+  _AGENT_DOMAIN_NAME: {{ .Values.loadBalancer.agent.domain | quote }}
+  _HANDLER_DOMAIN_NAME: {{ .Values.loadBalancer.handler.domain | quote }}
+  _LB_NAME: {{ .Values.loadBalancer.name | quote }}
+  _ENABLE_CLOUD_ARMOR_AGENT: {{ .Values.loadBalancer.agent.cloudArmor.enabled | quote }}
+  _ENABLE_CLOUD_ARMOR_HANDLER: {{ .Values.loadBalancer.handler.cloudArmor.enabled | quote }}
+  _CLOUD_ARMOR_SENSITIVITY_AGENT: {{ .Values.loadBalancer.agent.cloudArmor.sensitivity | quote }}
+  _CLOUD_ARMOR_SENSITIVITY_HANDLER: {{ .Values.loadBalancer.handler.cloudArmor.sensitivity | quote }}
+  _ALLOW_UNAUTHENTICATED: {{ .Values.security.allowUnauthenticated | quote }}
+  _SCAN_SEVERITY: {{ .Values.security.scanSeverity | quote }}
+  _GEMINI_MODEL: {{ .Values.agent.geminiModel | quote }}
+  _AGENT_LOGGING_DETAIL: {{ .Values.agent.loggingDetail | quote }}
+  _OTEL_SERVICE_NAME: {{ .Values.agent.otelServiceName | default .Values.services.agent.name | quote }}
+  _MCP_DEBUG: {{ .Values.mcp.debug | quote }}
+  _MCP_TIMEOUT: {{ .Values.mcp.timeout | quote }}
+  _MCP_SSE_READ_TIMEOUT: {{ .Values.mcp.sseReadTimeout | quote }}
+  _DATABASE_URL_SECRET: {{ .Values.secrets.databaseUrl | quote }}
+  _SESSION_DATABASE_URL_SECRET: {{ .Values.secrets.sessionDatabaseUrl | quote }}
+  _DCR_ENCRYPTION_KEY_SECRET: {{ .Values.secrets.dcrEncryptionKey | quote }}
+  _RATE_LIMIT_KEY_PREFIX: {{ .Values.rateLimit.keyPrefix | quote }}
+  _REDIS_URL_SECRET: {{ .Values.rateLimit.redisUrlSecret | quote }}
+  _REDIS_CA_CERT_SECRET: {{ .Values.rateLimit.redisCaCertSecret | quote }}
+  GIT_REPO: {{ .Values.deploy.gitRepo | quote }}
+  GIT_BRANCH: {{ .Values.deploy.gitBranch | quote }}

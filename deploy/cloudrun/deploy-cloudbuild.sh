@@ -34,7 +34,7 @@
 #   MCP_SOURCE_IMAGE          MCP server image (default: quay.io/redhat-services-prod/.../red-hat-lightspeed-mcp:latest)
 #   SERVICE_ACCOUNT_NAME      Cloud Run service account (default: lightspeed-agent)
 #   DB_INSTANCE_NAME          Cloud SQL instance name (default: lightspeed-agent-db)
-#   VPC_CONNECTOR_NAME        VPC connector name (default: lightspeed-redis-conn)
+#   VPC_CONNECTOR_NAME        VPC connector name (default: ls-redis-conn)
 #   SCAN_SEVERITY             Trivy scan severity threshold (default: CRITICAL,HIGH)
 #   VERTEXAI_LOCATION         Vertex AI location (default: global)
 #
@@ -259,6 +259,39 @@ if [[ -n "${OTEL_SERVICE_NAME:-}" ]]; then
     SUBSTITUTIONS="${SUBSTITUTIONS},_OTEL_SERVICE_NAME=${OTEL_SERVICE_NAME}"
 elif [[ -n "${SERVICE_NAME:-}" ]]; then
     SUBSTITUTIONS="${SUBSTITUTIONS},_OTEL_SERVICE_NAME=${SERVICE_NAME}"
+fi
+if [[ -n "${DATABASE_URL_SECRET:-}" ]]; then
+    SUBSTITUTIONS="${SUBSTITUTIONS},_DATABASE_URL_SECRET=${DATABASE_URL_SECRET}"
+fi
+if [[ -n "${SESSION_DATABASE_URL_SECRET:-}" ]]; then
+    SUBSTITUTIONS="${SUBSTITUTIONS},_SESSION_DATABASE_URL_SECRET=${SESSION_DATABASE_URL_SECRET}"
+fi
+if [[ -n "${DCR_ENCRYPTION_KEY_SECRET:-}" ]]; then
+    SUBSTITUTIONS="${SUBSTITUTIONS},_DCR_ENCRYPTION_KEY_SECRET=${DCR_ENCRYPTION_KEY_SECRET}"
+fi
+if [[ -n "${RATE_LIMIT_KEY_PREFIX:-}" ]]; then
+    SUBSTITUTIONS="${SUBSTITUTIONS},_RATE_LIMIT_KEY_PREFIX=${RATE_LIMIT_KEY_PREFIX}"
+fi
+if [[ -n "${REDIS_URL_SECRET:-}" ]]; then
+    SUBSTITUTIONS="${SUBSTITUTIONS},_REDIS_URL_SECRET=${REDIS_URL_SECRET}"
+fi
+if [[ -n "${REDIS_CA_CERT_SECRET:-}" ]]; then
+    SUBSTITUTIONS="${SUBSTITUTIONS},_REDIS_CA_CERT_SECRET=${REDIS_CA_CERT_SECRET}"
+fi
+if [[ -n "${MCP_TIMEOUT:-}" ]]; then
+    SUBSTITUTIONS="${SUBSTITUTIONS},_MCP_TIMEOUT=${MCP_TIMEOUT}"
+fi
+if [[ -n "${MCP_SSE_READ_TIMEOUT:-}" ]]; then
+    SUBSTITUTIONS="${SUBSTITUTIONS},_MCP_SSE_READ_TIMEOUT=${MCP_SSE_READ_TIMEOUT}"
+fi
+if [[ -n "${GEMINI_MODEL:-}" ]]; then
+    SUBSTITUTIONS="${SUBSTITUTIONS},_GEMINI_MODEL=${GEMINI_MODEL}"
+fi
+if [[ -n "${AGENT_LOGGING_DETAIL:-}" ]]; then
+    SUBSTITUTIONS="${SUBSTITUTIONS},_AGENT_LOGGING_DETAIL=${AGENT_LOGGING_DETAIL}"
+fi
+if [[ -n "${MCP_DEBUG:-}" ]]; then
+    SUBSTITUTIONS="${SUBSTITUTIONS},_MCP_DEBUG=${MCP_DEBUG}"
 fi
 
 # =============================================================================

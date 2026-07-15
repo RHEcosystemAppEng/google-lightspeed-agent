@@ -71,7 +71,13 @@ SERVICE_NAME="${SERVICE_NAME:-lightspeed-agent}"
 SERVICE_ACCOUNT_NAME="${SERVICE_ACCOUNT_NAME:-${SERVICE_NAME}}"
 HANDLER_SERVICE_NAME="${HANDLER_SERVICE_NAME:-marketplace-handler}"
 DB_INSTANCE_NAME="${DB_INSTANCE_NAME:-lightspeed-agent-db}"
-VPC_CONNECTOR_NAME="${VPC_CONNECTOR_NAME:-lightspeed-redis-conn}"
+VPC_CONNECTOR_NAME="${VPC_CONNECTOR_NAME:-ls-redis-conn}"
+DATABASE_URL_SECRET="${DATABASE_URL_SECRET:-database-url}"
+SESSION_DATABASE_URL_SECRET="${SESSION_DATABASE_URL_SECRET:-session-database-url}"
+DCR_ENCRYPTION_KEY_SECRET="${DCR_ENCRYPTION_KEY_SECRET:-dcr-encryption-key}"
+RATE_LIMIT_KEY_PREFIX="${RATE_LIMIT_KEY_PREFIX:-lightspeed:ratelimit}"
+REDIS_URL_SECRET="${REDIS_URL_SECRET:-rate-limit-redis-url}"
+REDIS_CA_CERT_SECRET="${REDIS_CA_CERT_SECRET:-redis-ca-cert}"
 IMAGE_TAG="${IMAGE_TAG:-latest}"
 
 # Pub/Sub Invoker Service Account (must match setup.sh)
@@ -92,6 +98,12 @@ AGENT_DOMAIN_NAME="${AGENT_DOMAIN_NAME:-}"
 HANDLER_DOMAIN_NAME="${HANDLER_DOMAIN_NAME:-}"
 LB_NAME="${LB_NAME:-lightspeed-lb}"
 SERVICE_CONTROL_SERVICE_NAME="${SERVICE_CONTROL_SERVICE_NAME:-}"
+GEMINI_MODEL="${GEMINI_MODEL:-gemini-3.5-flash}"
+AGENT_LOGGING_DETAIL="${AGENT_LOGGING_DETAIL:-basic}"
+MCP_DEBUG="${MCP_DEBUG:-false}"
+MCP_TIMEOUT="${MCP_TIMEOUT:-60}"
+MCP_SSE_READ_TIMEOUT="${MCP_SSE_READ_TIMEOUT:-300}"
+OTEL_SERVICE_NAME="${OTEL_SERVICE_NAME:-${SERVICE_NAME}}"
 PUBSUB_TOPIC="${PUBSUB_TOPIC:-marketplace-entitlements}"
 
 # When PUBSUB_TOPIC is a fully-qualified path (projects/.../topics/...),
@@ -247,7 +259,23 @@ deploy_agent() {
         -e "s|\${SERVICE_ACCOUNT_NAME}|${SERVICE_ACCOUNT_NAME}|g" \
         -e "s|\${DB_INSTANCE_NAME}|${DB_INSTANCE_NAME}|g" \
         -e "s|\${VPC_CONNECTOR_NAME}|${VPC_CONNECTOR_NAME}|g" \
+        -e "s|\${GEMINI_MODEL}|${GEMINI_MODEL}|g" \
+        -e "s|\${AGENT_LOGGING_DETAIL}|${AGENT_LOGGING_DETAIL}|g" \
+        -e "s|\${MCP_TIMEOUT}|${MCP_TIMEOUT}|g" \
+        -e "s|\${MCP_SSE_READ_TIMEOUT}|${MCP_SSE_READ_TIMEOUT}|g" \
+        -e "s|\${DATABASE_URL_SECRET}|${DATABASE_URL_SECRET}|g" \
+        -e "s|\${SESSION_DATABASE_URL_SECRET}|${SESSION_DATABASE_URL_SECRET}|g" \
+        -e "s|\${RATE_LIMIT_KEY_PREFIX}|${RATE_LIMIT_KEY_PREFIX}|g" \
+        -e "s|\${REDIS_URL_SECRET}|${REDIS_URL_SECRET}|g" \
+        -e "s|\${REDIS_CA_CERT_SECRET}|${REDIS_CA_CERT_SECRET}|g" \
+        -e "s|\${OTEL_SERVICE_NAME}|${OTEL_SERVICE_NAME}|g" \
         deploy/cloudrun/service.yaml > "$tmp_yaml"
+
+    if [[ "$MCP_DEBUG" == "true" ]]; then
+        sed -i "s|            # \${MCP_DEBUG_FLAG}|            - \"--debug\"|" "$tmp_yaml"
+    else
+        sed -i "/# \${MCP_DEBUG_FLAG}/d" "$tmp_yaml"
+    fi
 
     # Deploy using the YAML
     gcloud run services replace "$tmp_yaml" \
@@ -286,6 +314,11 @@ deploy_handler() {
         -e "s|\${DB_INSTANCE_NAME}|${DB_INSTANCE_NAME}|g" \
         -e "s|\${SERVICE_CONTROL_SERVICE_NAME}|${SERVICE_CONTROL_SERVICE_NAME}|g" \
         -e "s|\${VPC_CONNECTOR_NAME}|${VPC_CONNECTOR_NAME}|g" \
+        -e "s|\${DATABASE_URL_SECRET}|${DATABASE_URL_SECRET}|g" \
+        -e "s|\${DCR_ENCRYPTION_KEY_SECRET}|${DCR_ENCRYPTION_KEY_SECRET}|g" \
+        -e "s|\${RATE_LIMIT_KEY_PREFIX}|${RATE_LIMIT_KEY_PREFIX}|g" \
+        -e "s|\${REDIS_URL_SECRET}|${REDIS_URL_SECRET}|g" \
+        -e "s|\${REDIS_CA_CERT_SECRET}|${REDIS_CA_CERT_SECRET}|g" \
         deploy/cloudrun/marketplace-handler.yaml > "$tmp_yaml"
 
     # Deploy using the YAML

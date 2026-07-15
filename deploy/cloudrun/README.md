@@ -510,7 +510,7 @@ The setup script enables required APIs, creates service accounts (runtime + Pub/
 | `SERVICE_ACCOUNT_NAME` | `${SERVICE_NAME}` | GCP service account name (allows a different name than the Cloud Run service) |
 | `HANDLER_SERVICE_NAME` | `marketplace-handler` | Marketplace handler Cloud Run service name |
 | `DB_INSTANCE_NAME` | `lightspeed-agent-db` | Cloud SQL instance name |
-| `VPC_CONNECTOR_NAME` | `lightspeed-redis-conn` | Serverless VPC Access connector for Redis |
+| `VPC_CONNECTOR_NAME` | `ls-redis-conn` | Serverless VPC Access connector for Redis |
 | `OTEL_SERVICE_NAME` | `${SERVICE_NAME}` | OTel service name for metrics and traces |
 | `PUBSUB_INVOKER_NAME` | `pubsub-invoker` | Pub/Sub invoker SA name |
 | `PUBSUB_TOPIC` | `marketplace-entitlements` | Pub/Sub topic for marketplace events. **Must** be set to the fully-qualified topic from Google Cloud Marketplace for production deployments. See [Set Environment Variables](#1-set-environment-variables). |
@@ -582,7 +582,7 @@ The agent uses Redis for distributed rate limiting. On Cloud Run, use **Cloud Me
 # Create a Serverless VPC Access connector in the same region as Cloud Run
 # Use the default network or your custom VPC. The subnet range must not overlap with existing subnets.
 # Check available ranges: gcloud compute networks subnets list --network=default --filter="region:$GOOGLE_CLOUD_LOCATION"
-gcloud compute networks vpc-access connectors create lightspeed-redis-conn \
+gcloud compute networks vpc-access connectors create ls-redis-conn \
   --region=$GOOGLE_CLOUD_LOCATION \
   --network=default \
   --range=10.8.0.0/28 \
@@ -642,8 +642,8 @@ echo -n "rediss://${REDIS_HOST}:${REDIS_PORT}/0" | \
 **Step 5: Set the VPC connector name** (if different from default):
 
 ```bash
-# Default is lightspeed-redis-conn; override if you used a different name
-export VPC_CONNECTOR_NAME="lightspeed-redis-conn"
+# Default is ls-redis-conn; override if you used a different name
+export VPC_CONNECTOR_NAME="ls-redis-conn"
 ```
 
 See [Connect to Redis from Cloud Run](https://cloud.google.com/run/docs/integrate/redis-memorystore) for more details.
@@ -953,7 +953,7 @@ sed -e "s|\${PROJECT_ID}|$GOOGLE_CLOUD_PROJECT|g" \
     -e "s|\${REGION}|$GOOGLE_CLOUD_LOCATION|g" \
     -e "s|\${VERTEXAI_LOCATION}|${VERTEXAI_LOCATION:-global}|g" \
     -e "s|\${DB_INSTANCE_NAME}|${DB_INSTANCE_NAME:-lightspeed-agent-db}|g" \
-    -e "s|\${VPC_CONNECTOR_NAME}|${VPC_CONNECTOR_NAME:-lightspeed-redis-conn}|g" \
+    -e "s|\${VPC_CONNECTOR_NAME}|${VPC_CONNECTOR_NAME:-ls-redis-conn}|g" \
     -e "s|\${SERVICE_NAME}|${SERVICE_NAME:-lightspeed-agent}|g" \
     -e "s|\${SERVICE_ACCOUNT_NAME}|${SERVICE_ACCOUNT_NAME:-lightspeed-agent}|g" \
     -e "s|\${MCP_IMAGE}|${MCP_IMAGE:-gcr.io/$GOOGLE_CLOUD_PROJECT/insights-mcp:latest}|g" \
@@ -1066,7 +1066,7 @@ All variables have defaults matching `deploy.sh`. Override any with `--substitut
 | `_IMAGE_TAG` | `latest` | Container image tag |
 | `_SERVICE_ACCOUNT_NAME` | `lightspeed-agent` | GCP service account name |
 | `_DB_INSTANCE_NAME` | `lightspeed-agent-db` | Cloud SQL instance name |
-| `_VPC_CONNECTOR_NAME` | `lightspeed-redis-conn` | VPC connector for Redis |
+| `_VPC_CONNECTOR_NAME` | `ls-redis-conn` | VPC connector for Redis |
 | `_MCP_SOURCE_IMAGE` | `quay.io/.../red-hat-lightspeed-mcp:latest` | MCP image to mirror to GCR |
 | `_ALLOW_UNAUTHENTICATED` | `false` | Allow public access to both services |
 | `_PUBSUB_INVOKER_NAME` | `pubsub-invoker` | Pub/Sub invoker SA name |
@@ -1208,7 +1208,7 @@ Both the agent and the marketplace handler use Cloud Memorystore for Redis for d
 | `RATE_LIMIT_REQUESTS_PER_MINUTE` | Env | Max requests per minute per principal |
 | `RATE_LIMIT_REQUESTS_PER_HOUR` | Env | Max requests per hour per principal |
 
-Both services use a VPC connector to reach the Redis instance. Set `VPC_CONNECTOR_NAME` (default: `lightspeed-redis-conn`) when deploying. In-transit encryption (TLS) is enabled on the Memorystore instance; the CA certificate is mounted from Secret Manager as a volume (see `service.yaml` and `marketplace-handler.yaml`). See [Rate Limiting — Testing](../../docs/rate-limiting.md#testing-rate-limiting) for how to validate rate limiting.
+Both services use a VPC connector to reach the Redis instance. Set `VPC_CONNECTOR_NAME` (default: `ls-redis-conn`) when deploying. In-transit encryption (TLS) is enabled on the Memorystore instance; the CA certificate is mounted from Secret Manager as a volume (see `service.yaml` and `marketplace-handler.yaml`). See [Rate Limiting — Testing](../../docs/rate-limiting.md#testing-rate-limiting) for how to validate rate limiting.
 
 ### MCP Output Size Guard
 

@@ -20,7 +20,7 @@ from google.auth import exceptions as google_auth_exceptions
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token as google_id_token
 
-from lightspeed_agent.config import get_settings
+from lightspeed_agent.config import Settings, get_settings
 from lightspeed_agent.dcr import DCRError, DCRRequest, get_dcr_service
 from lightspeed_agent.marketplace.models import ProcurementEvent, ProcurementEventType
 from lightspeed_agent.marketplace.service import get_procurement_service
@@ -190,8 +190,35 @@ async def _handle_pubsub_event(body: dict[str, Any]) -> JSONResponse:
     entitlement_data = data.get("entitlement")
     product = entitlement_data.get("product") if entitlement_data else None
 
+    # GCP Pub/Sub notifications often omit the product field. When filtering
+    # is configured, fetch it from the Procurement API if missing.
+    if not product and settings.service_control_service_name and entitlement_data:
+        entitlement_id = (
+            entitlement_data.get("id")
+            or entitlement_data.get("name", "").split("/")[-1]
+        )
+        if entitlement_id:
+            product = await _fetch_entitlement_product(entitlement_id, settings)
+
+    if product == _NOT_AUTHORIZED:
+        logger.info(
+            "Entitlement %s belongs to a different product (SA not authorized)",
+            entitlement_data.get("id", "unknown") if entitlement_data else "unknown",
+        )
+        return JSONResponse(content={"status": "ok", "message": "not for this product"})
+
+    # Fail-closed: when filtering is configured but product can't be determined,
+    # skip the event. Pub/Sub will retry on transient API failures.
+    if not product and settings.service_control_service_name and entitlement_data:
+        logger.warning(
+            "Could not determine product for entitlement %s — skipping (fail-closed)",
+            entitlement_data.get("id", "unknown"),
+        )
+        return JSONResponse(
+            content={"status": "ok", "message": "Product could not be determined, skipping"},
+        )
+
     if product and settings.service_control_service_name:
-        # Strip the "products/" prefix if present
         product_id = product.removeprefix("products/")
         if product_id != settings.service_control_service_name:
             logger.info(
@@ -305,3 +332,65 @@ def _build_procurement_event(
         account=account_info,
         entitlement=entitlement_info,
     )
+
+
+_NOT_AUTHORIZED = "__not_authorized__"
+
+
+async def _fetch_entitlement_product(entitlement_id: str, settings: Settings) -> str | None:
+    """Fetch the product field for an entitlement from the Procurement API.
+
+    Used for product-level filtering when the Pub/Sub message doesn't include
+    the product field (which is common for most event types).
+
+    Returns the product string, _NOT_AUTHORIZED if the SA lacks permission
+    (meaning this entitlement belongs to a different product), or None if
+    the product could not be determined.
+    """
+    import google.auth
+    import httpx
+
+    project = settings.google_cloud_project
+    if not project:
+        return None
+
+    url = (
+        f"https://cloudcommerceprocurement.googleapis.com/v1"
+        f"/providers/{project}/entitlements/{entitlement_id}"
+    )
+
+    try:
+        credentials, _ = google.auth.default(
+            scopes=["https://www.googleapis.com/auth/cloud-platform"]
+        )
+        await asyncio.to_thread(credentials.refresh, google_requests.Request())
+        headers = {"Authorization": f"Bearer {credentials.token}"}
+
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url, headers=headers, timeout=10.0)
+
+        if response.status_code == 200:
+            product: str = response.json().get("product", "")
+            if product:
+                logger.info(
+                    "Resolved product %s for entitlement %s via API",
+                    product,
+                    entitlement_id,
+                )
+                return product
+        elif response.status_code == 403:
+            logger.info(
+                "Not authorized to access entitlement %s — belongs to a different product",
+                entitlement_id,
+            )
+            return _NOT_AUTHORIZED
+        else:
+            logger.warning(
+                "Could not fetch entitlement %s for product filtering (HTTP %d)",
+                entitlement_id,
+                response.status_code,
+            )
+    except Exception as e:
+        logger.warning("Error fetching entitlement %s for product filtering: %s", entitlement_id, e)
+
+    return None

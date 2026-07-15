@@ -64,7 +64,7 @@ spec:
             - name: GOOGLE_CLOUD_LOCATION
               value: "${VERTEXAI_LOCATION}"
             - name: GEMINI_MODEL
-              value: "gemini-3.5-flash"
+              value: "${GEMINI_MODEL}"
             # Agent Configuration
             - name: AGENT_HOST
               value: "0.0.0.0"
@@ -94,7 +94,7 @@ spec:
             - name: LOG_FORMAT
               value: "json"
             - name: AGENT_LOGGING_DETAIL
-              value: "basic"
+              value: "${AGENT_LOGGING_DETAIL}"
             # Red Hat SSO Configuration
             - name: RED_HAT_SSO_ISSUER
               value: "https://sso.redhat.com/auth/realms/redhat-external"
@@ -117,6 +117,10 @@ spec:
               value: "http://localhost:8080"
             - name: MCP_READ_ONLY
               value: "true"
+            - name: MCP_TIMEOUT
+              value: "${MCP_TIMEOUT}"
+            - name: MCP_SSE_READ_TIMEOUT
+              value: "${MCP_SSE_READ_TIMEOUT}"
             # ADK AI Skills — optional external skills directory.
             # Mount custom skills via a volume and set the path here.
             # Bundled skills always load; external skills with the same name
@@ -138,7 +142,7 @@ spec:
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
-                  name: database-url
+                  name: ${DATABASE_URL_SECRET}
                   key: latest
             # Enforce SSL/TLS for direct TCP PostgreSQL connections.
             # Not needed when using Cloud SQL Proxy (encryption at infra layer).
@@ -152,22 +156,22 @@ spec:
             - name: SESSION_DATABASE_URL
               valueFrom:
                 secretKeyRef:
-                  name: session-database-url
+                  name: ${SESSION_DATABASE_URL_SECRET}
                   key: latest
             # Rate Limiting (Redis-backed, required for API Server)
             # Uses rediss:// (TLS) for in-transit encryption to Cloud Memorystore
             - name: RATE_LIMIT_REDIS_URL
               valueFrom:
                 secretKeyRef:
-                  name: rate-limit-redis-url
+                  name: ${REDIS_URL_SECRET}
                   key: latest
             # Path to the Cloud Memorystore server CA certificate for TLS verification
             - name: RATE_LIMIT_REDIS_CA_CERT
-              value: "/secrets/redis-ca-cert/latest"
+              value: "/secrets/${REDIS_CA_CERT_SECRET}/latest"
             - name: RATE_LIMIT_REDIS_TIMEOUT_MS
               value: "200"
             - name: RATE_LIMIT_KEY_PREFIX
-              value: "lightspeed:ratelimit"
+              value: "${RATE_LIMIT_KEY_PREFIX}"
             - name: RATE_LIMIT_REQUESTS_PER_MINUTE
               value: "60"
             - name: RATE_LIMIT_REQUESTS_PER_HOUR
@@ -189,7 +193,7 @@ spec:
               value: "*"
           volumeMounts:
             - name: redis-ca-cert
-              mountPath: /secrets/redis-ca-cert
+              mountPath: /secrets/${REDIS_CA_CERT_SECRET}
               readOnly: true
           # Health checks (served by the probe server on a separate port)
           startupProbe:
@@ -228,6 +232,7 @@ spec:
             - "--readonly"
             - "--toolset"
             - "advisor,inventory,vulnerability,planning,rhsm,content_sources,rbac"
+            # ${MCP_DEBUG_FLAG}
             - "http"
             - "--port"
             - "8080"
@@ -281,7 +286,7 @@ spec:
       volumes:
         - name: redis-ca-cert
           secret:
-            secretName: redis-ca-cert
+            secretName: ${REDIS_CA_CERT_SECRET}
             items:
               - key: latest
                 path: latest

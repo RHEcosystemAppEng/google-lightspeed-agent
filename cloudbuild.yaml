@@ -45,7 +45,7 @@ substitutions:
   _IMAGE_TAG: latest
   _SERVICE_ACCOUNT_NAME: lightspeed-agent
   _DB_INSTANCE_NAME: lightspeed-agent-db
-  _VPC_CONNECTOR_NAME: lightspeed-redis-conn
+  _VPC_CONNECTOR_NAME: ls-redis-conn
   _MCP_SOURCE_IMAGE: quay.io/redhat-services-prod/insights-management-tenant/insights-mcp/red-hat-lightspeed-mcp:latest
   _ALLOW_UNAUTHENTICATED: "false"
   _PUBSUB_INVOKER_NAME: pubsub-invoker
@@ -66,6 +66,19 @@ substitutions:
   _HANDLER_DOMAIN_NAME: ""
   _LB_NAME: lightspeed-lb
   _SCAN_SEVERITY: CRITICAL,HIGH
+  # Agent and MCP runtime configuration
+  _GEMINI_MODEL: "gemini-3.5-flash"
+  _AGENT_LOGGING_DETAIL: "basic"
+  _MCP_DEBUG: "false"
+  _MCP_TIMEOUT: "60"
+  _MCP_SSE_READ_TIMEOUT: "300"
+  # Secret Manager secret names (parameterized for multi-instance)
+  _DATABASE_URL_SECRET: "database-url"
+  _SESSION_DATABASE_URL_SECRET: "session-database-url"
+  _DCR_ENCRYPTION_KEY_SECRET: "dcr-encryption-key"
+  _RATE_LIMIT_KEY_PREFIX: "lightspeed:ratelimit"
+  _REDIS_URL_SECRET: "rate-limit-redis-url"
+  _REDIS_CA_CERT_SECRET: "redis-ca-cert"
 
 timeout: 1800s
 
@@ -258,6 +271,11 @@ steps:
             -e 's|$${DB_INSTANCE_NAME}|${_DB_INSTANCE_NAME}|g' \
             -e 's|$${VPC_CONNECTOR_NAME}|${_VPC_CONNECTOR_NAME}|g' \
             -e 's|$${SERVICE_CONTROL_SERVICE_NAME}|${_SERVICE_CONTROL_SERVICE_NAME}|g' \
+            -e 's|$${DATABASE_URL_SECRET}|${_DATABASE_URL_SECRET}|g' \
+            -e 's|$${DCR_ENCRYPTION_KEY_SECRET}|${_DCR_ENCRYPTION_KEY_SECRET}|g' \
+            -e 's|$${RATE_LIMIT_KEY_PREFIX}|${_RATE_LIMIT_KEY_PREFIX}|g' \
+            -e 's|$${REDIS_URL_SECRET}|${_REDIS_URL_SECRET}|g' \
+            -e 's|$${REDIS_CA_CERT_SECRET}|${_REDIS_CA_CERT_SECRET}|g' \
             deploy/cloudrun/marketplace-handler.yaml > /workspace/handler.yaml
 
         gcloud run services replace /workspace/handler.yaml \
@@ -282,8 +300,23 @@ steps:
             -e 's|$${SERVICE_ACCOUNT_NAME}|${_SERVICE_ACCOUNT_NAME}|g' \
             -e 's|$${DB_INSTANCE_NAME}|${_DB_INSTANCE_NAME}|g' \
             -e 's|$${VPC_CONNECTOR_NAME}|${_VPC_CONNECTOR_NAME}|g' \
+            -e 's|$${GEMINI_MODEL}|${_GEMINI_MODEL}|g' \
+            -e 's|$${AGENT_LOGGING_DETAIL}|${_AGENT_LOGGING_DETAIL}|g' \
+            -e 's|$${MCP_TIMEOUT}|${_MCP_TIMEOUT}|g' \
+            -e 's|$${MCP_SSE_READ_TIMEOUT}|${_MCP_SSE_READ_TIMEOUT}|g' \
+            -e 's|$${DATABASE_URL_SECRET}|${_DATABASE_URL_SECRET}|g' \
+            -e 's|$${SESSION_DATABASE_URL_SECRET}|${_SESSION_DATABASE_URL_SECRET}|g' \
+            -e 's|$${RATE_LIMIT_KEY_PREFIX}|${_RATE_LIMIT_KEY_PREFIX}|g' \
+            -e 's|$${REDIS_URL_SECRET}|${_REDIS_URL_SECRET}|g' \
+            -e 's|$${REDIS_CA_CERT_SECRET}|${_REDIS_CA_CERT_SECRET}|g' \
             -e 's|$${OTEL_SERVICE_NAME}|${_OTEL_SERVICE_NAME}|g' \
             deploy/cloudrun/service.yaml > /workspace/service.yaml
+
+        if [ "${_MCP_DEBUG}" = "true" ]; then
+          sed -i 's|            # $${MCP_DEBUG_FLAG}|            - "--debug"|' /workspace/service.yaml
+        else
+          sed -i '/# $${MCP_DEBUG_FLAG}/d' /workspace/service.yaml
+        fi
 
         gcloud run services replace /workspace/service.yaml \
             --region=${_REGION} \
@@ -623,6 +656,8 @@ steps:
         for f in deploy/cloudrun/dashboards/*.json; do
           [ -f "$$f" ] || continue
           sed -i "s/\$${OTEL_SERVICE_NAME}/${_OTEL_SERVICE_NAME}/g" "$$f"
+          sed -i "s/Lightspeed — /Lightspeed (${_SERVICE_NAME}) — /g" "$$f"
+          sed -i "s/\"lightspeed-agent\"/\"${_SERVICE_NAME}\"/g" "$$f"
           name=$$(python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['displayName'])" "$$f")
           echo "Processing dashboard: $$name"
           existing=$$(gcloud monitoring dashboards list \

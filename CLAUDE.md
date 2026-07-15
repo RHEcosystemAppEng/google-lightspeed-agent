@@ -66,6 +66,14 @@ make logs                              # Agent logs
 make help                              # List all available targets
 ```
 
+### GitOps Deployment (ArgoCD)
+
+PR-based deployments via OpenShift GitOps (ArgoCD). Helm charts and setup scripts are here; ArgoCD Application CRs and environment overrides are in a separate [GitOps repo](https://github.com/RHEcosystemAppEng/google-lightspeed-agent-gitops).
+
+- `deploy/gitops/google-cloud/` — Helm chart that triggers Cloud Build for Cloud Run deployment
+- `deploy/gitops/setup/` — Prerequisite install scripts (ArgoCD operator, GCP SA)
+- See `deploy/gitops/README.md` for setup, prerequisites, and workflows
+
 ### Shell Tests (deploy.sh)
 
 Changes to `deploy/cloudrun/deploy.sh` must include test updates in `tests/shell/`. CI enforces that every function in `deploy.sh` is referenced in the bats tests.
@@ -135,6 +143,42 @@ Agent behavioral instructions use ADK's progressive-disclosure Skills system ins
 ### Middleware Stack
 
 CORS → body size limits → security headers → rate limiting (60 req/min, 1000 req/hour) → JWT auth. See `api/app.py` for ordering and configuration.
+
+## GitOps Companion Repository
+
+Deployments are managed via ArgoCD using a separate GitOps repo: `https://github.com/RHEcosystemAppEng/google-lightspeed-agent-gitops`.
+
+### How it works
+
+ArgoCD Application CRs use multi-source to combine:
+- **This repo** — Helm charts and templates (`deploy/openshift/`, `deploy/gitops/google-cloud/`)
+- **GitOps repo** — environment-specific overrides (`values-override.yaml`) and ArgoCD Application CRs
+
+```
+google-lightspeed-agent-gitops/
+├── openshift/
+│   ├── application.yaml        # ArgoCD Application CR for OpenShift
+│   └── values-override.yaml    # Environment overrides (image tags, config)
+└── google-cloud/
+    ├── application.yaml        # ArgoCD Application CR for Cloud Run
+    └── values-override.yaml    # Environment overrides (project ID, image tags)
+```
+
+### When to update the GitOps repo
+
+When a PR in this repo changes any of the following, also open a companion PR in the GitOps repo:
+
+- **Helm chart values** (`deploy/openshift/values.yaml`): if you add, rename, or remove a value, update `values-override.yaml` in the GitOps repo to match (add new overrides, rename keys, remove stale ones).
+- **New environment variables or config options**: if the agent gains a new required or deployment-specific env var, add it to the relevant `values-override.yaml`.
+- **Helm chart structure**: if you add/remove templates or change the chart path, update the ArgoCD `application.yaml` sources accordingly.
+- **Image references**: image tag bumps go exclusively in the GitOps repo's `values-override.yaml`, not in this repo's `values.yaml`.
+
+### How to make GitOps repo changes
+
+1. Clone the GitOps repo if not already available locally
+2. Create a branch, make the changes to the relevant `values-override.yaml` or `application.yaml`
+3. Commit, push, and open a PR with `gh pr create`
+4. Reference the companion PR in both PR descriptions
 
 ## Configuration
 

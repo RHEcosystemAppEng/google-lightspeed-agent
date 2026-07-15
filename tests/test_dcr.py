@@ -857,6 +857,244 @@ class TestPubSubHandler:
         data = response.json()
         assert data["status"] == "success"
 
+    @pytest.mark.asyncio
+    async def test_product_fetched_from_api_when_missing(self, client):
+        """Test that product is fetched from API when not in Pub/Sub message."""
+        from lightspeed_agent.config import get_settings
+
+        settings = get_settings()
+        original = settings.service_control_service_name
+        settings.service_control_service_name = "my-agent.endpoints.project.cloud.goog"
+        try:
+            event_data = {
+                "eventType": "ENTITLEMENT_ACTIVE",
+                "eventId": "evt-api-fetch",
+                "providerId": "test-provider",
+                "entitlement": {
+                    "id": "order-api-fetch",
+                },
+            }
+
+            with patch(
+                "lightspeed_agent.marketplace.router._fetch_entitlement_product",
+                new_callable=AsyncMock,
+                return_value="products/other-agent.endpoints.project.cloud.goog",
+            ):
+                response = self._post_pubsub(client, self._make_pubsub_body(event_data))
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["status"] == "ok"
+            assert "not for this product" in data["message"]
+        finally:
+            settings.service_control_service_name = original
+
+    @pytest.mark.asyncio
+    async def test_product_fetched_from_api_matching(self, client):
+        """Test that matching product from API allows processing."""
+        from lightspeed_agent.config import get_settings
+
+        settings = get_settings()
+        original = settings.service_control_service_name
+        settings.service_control_service_name = "my-agent.endpoints.project.cloud.goog"
+        try:
+            event_data = {
+                "eventType": "ENTITLEMENT_ACTIVE",
+                "eventId": "evt-api-match",
+                "providerId": "test-provider",
+                "entitlement": {
+                    "id": "order-api-match",
+                },
+            }
+
+            with patch(
+                "lightspeed_agent.marketplace.router._fetch_entitlement_product",
+                new_callable=AsyncMock,
+                return_value="products/my-agent.endpoints.project.cloud.goog",
+            ):
+                response = self._post_pubsub(client, self._make_pubsub_body(event_data))
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["status"] == "success"
+        finally:
+            settings.service_control_service_name = original
+
+    @pytest.mark.asyncio
+    async def test_product_api_403_skips_event(self, client):
+        """Test that 403 from API (wrong SA) skips the event."""
+        from lightspeed_agent.config import get_settings
+        from lightspeed_agent.marketplace.router import _NOT_AUTHORIZED
+
+        settings = get_settings()
+        original = settings.service_control_service_name
+        settings.service_control_service_name = "my-agent.endpoints.project.cloud.goog"
+        try:
+            event_data = {
+                "eventType": "ENTITLEMENT_CREATION_REQUESTED",
+                "eventId": "evt-403",
+                "providerId": "test-provider",
+                "entitlement": {
+                    "id": "order-403",
+                },
+            }
+
+            with patch(
+                "lightspeed_agent.marketplace.router._fetch_entitlement_product",
+                new_callable=AsyncMock,
+                return_value=_NOT_AUTHORIZED,
+            ):
+                response = self._post_pubsub(client, self._make_pubsub_body(event_data))
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["status"] == "ok"
+            assert "not for this product" in data["message"]
+        finally:
+            settings.service_control_service_name = original
+
+    @pytest.mark.asyncio
+    async def test_product_api_failure_skips_event_fail_closed(self, client):
+        """Test that API failure (None return) skips the event when filtering is configured."""
+        from lightspeed_agent.config import get_settings
+
+        settings = get_settings()
+        original = settings.service_control_service_name
+        settings.service_control_service_name = "my-agent.endpoints.project.cloud.goog"
+        try:
+            event_data = {
+                "eventType": "ENTITLEMENT_ACTIVE",
+                "eventId": "evt-fail-closed",
+                "providerId": "test-provider",
+                "entitlement": {
+                    "id": "order-fail-closed",
+                },
+            }
+
+            with patch(
+                "lightspeed_agent.marketplace.router._fetch_entitlement_product",
+                new_callable=AsyncMock,
+                return_value=None,
+            ):
+                response = self._post_pubsub(client, self._make_pubsub_body(event_data))
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["status"] == "ok"
+            msg = data["message"].lower()
+            assert "skipping" in msg or "could not be determined" in msg
+        finally:
+            settings.service_control_service_name = original
+
+
+class TestFetchEntitlementProduct:
+    """Unit tests for _fetch_entitlement_product."""
+
+    @pytest.mark.asyncio
+    async def test_successful_api_response(self):
+        """Test that a 200 response returns the product string."""
+        from lightspeed_agent.marketplace.router import _fetch_entitlement_product
+
+        mock_settings = AsyncMock()
+        mock_settings.google_cloud_project = "test-project"
+
+        mock_response = httpx.Response(
+            status_code=200,
+            json={"product": "products/test-product"},
+            request=httpx.Request("GET", "https://fake"),
+        )
+
+        with (
+            patch("google.auth.default", return_value=(AsyncMock(), "project-id")),
+            patch("asyncio.to_thread", new_callable=AsyncMock),
+            patch("httpx.AsyncClient.get", new_callable=AsyncMock, return_value=mock_response),
+        ):
+            result = await _fetch_entitlement_product("ent-123", mock_settings)
+
+        assert result == "products/test-product"
+
+    @pytest.mark.asyncio
+    async def test_403_returns_not_authorized(self):
+        """Test that a 403 response returns _NOT_AUTHORIZED sentinel."""
+        from lightspeed_agent.marketplace.router import (
+            _NOT_AUTHORIZED,
+            _fetch_entitlement_product,
+        )
+
+        mock_settings = AsyncMock()
+        mock_settings.google_cloud_project = "test-project"
+
+        mock_response = httpx.Response(
+            status_code=403,
+            json={"error": "forbidden"},
+            request=httpx.Request("GET", "https://fake"),
+        )
+
+        with (
+            patch("google.auth.default", return_value=(AsyncMock(), "project-id")),
+            patch("asyncio.to_thread", new_callable=AsyncMock),
+            patch("httpx.AsyncClient.get", new_callable=AsyncMock, return_value=mock_response),
+        ):
+            result = await _fetch_entitlement_product("ent-403", mock_settings)
+
+        assert result == _NOT_AUTHORIZED
+
+    @pytest.mark.asyncio
+    async def test_500_returns_none(self):
+        """Test that a 500 response returns None."""
+        from lightspeed_agent.marketplace.router import _fetch_entitlement_product
+
+        mock_settings = AsyncMock()
+        mock_settings.google_cloud_project = "test-project"
+
+        mock_response = httpx.Response(
+            status_code=500,
+            json={"error": "internal"},
+            request=httpx.Request("GET", "https://fake"),
+        )
+
+        with (
+            patch("google.auth.default", return_value=(AsyncMock(), "project-id")),
+            patch("asyncio.to_thread", new_callable=AsyncMock),
+            patch("httpx.AsyncClient.get", new_callable=AsyncMock, return_value=mock_response),
+        ):
+            result = await _fetch_entitlement_product("ent-500", mock_settings)
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_network_error_returns_none(self):
+        """Test that a network error returns None."""
+        from lightspeed_agent.marketplace.router import _fetch_entitlement_product
+
+        mock_settings = AsyncMock()
+        mock_settings.google_cloud_project = "test-project"
+
+        with (
+            patch("google.auth.default", return_value=(AsyncMock(), "project-id")),
+            patch("asyncio.to_thread", new_callable=AsyncMock),
+            patch(
+                "httpx.AsyncClient.get",
+                new_callable=AsyncMock,
+                side_effect=httpx.ConnectError("Connection refused"),
+            ),
+        ):
+            result = await _fetch_entitlement_product("ent-err", mock_settings)
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_no_google_cloud_project_returns_none(self):
+        """Test that None is returned when google_cloud_project is not set."""
+        from lightspeed_agent.marketplace.router import _fetch_entitlement_product
+
+        mock_settings = AsyncMock()
+        mock_settings.google_cloud_project = None
+
+        result = await _fetch_entitlement_product("ent-no-proj", mock_settings)
+
+        assert result is None
+
 
 class TestAgentCardDCRExtension:
     """Tests for DCR extension in AgentCard."""

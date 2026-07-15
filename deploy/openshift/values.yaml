@@ -82,6 +82,7 @@ mcp:
   ssoBaseUrl: "https://sso.stage.redhat.com"
   # HTTP proxy for MCP — may be required for staging (behind Akamai edge lockdown)
   proxyUrl: ""
+  debug: true
   resources:
     requests:
       cpu: 250m

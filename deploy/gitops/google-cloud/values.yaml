@@ -1,0 +1,116 @@
+nameOverride: ""
+fullnameOverride: ""
+
+# -- GCP project configuration
+project:
+  id: ""
+  region: us-central1
+  vertexaiLocation: global
+
+# -- Container images pulled from Quay.io, scanned, and pushed to GCR by Cloud Build
+images:
+  agent:
+    source: quay.io/ecosystem-appeng/google-lightspeed-agent
+    tag: latest
+  handler:
+    source: quay.io/ecosystem-appeng/google-marketplace-handler
+    tag: latest  # Used for source image pull; GCR tag uses images.agent.tag
+  mcp:
+    source: quay.io/redhat-services-prod/insights-management-tenant/insights-mcp/red-hat-lightspeed-mcp
+    tag: latest
+
+# -- Agent runtime configuration passed to Cloud Run service
+agent:
+  geminiModel: "gemini-3.5-flash"
+  loggingDetail: "basic"
+  otelServiceName: ""
+
+# -- Secret Manager secret names (parameterized for multi-instance)
+secrets:
+  databaseUrl: "database-url"
+  sessionDatabaseUrl: "session-database-url"
+  dcrEncryptionKey: "dcr-encryption-key"
+
+# -- Rate limiting and Redis configuration
+rateLimit:
+  keyPrefix: "lightspeed:ratelimit"
+  redisUrlSecret: "rate-limit-redis-url"
+  redisCaCertSecret: "redis-ca-cert"
+
+# -- MCP server configuration
+# Value is a string (not boolean) because it passes through to Cloud Build
+# substitutions which are always string-typed.
+mcp:
+  debug: "false"
+  timeout: "60"
+  sseReadTimeout: "300"
+
+# -- Cloud Run service configuration
+services:
+  agent:
+    name: lightspeed-agent
+  handler:
+    name: marketplace-handler
+  serviceAccountName: lightspeed-agent
+
+# -- GCP infrastructure resource names
+infrastructure:
+  dbInstanceName: lightspeed-agent-db
+  vpcConnectorName: ls-redis-conn
+
+# -- Pub/Sub configuration
+pubsub:
+  topic: marketplace-entitlements
+  subscription: ""
+  invokerName: pubsub-invoker
+  serviceControlServiceName: ""
+
+# -- Google Cloud Load Balancer and Cloud Armor
+# Values are strings (not booleans) because they pass through to Cloud Build
+# substitutions which are always string-typed.
+loadBalancer:
+  name: lightspeed-lb
+  agent:
+    enabled: "false"
+    domain: ""
+    cloudArmor:
+      enabled: "true"
+      sensitivity: "1"
+  handler:
+    enabled: "false"
+    domain: ""
+    cloudArmor:
+      enabled: "true"
+      sensitivity: "2"
+
+# -- Security settings
+security:
+  allowUnauthenticated: "false"
+  scanSeverity: CRITICAL,HIGH
+
+# -- Deploy Job configuration
+deploy:
+  # To upgrade, run: skopeo inspect docker://google/cloud-sdk:<VERSION>-slim | jq .Digest
+  image: google/cloud-sdk:575.0.0-slim@sha256:7805e8f25c698ac26606177ae77f1d68a14e6e276570bab4ecbb75de898cb4cb
+  # K8s Secret containing the GCP SA key for the deploy Job.
+  # Created by setup-gcp-sa.sh or manually (see secrets.yaml.example).
+  gcpSecretName: gcp-sa-bootstrap
+  gitRepo: https://github.com/RHEcosystemAppEng/google-lightspeed-agent.git
+  gitBranch: main
+  # Git access token secret for private repositories.
+  # Create: oc create secret generic git-credentials --from-literal=token=<PAT> -n <namespace>
+  # Leave empty for public repositories.
+  gitTokenSecret: ""
+  gitTokenKey: token
+  # GCP Secret Manager secret name for the git clone token, used by Cloud Build's
+  # availableSecrets to inject the token at build time without exposing it in logs.
+  gitTokenSMSecret: "git-clone-token"
+  serviceAccount:
+    name: lightspeed-deploy
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi

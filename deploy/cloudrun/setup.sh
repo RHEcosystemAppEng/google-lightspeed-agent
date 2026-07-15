@@ -31,6 +31,20 @@ log_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
 log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
+wait_for_sa() {
+    local sa_email="$1"
+    local max_wait=30
+    local waited=0
+    while ! gcloud iam service-accounts describe "$sa_email" --project="$PROJECT_ID" &>/dev/null; do
+        if (( waited >= max_wait )); then
+            log_error "Service account $sa_email not visible after ${max_wait}s"
+            return 1
+        fi
+        sleep 2
+        waited=$((waited + 2))
+    done
+}
+
 # =============================================================================
 # Configuration
 # =============================================================================
@@ -42,6 +56,7 @@ SERVICE_NAME="${SERVICE_NAME:-lightspeed-agent}"
 SERVICE_ACCOUNT_NAME="${SERVICE_ACCOUNT_NAME:-${SERVICE_NAME}}"
 HANDLER_SERVICE_NAME="${HANDLER_SERVICE_NAME:-marketplace-handler}"
 DB_INSTANCE_NAME="${DB_INSTANCE_NAME:-lightspeed-agent-db}"
+REDIS_INSTANCE_NAME="${REDIS_INSTANCE_NAME:-lightspeed-redis}"
 SERVICE_ACCOUNT="${SERVICE_ACCOUNT_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
 
 # Pub/Sub Invoker Service Account (separate SA for push subscription auth)
@@ -57,6 +72,27 @@ ENABLE_LB_HANDLER="${ENABLE_LB_HANDLER:-false}"
 AGENT_DOMAIN_NAME="${AGENT_DOMAIN_NAME:-}"
 HANDLER_DOMAIN_NAME="${HANDLER_DOMAIN_NAME:-}"
 LB_NAME="${LB_NAME:-lightspeed-lb}"
+
+# Per-instance Secret Manager secret names (for multi-instance support)
+DATABASE_URL_SECRET="${DATABASE_URL_SECRET:-database-url}"
+SESSION_DATABASE_URL_SECRET="${SESSION_DATABASE_URL_SECRET:-session-database-url}"
+DCR_ENCRYPTION_KEY_SECRET="${DCR_ENCRYPTION_KEY_SECRET:-dcr-encryption-key}"
+REDIS_URL_SECRET="${REDIS_URL_SECRET:-rate-limit-redis-url}"
+REDIS_CA_CERT_SECRET="${REDIS_CA_CERT_SECRET:-redis-ca-cert}"
+
+# VPC connector for Cloud Run → Redis access
+VPC_CONNECTOR_NAME="${VPC_CONNECTOR_NAME:-ls-redis-conn}"
+VPC_CONNECTOR_RANGE="${VPC_CONNECTOR_RANGE:-10.8.0.0/28}"
+VPC_NETWORK="${VPC_NETWORK:-default}"
+
+# Cloud SQL configuration
+DB_TIER="${DB_TIER:-db-g1-small}"
+DB_VERSION="${DB_VERSION:-POSTGRES_16}"
+DB_EDITION="${DB_EDITION:-ENTERPRISE}"
+
+# Redis configuration
+REDIS_TIER="${REDIS_TIER:-basic}"
+REDIS_SIZE_GB="${REDIS_SIZE_GB:-1}"
 
 # Validate required variables
 if [[ -z "$PROJECT_ID" ]]; then
@@ -85,6 +121,10 @@ log_info "Handler service: $HANDLER_SERVICE_NAME"
 log_info "DB instance: $DB_INSTANCE_NAME"
 log_info "Pub/Sub invoker SA: $PUBSUB_INVOKER_NAME"
 log_info "Marketplace integration: $ENABLE_MARKETPLACE"
+log_info "Redis instance: $REDIS_INSTANCE_NAME"
+log_info "VPC connector: $VPC_CONNECTOR_NAME"
+log_info "DB secret: $DATABASE_URL_SECRET"
+log_info "Redis secret: $REDIS_URL_SECRET"
 log_info "Agent load balancer: $ENABLE_LB_AGENT"
 log_info "Handler load balancer: $ENABLE_LB_HANDLER"
 
@@ -115,6 +155,7 @@ apis=(
     "servicemanagement.googleapis.com"
     "redis.googleapis.com"
     "vpcaccess.googleapis.com"
+    "sqladmin.googleapis.com"
 )
 
 # Add Compute Engine API when any load balancer is enabled
@@ -138,7 +179,8 @@ if ! gcloud iam service-accounts describe "$SERVICE_ACCOUNT" --project="$PROJECT
         --display-name="Lightspeed Agent Service Account" \
         --description="Service account for the Red Hat Lightspeed Agent for Google Cloud" \
         --project="$PROJECT_ID"
-    log_info "Service account created"
+    log_info "Service account created, waiting for propagation..."
+    wait_for_sa "$SERVICE_ACCOUNT"
 else
     log_info "Service account already exists"
 fi
@@ -193,21 +235,21 @@ secrets=(
 
 # DCR (Dynamic Client Registration) secrets
 dcr_secrets=(
-    "gma-client-id"             # GMA SSO API client ID for tenant creation
-    "gma-client-secret"         # GMA SSO API client secret
-    "dcr-encryption-key"        # Fernet key for encrypting client secrets
+    "gma-client-id"
+    "gma-client-secret"
+    "$DCR_ENCRYPTION_KEY_SECRET"
 )
 
 # Database secrets (PostgreSQL for production - REQUIRED)
 db_secrets=(
-    "database-url"              # Marketplace DB: postgresql+asyncpg://user:pass@/db?host=/cloudsql/...
-    "session-database-url"      # Session DB: postgresql+asyncpg://user:pass@/db?host=/cloudsql/...
+    "$DATABASE_URL_SECRET"
+    "$SESSION_DATABASE_URL_SECRET"
 )
 
 # Rate limiting (Redis - REQUIRED for agent)
 redis_secrets=(
-    "rate-limit-redis-url"      # rediss://REDIS_IP:6379/0 (Cloud Memorystore instance, TLS)
-    "redis-ca-cert"             # Cloud Memorystore server CA certificate (PEM)
+    "$REDIS_URL_SECRET"
+    "$REDIS_CA_CERT_SECRET"
 )
 
 # Combine all optional secrets
@@ -301,7 +343,8 @@ if [[ "$ENABLE_MARKETPLACE" == "true" ]]; then
             --display-name="Pub/Sub Invoker SA" \
             --description="Authorizes Pub/Sub push subscriptions to invoke Cloud Run services" \
             --project="$PROJECT_ID"
-        log_info "Pub/Sub Invoker service account created"
+        log_info "Pub/Sub Invoker service account created, waiting for propagation..."
+        wait_for_sa "$PUBSUB_INVOKER_SA"
     else
         log_info "Pub/Sub Invoker service account already exists"
     fi
@@ -313,6 +356,18 @@ if [[ "$ENABLE_MARKETPLACE" == "true" ]]; then
     gcloud iam service-accounts add-iam-policy-binding "$PUBSUB_INVOKER_SA" \
         --member="serviceAccount:$PUBSUB_INVOKER_SA" \
         --role="roles/iam.serviceAccountUser" \
+        --project="$PROJECT_ID" \
+        --quiet || true
+
+    # Grant Cloud Build SA permission to impersonate the Pub/Sub Invoker SA.
+    # Required for cross-project topic subscriptions where Cloud Build uses
+    # --impersonate-service-account to create the push subscription.
+    PROJECT_NUMBER=$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')
+    CB_SA="${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com"
+    log_info "Granting Token Creator to Cloud Build SA on Pub/Sub Invoker SA..."
+    gcloud iam service-accounts add-iam-policy-binding "$PUBSUB_INVOKER_SA" \
+        --member="serviceAccount:$CB_SA" \
+        --role="roles/iam.serviceAccountTokenCreator" \
         --project="$PROJECT_ID" \
         --quiet || true
 
@@ -348,12 +403,136 @@ if [[ "$ENABLE_MARKETPLACE" == "true" ]]; then
     # marketplace-handler is deployed, because the push endpoint URL
     # (the handler's Cloud Run URL) is not known until then.
     log_info "Pub/Sub push subscription will be configured by deploy.sh"
+
+    # Auto-generate DCR encryption key if the secret still has a placeholder value
+    CURRENT_DCR_VALUE=$(gcloud secrets versions access latest --secret="$DCR_ENCRYPTION_KEY_SECRET" --project="$PROJECT_ID" 2>/dev/null || echo "")
+    if [[ "$CURRENT_DCR_VALUE" == "PLACEHOLDER" || -z "$CURRENT_DCR_VALUE" ]]; then
+        log_info "Generating DCR encryption key..."
+        python3 -c "import os, base64; print(base64.urlsafe_b64encode(os.urandom(32)).decode(), end='')" \
+            | gcloud secrets versions add "$DCR_ENCRYPTION_KEY_SECRET" --data-file=- --project="$PROJECT_ID"
+        log_info "Secret '$DCR_ENCRYPTION_KEY_SECRET' populated with generated Fernet key"
+    else
+        log_info "Secret '$DCR_ENCRYPTION_KEY_SECRET' already has a non-placeholder value"
+    fi
 else
     log_info "Skipping Pub/Sub setup (ENABLE_MARKETPLACE=false)"
 fi
 
 # =============================================================================
-# Step 5: Set Up Load Balancer Resources (Optional, per-service)
+# Step 5: Create Cloud SQL Instance and Databases
+# =============================================================================
+log_info "Setting up Cloud SQL instance: $DB_INSTANCE_NAME"
+
+if ! gcloud sql instances describe "$DB_INSTANCE_NAME" --project="$PROJECT_ID" &>/dev/null; then
+    log_info "Creating Cloud SQL instance (this may take several minutes)..."
+    gcloud sql instances create "$DB_INSTANCE_NAME" \
+        --database-version="$DB_VERSION" \
+        --edition="$DB_EDITION" \
+        --tier="$DB_TIER" \
+        --region="$REGION" \
+        --project="$PROJECT_ID" \
+        --ssl-mode=ENCRYPTED_ONLY \
+        --quiet
+    log_info "Cloud SQL instance '$DB_INSTANCE_NAME' created"
+else
+    log_info "Cloud SQL instance '$DB_INSTANCE_NAME' already exists"
+fi
+
+# Create databases (idempotent — gcloud returns success if already exists)
+log_info "Creating databases..."
+gcloud sql databases create lightspeed_agent \
+    --instance="$DB_INSTANCE_NAME" --project="$PROJECT_ID" 2>/dev/null || true
+gcloud sql databases create agent_sessions \
+    --instance="$DB_INSTANCE_NAME" --project="$PROJECT_ID" 2>/dev/null || true
+
+# Create users and populate secrets (only if secrets still have placeholder values)
+log_info "Creating database users and populating secrets..."
+
+CURRENT_DB_URL=$(gcloud secrets versions access latest --secret="$DATABASE_URL_SECRET" --project="$PROJECT_ID" 2>/dev/null || echo "")
+if [[ "$CURRENT_DB_URL" == "PLACEHOLDER" || -z "$CURRENT_DB_URL" ]]; then
+    MARKETPLACE_DB_PASSWORD=$(python3 -c "import secrets; print(secrets.token_urlsafe(24))")
+    SESSION_DB_PASSWORD=$(python3 -c "import secrets; print(secrets.token_urlsafe(24))")
+
+    gcloud sql users create insights \
+        --instance="$DB_INSTANCE_NAME" --password="$MARKETPLACE_DB_PASSWORD" \
+        --project="$PROJECT_ID" 2>/dev/null || true
+    gcloud sql users create sessions \
+        --instance="$DB_INSTANCE_NAME" --password="$SESSION_DB_PASSWORD" \
+        --project="$PROJECT_ID" 2>/dev/null || true
+
+    CONNECTION_NAME=$(gcloud sql instances describe "$DB_INSTANCE_NAME" \
+        --project="$PROJECT_ID" --format='value(connectionName)')
+
+    echo -n "postgresql+asyncpg://insights:${MARKETPLACE_DB_PASSWORD}@/lightspeed_agent?host=/cloudsql/${CONNECTION_NAME}" \
+        | gcloud secrets versions add "$DATABASE_URL_SECRET" --data-file=- --project="$PROJECT_ID"
+    log_info "Secret '$DATABASE_URL_SECRET' populated with database URL"
+
+    echo -n "postgresql+asyncpg://sessions:${SESSION_DB_PASSWORD}@/agent_sessions?host=/cloudsql/${CONNECTION_NAME}" \
+        | gcloud secrets versions add "$SESSION_DATABASE_URL_SECRET" --data-file=- --project="$PROJECT_ID"
+    log_info "Secret '$SESSION_DATABASE_URL_SECRET' populated with session database URL"
+else
+    log_info "Database secrets already have non-placeholder values, skipping population"
+fi
+
+# =============================================================================
+# Step 6: Create Redis (Cloud Memorystore) Instance
+# =============================================================================
+log_info "Setting up Redis instance: $REDIS_INSTANCE_NAME"
+
+if ! gcloud redis instances describe "$REDIS_INSTANCE_NAME" --region="$REGION" --project="$PROJECT_ID" &>/dev/null; then
+    log_info "Creating Redis instance (this may take several minutes)..."
+    gcloud redis instances create "$REDIS_INSTANCE_NAME" \
+        --region="$REGION" \
+        --tier="$REDIS_TIER" \
+        --size="$REDIS_SIZE_GB" \
+        --transit-encryption-mode=SERVER_AUTHENTICATION \
+        --project="$PROJECT_ID" \
+        --quiet
+    log_info "Redis instance '$REDIS_INSTANCE_NAME' created"
+else
+    log_info "Redis instance '$REDIS_INSTANCE_NAME' already exists"
+fi
+
+# Populate Redis secrets (only if still placeholder)
+CURRENT_REDIS_URL=$(gcloud secrets versions access latest --secret="$REDIS_URL_SECRET" --project="$PROJECT_ID" 2>/dev/null || echo "")
+if [[ "$CURRENT_REDIS_URL" == "PLACEHOLDER" || -z "$CURRENT_REDIS_URL" ]]; then
+    REDIS_HOST=$(gcloud redis instances describe "$REDIS_INSTANCE_NAME" \
+        --region="$REGION" --project="$PROJECT_ID" --format='value(host)')
+    REDIS_PORT=$(gcloud redis instances describe "$REDIS_INSTANCE_NAME" \
+        --region="$REGION" --project="$PROJECT_ID" --format='value(port)')
+
+    echo -n "rediss://${REDIS_HOST}:${REDIS_PORT}/0" \
+        | gcloud secrets versions add "$REDIS_URL_SECRET" --data-file=- --project="$PROJECT_ID"
+    log_info "Secret '$REDIS_URL_SECRET' populated with Redis URL"
+
+    gcloud redis instances describe "$REDIS_INSTANCE_NAME" \
+        --region="$REGION" --project="$PROJECT_ID" \
+        --format='value(serverCaCerts[0].cert)' \
+        | gcloud secrets versions add "$REDIS_CA_CERT_SECRET" --data-file=- --project="$PROJECT_ID"
+    log_info "Secret '$REDIS_CA_CERT_SECRET' populated with Redis CA certificate"
+else
+    log_info "Redis secrets already have non-placeholder values, skipping population"
+fi
+
+# =============================================================================
+# Step 7: Create VPC Connector (Cloud Run → Redis)
+# =============================================================================
+log_info "Setting up VPC connector: $VPC_CONNECTOR_NAME"
+
+if ! gcloud compute networks vpc-access connectors describe "$VPC_CONNECTOR_NAME" \
+    --region="$REGION" --project="$PROJECT_ID" &>/dev/null; then
+    gcloud compute networks vpc-access connectors create "$VPC_CONNECTOR_NAME" \
+        --region="$REGION" \
+        --range="$VPC_CONNECTOR_RANGE" \
+        --network="$VPC_NETWORK" \
+        --project="$PROJECT_ID"
+    log_info "VPC connector '$VPC_CONNECTOR_NAME' created"
+else
+    log_info "VPC connector '$VPC_CONNECTOR_NAME' already exists"
+fi
+
+# =============================================================================
+# Step 8: Set Up Load Balancer Resources (Optional, per-service)
 # =============================================================================
 
 # Reserve a static IP and create a Google-managed SSL certificate for one service.
@@ -397,10 +576,22 @@ log_info "=========================================="
 log_info "Setup complete!"
 log_info "=========================================="
 echo ""
-echo "Service accounts created:"
+echo "Resources created:"
 echo "  Runtime SA:         $SERVICE_ACCOUNT"
 if [[ "$ENABLE_MARKETPLACE" == "true" ]]; then
     echo "  Pub/Sub Invoker SA: $PUBSUB_INVOKER_SA"
+fi
+echo "  Cloud SQL:          $DB_INSTANCE_NAME"
+echo "  Redis:              $REDIS_INSTANCE_NAME"
+echo "  VPC connector:      $VPC_CONNECTOR_NAME"
+echo ""
+echo "Secrets populated automatically:"
+echo "  $DATABASE_URL_SECRET"
+echo "  $SESSION_DATABASE_URL_SECRET"
+echo "  $REDIS_URL_SECRET"
+echo "  $REDIS_CA_CERT_SECRET"
+if [[ "$ENABLE_MARKETPLACE" == "true" ]]; then
+    echo "  $DCR_ENCRYPTION_KEY_SECRET (auto-generated Fernet key)"
 fi
 if [[ "$ENABLE_LB_AGENT" == "true" ]]; then
     AGENT_LB_IP=$(gcloud compute addresses describe "${LB_NAME}-agent-ip" --global --project="$PROJECT_ID" --format='value(address)')
@@ -425,59 +616,28 @@ if [[ "$ENABLE_LB_HANDLER" == "true" ]]; then
     echo "  SSL provisioning requires DNS to resolve to this IP."
 fi
 echo ""
-echo "Next steps:"
+echo "Remaining manual steps:"
 echo ""
-echo "1. Set up Cloud SQL database:"
-echo "   # Create instance"
-echo "   gcloud sql instances create $DB_INSTANCE_NAME --database-version=POSTGRES_16 --edition=ENTERPRISE --tier=db-g1-small --region=$REGION --project=$PROJECT_ID --ssl-mode=ENCRYPTED_ONLY"
-echo ""
-echo "   # Generate random passwords for database users"
-echo "   MARKETPLACE_DB_PASSWORD=\$(python3 -c \"import secrets; print(secrets.token_urlsafe(24))\")"
-echo "   SESSION_DB_PASSWORD=\$(python3 -c \"import secrets; print(secrets.token_urlsafe(24))\")"
-echo "   echo \"Marketplace DB password: \$MARKETPLACE_DB_PASSWORD\""
-echo "   echo \"Session DB password: \$SESSION_DB_PASSWORD\""
-echo ""
-echo "   # Create databases and users"
-echo "   gcloud sql databases create lightspeed_agent --instance=$DB_INSTANCE_NAME --project=$PROJECT_ID"
-echo "   gcloud sql users create insights --instance=$DB_INSTANCE_NAME --password=\$MARKETPLACE_DB_PASSWORD --project=$PROJECT_ID"
-echo "   gcloud sql databases create agent_sessions --instance=$DB_INSTANCE_NAME --project=$PROJECT_ID"
-echo "   gcloud sql users create sessions --instance=$DB_INSTANCE_NAME --password=\$SESSION_DB_PASSWORD --project=$PROJECT_ID"
-echo ""
-echo "2. Update secrets with actual values:"
+echo "1. Update shared secrets (only needed once per project):"
 echo ""
 echo "   # Red Hat SSO credentials (for user authentication)"
 echo "   echo -n 'YOUR_SSO_CLIENT_ID' | gcloud secrets versions add redhat-sso-client-id --data-file=- --project=$PROJECT_ID"
 echo "   echo -n 'YOUR_SSO_CLIENT_SECRET' | gcloud secrets versions add redhat-sso-client-secret --data-file=- --project=$PROJECT_ID"
 echo ""
-echo "   # DCR (Dynamic Client Registration) credentials — GMA SSO API"
+echo "   # GMA credentials for DCR (Dynamic Client Registration)"
 echo "   echo -n 'YOUR_GMA_CLIENT_ID' | gcloud secrets versions add gma-client-id --data-file=- --project=$PROJECT_ID"
 echo "   echo -n 'YOUR_GMA_CLIENT_SECRET' | gcloud secrets versions add gma-client-secret --data-file=- --project=$PROJECT_ID"
-echo "   # Generate Fernet key: python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'"
-echo "   echo -n 'YOUR_FERNET_KEY' | gcloud secrets versions add dcr-encryption-key --data-file=- --project=$PROJECT_ID"
 echo ""
-echo "   # Database URLs (after Cloud SQL setup)"
-echo "   CONNECTION_NAME=\$(gcloud sql instances describe $DB_INSTANCE_NAME --project=$PROJECT_ID --format='value(connectionName)')"
-echo "   echo -n \"postgresql+asyncpg://insights:\$MARKETPLACE_DB_PASSWORD@/lightspeed_agent?host=/cloudsql/\$CONNECTION_NAME\" | gcloud secrets versions add database-url --data-file=- --project=$PROJECT_ID"
-echo "   echo -n \"postgresql+asyncpg://sessions:\$SESSION_DB_PASSWORD@/agent_sessions?host=/cloudsql/\$CONNECTION_NAME\" | gcloud secrets versions add session-database-url --data-file=- --project=$PROJECT_ID"
+echo "2. Deploy the agent:"
+echo "   # Option A: GitOps (ArgoCD)"
+echo "   oc apply -f application.yaml"
 echo ""
-echo "   # Rate limit Redis URL and CA cert (after Cloud Memorystore setup - see deploy/cloudrun/README.md)"
-echo "   # Note: TLS-enabled instances use port 6378, not 6379. Read the port from: gcloud redis instances describe INSTANCE --format='value(port)'"
-echo "   echo -n 'rediss://REDIS_IP:6378/0' | gcloud secrets versions add rate-limit-redis-url --data-file=- --project=$PROJECT_ID"
-echo "   # Download and store the Redis server CA certificate for TLS verification:"
-echo "   gcloud redis instances describe lightspeed-redis --region=\$REGION --project=$PROJECT_ID --format='value(serverCaCerts[0].cert)' | gcloud secrets versions add redis-ca-cert --data-file=- --project=$PROJECT_ID"
+echo "   # Option B: One-command Cloud Build deployment"
+echo "   ./deploy/cloudrun/deploy-cloudbuild.sh"
 echo ""
-echo "3. Copy the MCP server image to GCR (Cloud Run doesn't support Quay.io):"
-echo "   docker pull quay.io/redhat-services-prod/insights-management-tenant/insights-mcp/red-hat-lightspeed-mcp:latest"
-echo "   docker tag quay.io/redhat-services-prod/insights-management-tenant/insights-mcp/red-hat-lightspeed-mcp:latest gcr.io/$PROJECT_ID/red-hat-lightspeed-mcp:latest"
-echo "   docker push gcr.io/$PROJECT_ID/red-hat-lightspeed-mcp:latest"
+echo "   # Option C: Manual deployment"
+echo "   ./deploy/cloudrun/deploy.sh --build --service all"
 echo ""
-echo "4. Deploy the agent:"
-echo "   # Option A: One-command Cloud Build deployment (copies images from Quay.io automatically)"
-echo "   ./deploy/cloudrun/deploy-cloudbuild.sh --no-lb --allow-unauthenticated"
-echo ""
-echo "   # Option B: Manual deployment with deploy.sh (requires step 3 above for MCP image)"
-echo "   ./deploy/cloudrun/deploy.sh --build --service all --allow-unauthenticated"
-echo ""
-echo "5. Get the service URL:"
+echo "3. Get the service URL:"
 echo "   gcloud run services describe $SERVICE_NAME --region=$REGION --project=$PROJECT_ID --format='value(status.url)'"
 echo ""

@@ -118,12 +118,12 @@ spec:
             - name: DCR_ENCRYPTION_KEY
               valueFrom:
                 secretKeyRef:
-                  name: dcr-encryption-key
+                  name: ${DCR_ENCRYPTION_KEY_SECRET}
                   key: latest
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
-                  name: database-url
+                  name: ${DATABASE_URL_SECRET}
                   key: latest
             # Enforce SSL/TLS for direct TCP PostgreSQL connections.
             # Not needed when using Cloud SQL Proxy (encryption at infra layer).
@@ -134,15 +134,15 @@ spec:
             - name: RATE_LIMIT_REDIS_URL
               valueFrom:
                 secretKeyRef:
-                  name: rate-limit-redis-url
+                  name: ${REDIS_URL_SECRET}
                   key: latest
             # Path to the Cloud Memorystore server CA certificate for TLS verification
             - name: RATE_LIMIT_REDIS_CA_CERT
-              value: "/secrets/redis-ca-cert/latest"
+              value: "/secrets/${REDIS_CA_CERT_SECRET}/latest"
             - name: RATE_LIMIT_REDIS_TIMEOUT_MS
               value: "200"
             - name: RATE_LIMIT_KEY_PREFIX
-              value: "lightspeed:ratelimit"
+              value: "${RATE_LIMIT_KEY_PREFIX}"
             - name: RATE_LIMIT_REQUESTS_PER_MINUTE
               value: "60"
             - name: RATE_LIMIT_REQUESTS_PER_HOUR
@@ -157,7 +157,7 @@ spec:
               value: ""
           volumeMounts:
             - name: redis-ca-cert
-              mountPath: /secrets/redis-ca-cert
+              mountPath: /secrets/${REDIS_CA_CERT_SECRET}
               readOnly: true
           # Health checks (served by the probe server on a separate port)
           startupProbe:
@@ -176,7 +176,7 @@ spec:
       volumes:
         - name: redis-ca-cert
           secret:
-            secretName: redis-ca-cert
+            secretName: ${REDIS_CA_CERT_SECRET}
             items:
               - key: latest
                 path: latest
