@@ -43,6 +43,10 @@ spec:
             - {{ .Values.mlflow.port | quote }}
             - "--artifacts-destination"
             - "/mlflow/artifacts"
+            - "--allowed-hosts"
+            - "*"
+            - "--cors-allowed-origins"
+            - "*"
             - "--backend-store-uri"
             {{- if eq .Values.mlflow.postgresql.mode "dedicated" }}
             - "postgresql://$(MLFLOW_DB_USER):$(MLFLOW_DB_PASSWORD)@$(MLFLOW_DB_HOST):5432/$(MLFLOW_DB_NAME)"
