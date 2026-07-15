@@ -215,14 +215,15 @@ monitoring:
 mlflow:
   enabled: false
   trackingUri: "http://localhost:5000"
+  # Experiment name — auto-created on the MLflow server at startup if it doesn't exist.
   experimentName: lightspeed-agent
-  # Must already exist on the MLflow server — use experimentName for auto-creation.
+  # Experiment ID — overrides name-based lookup. Only set to target a pre-existing experiment by ID.
   experimentId: ""
   logPrompts: false
   runTags: ""
   image:
     repository: ghcr.io/mlflow/mlflow
-    tag: "v3.14.0"
+    tag: "v3.14.0-full"
     pullPolicy: IfNotPresent
   port: 5000
   resources:

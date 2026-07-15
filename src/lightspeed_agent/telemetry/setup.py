@@ -253,6 +253,32 @@ def _instrument_httpx() -> None:
         logger.warning("Failed to instrument HTTPX: %s", e)
 
 
+def _resolve_mlflow_experiment_id(tracking_uri: str, experiment_name: str) -> str:
+    """Resolve an MLflow experiment name to its ID, creating the experiment if needed."""
+    import json as _json
+    import urllib.parse
+    import urllib.request
+
+    encoded_name = urllib.parse.quote(experiment_name)
+    get_url = f"{tracking_uri}/api/2.0/mlflow/experiments/get-by-name?experiment_name={encoded_name}"
+    try:
+        with urllib.request.urlopen(get_url, timeout=10) as resp:
+            data = _json.loads(resp.read())
+            return data["experiment"]["experiment_id"]
+    except urllib.error.HTTPError as e:
+        if e.code != 404:
+            raise
+
+    create_url = f"{tracking_uri}/api/2.0/mlflow/experiments/create"
+    body = _json.dumps({"name": experiment_name}).encode()
+    req = urllib.request.Request(
+        create_url, data=body, headers={"Content-Type": "application/json"}
+    )
+    with urllib.request.urlopen(req, timeout=10) as resp:
+        data = _json.loads(resp.read())
+        return data["experiment_id"]
+
+
 def _add_mlflow_processor(settings: Any, provider: TracerProvider) -> None:
     """Add an OTLP HTTP span processor that exports traces to MLflow."""
     try:
@@ -262,9 +288,23 @@ def _add_mlflow_processor(settings: Any, provider: TracerProvider) -> None:
 
         tracking_uri = settings.mlflow_tracking_uri.rstrip("/")
 
+        experiment_id = settings.mlflow_experiment_id
+        if not experiment_id and settings.mlflow_experiment_name:
+            experiment_id = _resolve_mlflow_experiment_id(
+                tracking_uri, settings.mlflow_experiment_name
+            )
+            logger.info(
+                "Resolved MLflow experiment '%s' to ID %s",
+                settings.mlflow_experiment_name,
+                experiment_id,
+            )
+        if not experiment_id:
+            experiment_id = "0"
+            logger.warning("No MLflow experiment configured, using Default (ID 0)")
+
         mlflow_headers: dict[str, str] = {}
-        if settings.mlflow_experiment_id:
-            mlflow_headers["x-mlflow-experiment-id"] = settings.mlflow_experiment_id
+        if experiment_id:
+            mlflow_headers["x-mlflow-experiment-id"] = experiment_id
         if settings.mlflow_experiment_name:
             mlflow_headers["x-mlflow-experiment-name"] = settings.mlflow_experiment_name
         if settings.mlflow_log_prompts:
@@ -279,8 +319,9 @@ def _add_mlflow_processor(settings: Any, provider: TracerProvider) -> None:
         provider.add_span_processor(BatchSpanProcessor(mlflow_exporter))
 
         logger.info(
-            "MLflow tracing enabled (endpoint=%s/v1/traces)",
+            "MLflow tracing enabled (endpoint=%s/v1/traces, experiment_id=%s)",
             tracking_uri,
+            experiment_id,
         )
     except ImportError:
         logger.error(
