@@ -34,7 +34,7 @@
 #   MCP_SOURCE_IMAGE          MCP server image (default: quay.io/redhat-services-prod/.../red-hat-lightspeed-mcp:latest)
 #   SERVICE_ACCOUNT_NAME      Cloud Run service account (default: lightspeed-agent)
 #   DB_INSTANCE_NAME          Cloud SQL instance name (default: lightspeed-agent-db)
-#   VPC_CONNECTOR_NAME        VPC connector name (default: lightspeed-redis-conn)
+#   VPC_CONNECTOR_NAME        VPC connector name (default: ls-redis-conn)
 #   SCAN_SEVERITY             Trivy scan severity threshold (default: CRITICAL,HIGH)
 #   VERTEXAI_LOCATION         Vertex AI location (default: global)
 #

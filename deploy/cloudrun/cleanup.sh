@@ -376,5 +376,5 @@ fi
 echo "  gcloud container images delete gcr.io/$PROJECT_ID/$SERVICE_NAME --force-delete-tags --quiet"
 echo "  gcloud container images delete gcr.io/$PROJECT_ID/$HANDLER_SERVICE_NAME --force-delete-tags --quiet"
 echo "  gcloud container images delete gcr.io/$PROJECT_ID/red-hat-lightspeed-mcp --force-delete-tags --quiet"
-echo "  gcloud compute networks vpc-access connectors delete lightspeed-redis-conn --region=$REGION --project=$PROJECT_ID"
+echo "  gcloud compute networks vpc-access connectors delete ls-redis-conn --region=$REGION --project=$PROJECT_ID"
 echo ""

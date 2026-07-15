@@ -81,7 +81,7 @@ REDIS_URL_SECRET="${REDIS_URL_SECRET:-rate-limit-redis-url}"
 REDIS_CA_CERT_SECRET="${REDIS_CA_CERT_SECRET:-redis-ca-cert}"
 
 # VPC connector for Cloud Run → Redis access
-VPC_CONNECTOR_NAME="${VPC_CONNECTOR_NAME:-lightspeed-redis-conn}"
+VPC_CONNECTOR_NAME="${VPC_CONNECTOR_NAME:-ls-redis-conn}"
 VPC_CONNECTOR_RANGE="${VPC_CONNECTOR_RANGE:-10.8.0.0/28}"
 VPC_NETWORK="${VPC_NETWORK:-default}"
 

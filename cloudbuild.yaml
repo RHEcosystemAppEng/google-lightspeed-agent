@@ -45,7 +45,7 @@ substitutions:
   _IMAGE_TAG: latest
   _SERVICE_ACCOUNT_NAME: lightspeed-agent
   _DB_INSTANCE_NAME: lightspeed-agent-db
-  _VPC_CONNECTOR_NAME: lightspeed-redis-conn
+  _VPC_CONNECTOR_NAME: ls-redis-conn
   _MCP_SOURCE_IMAGE: quay.io/redhat-services-prod/insights-management-tenant/insights-mcp/red-hat-lightspeed-mcp:latest
   _ALLOW_UNAUTHENTICATED: "false"
   _PUBSUB_INVOKER_NAME: pubsub-invoker

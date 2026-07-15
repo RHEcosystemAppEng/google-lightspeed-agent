@@ -296,7 +296,7 @@ If two instances use the same `project.id` without overriding resource names, th
 | Cloud Run handler service | `marketplace-handler` | `services.handler.name` |
 | GCP runtime service account | `lightspeed-agent` | `services.serviceAccountName` |
 | Cloud SQL instance | `lightspeed-agent-db` | `infrastructure.dbInstanceName` |
-| VPC connector | `lightspeed-redis-conn` | `infrastructure.vpcConnectorName` |
+| VPC connector | `ls-redis-conn` | `infrastructure.vpcConnectorName` |
 | Pub/Sub subscription | `<topic-short-name>-sub` (auto-generated) | `pubsub.subscription` |
 | Pub/Sub invoker service account | `pubsub-invoker` | `pubsub.invokerName` |
 | Load balancer (name prefix) | `lightspeed-lb` | `loadBalancer.name` |
@@ -318,7 +318,7 @@ When adding prefixes (e.g., `staging-`) to the override keys above, keep GCP nam
 | Cloud SQL instance | `infrastructure.dbInstanceName` | 84 chars |
 | Pub/Sub topic | `pubsub.topic` | 255 chars |
 
-The **VPC connector name** is the tightest constraint. Per [GCP docs](https://docs.cloud.google.com/vpc/docs/configure-serverless-vpc-access), the name must be less than 21 characters with hyphens counting as 2. The default `lightspeed-redis-conn` (23 effective chars) exceeds this documented limit but is accepted by GCP in practice — however, adding any prefix to it will likely fail. Use shorter base names for multi-instance deployments (e.g., `ls-redis-stg`, `ls-redis-prd`). For SA names (30 chars), `staging-lightspeed-agent` (24 chars) fits, but `my-company-staging-lightspeed-agent` (35 chars) does not. Names that exceed limits are rejected by `gcloud` at `setup.sh` time.
+The **VPC connector name** is the tightest constraint. Per [GCP docs](https://docs.cloud.google.com/vpc/docs/configure-serverless-vpc-access), the name must be less than 21 characters with hyphens counting as 2. The default `ls-redis-conn` (16 effective chars) leaves room for short prefixes (e.g., `stg-ls-redis-conn`). For SA names (30 chars), `staging-lightspeed-agent` (24 chars) fits, but `my-company-staging-lightspeed-agent` (35 chars) does not. Names that exceed limits are rejected by `gcloud` at `setup.sh` time.
 
 ### What Is Shared by Design
 
