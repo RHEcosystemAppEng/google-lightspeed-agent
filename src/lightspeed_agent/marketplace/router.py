@@ -201,8 +201,9 @@ async def _handle_pubsub_event(body: dict[str, Any]) -> JSONResponse:
             product = await _fetch_entitlement_product(entitlement_id, settings)
 
     if product == _NOT_AUTHORIZED:
-        logger.info(
-            "Entitlement %s belongs to a different product (SA not authorized)",
+        logger.warning(
+            "Entitlement %s skipped: SA returned 403 from Procurement API "
+            "(different product, or SA not registered in Producer Portal)",
             entitlement_data.get("id", "unknown") if entitlement_data else "unknown",
         )
         return JSONResponse(content={"status": "ok", "message": "not for this product"})
@@ -379,8 +380,9 @@ async def _fetch_entitlement_product(entitlement_id: str, settings: Settings) ->
                 )
                 return product
         elif response.status_code == 403:
-            logger.info(
-                "Not authorized to access entitlement %s — belongs to a different product",
+            logger.warning(
+                "403 fetching entitlement %s — either belongs to a different product "
+                "or this SA is not registered in the Producer Portal Technical Integration",
                 entitlement_id,
             )
             return _NOT_AUTHORIZED

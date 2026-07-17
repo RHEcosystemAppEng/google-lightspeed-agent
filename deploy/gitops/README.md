@@ -419,12 +419,14 @@ Many `setup.sh` env vars must match the corresponding `values-override.yaml` fie
 
 #### 2. Register Service Accounts in the Google Cloud Marketplace Producer Portal
 
-Each instance's service accounts must be registered in the [Producer Portal](https://console.cloud.google.com/producer-portal) under the **Technical Integration** section of your product:
+**All** instance service accounts must be registered in the [Producer Portal](https://console.cloud.google.com/producer-portal) under the **Technical Integration** section:
 
-- **Partner Procurement API integration** — add the runtime SA (e.g., `sa-lightspeed-agent-staging@<project>.iam.gserviceaccount.com`). This authorizes the SA to call the Procurement API for entitlement management.
-- **Cloud Pub/Sub integration** — add the Pub/Sub invoker SA (e.g., `pubsub-invoker-staging@<project>.iam.gserviceaccount.com`). This authorizes the SA to create push subscriptions on the Marketplace entitlements topic.
+- **Partner Procurement API integration** — add the runtime SA for **every** instance (e.g., both `sa-lightspeed-agent@<project>.iam.gserviceaccount.com` and `sa-lightspeed-agent-staging@<project>.iam.gserviceaccount.com`). This authorizes the SA to call the Procurement API for entitlement management and multi-agent product filtering.
+- **Cloud Pub/Sub integration** — add the Pub/Sub invoker SA for **every** instance (e.g., both `pubsub-invoker@<project>.iam.gserviceaccount.com` and `pubsub-invoker-staging@<project>.iam.gserviceaccount.com`). This authorizes the SA to create push subscriptions on the Marketplace entitlements topic.
 
-Without this step, the deployment will fail at the `configure-pubsub` Cloud Build step with `"User not authorized to perform this action"`.
+> **Important:** The Technical Integration configuration is **provider-level** (per GCP project), not per-product. Updating the SA list on one product automatically updates all products under the same provider. This means you register all SAs in a single place, and all instances gain access to the Procurement API regardless of which product listing you edit. This is also why access to the Procurement API cannot be granted via standard IAM roles — it is managed exclusively through the Producer Portal.
+
+Without this step, the marketplace handler will get `403 Forbidden` when calling the Procurement API to resolve entitlement products, causing multi-agent product filtering to silently drop events. The deployment will also fail at the `configure-pubsub` Cloud Build step with `"User not authorized to perform this action"`.
 
 #### 3. Create Per-Instance GCP Deploy Service Accounts
 
