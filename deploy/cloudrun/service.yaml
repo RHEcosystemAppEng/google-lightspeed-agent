@@ -191,6 +191,19 @@ spec:
               value: "8002"
             - name: FORWARDED_ALLOW_IPS
               value: "*"
+            # MLflow Configuration
+            - name: MLFLOW_ENABLED
+              value: "${MLFLOW_ENABLED:-false}"
+            - name: MLFLOW_TRACKING_URI
+              value: "${MLFLOW_TRACKING_URI:-}"
+            - name: MLFLOW_EXPERIMENT_NAME
+              value: "${MLFLOW_EXPERIMENT_NAME:-lightspeed-agent}"
+            - name: MLFLOW_EXPERIMENT_ID
+              value: "${MLFLOW_EXPERIMENT_ID:-}"
+            - name: MLFLOW_LOG_PROMPTS
+              value: "${MLFLOW_LOG_PROMPTS:-false}"
+            - name: MLFLOW_RUN_TAGS
+              value: "${MLFLOW_RUN_TAGS:-}"
           volumeMounts:
             - name: redis-ca-cert
               mountPath: /secrets/${REDIS_CA_CERT_SECRET}
