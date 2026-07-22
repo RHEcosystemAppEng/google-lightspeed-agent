@@ -2619,6 +2619,64 @@ gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.serv
 
 No additional configuration is required — audit logging is automatically active when `LOG_FORMAT=json`.
 
+## MLflow Tracing (LLM Observability)
+
+The agent supports sending LLM traces to an external MLflow Tracking Server via
+an OpenTelemetry bridge. Google ADK natively generates OTel traces for agent
+runs, LLM calls, and tool invocations — MLflow accepts them via its OTLP
+endpoint at `/v1/traces`.
+
+On Cloud Run, MLflow is **not deployed as a new service** — the agent connects
+to an existing MLflow instance on Red Hat infrastructure (or any external MLflow
+server). No additional Cloud SQL databases or GCS buckets are needed.
+
+### Configuration
+
+Set the following environment variables on the agent service (already present in
+`service.yaml` with defaults):
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MLFLOW_ENABLED` | `false` | Enable MLflow tracing |
+| `MLFLOW_TRACKING_URI` | (empty) | External MLflow server URL (e.g., `https://mlflow.example.redhat.com`) |
+| `MLFLOW_EXPERIMENT_NAME` | `lightspeed-agent` | MLflow experiment name |
+| `MLFLOW_LOG_PROMPTS` | `false` | Log prompts/responses (**security-sensitive**) |
+
+### Enabling MLflow
+
+```bash
+gcloud run services update ${SERVICE_NAME:-lightspeed-agent} \
+  --region=$GOOGLE_CLOUD_LOCATION \
+  --project=$GOOGLE_CLOUD_PROJECT \
+  --update-env-vars="\
+MLFLOW_ENABLED=true,\
+MLFLOW_TRACKING_URI=https://mlflow.example.redhat.com"
+```
+
+**Networking:** If the MLflow instance is on a public HTTPS endpoint, no
+additional configuration is needed — Cloud Run has outbound internet access by
+default. If it's behind a VPN or private network, configure a VPC connector +
+Cloud VPN or Cloud Interconnect (the existing VPC connector for Redis can be
+reused).
+
+**Authentication:** If the MLflow instance requires auth, set credentials via
+Secret Manager and configure the `OTEL_EXPORTER_OTLP_HEADERS` env var with
+the appropriate auth headers.
+
+### Dependencies
+
+The agent needs `opentelemetry-exporter-otlp-proto-http` for OTLP span export to
+MLflow. This package is already included in the default container image (pulled in
+by `opentelemetry-exporter-otlp` in the `[agent]` extra) — no additional
+installation is needed.
+
+For minimal (non-agent) installs, the `[mlflow]` optional dependency group
+provides only the OTLP HTTP exporter:
+
+```bash
+pip install 'lightspeed-agent[mlflow]'
+```
+
 ## Monitoring
 
 ### Built-in Cloud Run Metrics

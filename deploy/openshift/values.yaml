@@ -210,6 +210,50 @@ monitoring:
     namespace: ""
 
 # ---------------------------------------------------------------------------
+# MLflow Tracking Server (optional)
+# ---------------------------------------------------------------------------
+mlflow:
+  enabled: false
+  trackingUri: "http://localhost:5000"
+  experimentName: lightspeed-agent
+  # Must already exist on the MLflow server — use experimentName for auto-creation.
+  experimentId: ""
+  logPrompts: false
+  runTags: ""
+  image:
+    repository: ghcr.io/mlflow/mlflow
+    tag: "v3.14.0"
+    pullPolicy: IfNotPresent
+  port: 5000
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: "2"
+      memory: 4Gi
+  storage:
+    artifactSize: 10Gi
+    # storageClassName: ""   # uncomment to use a specific storage class
+  route:
+    enabled: false
+  auth:
+    type: none
+    oidc:
+      issuer: ""
+      clientId: ""
+      clientSecret: ""
+  postgresql:
+    # Must be "dedicated" — MLflow requires a SQL backend for OTLP trace ingestion.
+    # File-based backends silently drop traces. The chart fails if set otherwise.
+    mode: dedicated
+    user: mlflow
+    database: mlflow_tracking
+    storage:
+      size: 5Gi
+      # storageClassName: ""   # uncomment to use a specific storage class
+
+# ---------------------------------------------------------------------------
 # Session PostgreSQL database
 # ---------------------------------------------------------------------------
 postgresql:
@@ -395,3 +439,5 @@ secrets:
   gcpServiceAccountKey: ""
   # API key for non-Google LLM providers (litellm only)
   llmApiKey: ""
+  # MLflow dedicated PostgreSQL password (only needed when mlflow.enabled and mlflow.postgresql.mode is "dedicated")
+  mlflowDbPassword: ""
