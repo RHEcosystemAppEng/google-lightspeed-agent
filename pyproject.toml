@@ -54,7 +54,7 @@ agent = [
     "google-adk==2.4.0",
     "a2a-sdk[http-server]>=0.3.0,<0.4.0",
     "litellm>=1.83.10,<2.0.0",
-    "mcp>=1.0.0",
+    "mcp==1.28.1",
     # Configuration
     "python-dotenv>=1.2.2",
     # Google Cloud integration
