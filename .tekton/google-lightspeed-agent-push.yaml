@@ -8,7 +8,7 @@ metadata:
     pipelinesascode.tekton.dev/cancel-in-progress: "false"
     pipelinesascode.tekton.dev/max-keep-runs: "3"
     pipelinesascode.tekton.dev/on-cel-expression: event == "push" && target_branch
-      == "main"
+      == "konflux-migration"
   creationTimestamp: null
   labels:
     appstudio.openshift.io/application: google-lightspeed-agent
@@ -23,7 +23,7 @@ spec:
   - name: revision
     value: '{{revision}}'
   - name: output-image
-    value: quay.io/ecosystem-appeng/google-lightspeed-agent:{{revision}}
+    value: quay.io/nnaamneh/google-lightspeed-agent:{{revision}}
   - name: dockerfile
     value: ./Containerfile
   pipelineSpec:
