@@ -139,6 +139,20 @@ MLflow PostgreSQL service name
 {{- end }}
 
 {{/*
+Validate MLflow configuration when enabled.
+*/}}
+{{- define "lightspeed-agent.validateMlflow" -}}
+{{- if .Values.mlflow.enabled }}
+{{- if and (ne .Values.mlflow.mode "self-deployed") (ne .Values.mlflow.mode "managed") }}
+{{- fail "mlflow.mode must be 'self-deployed' or 'managed'" }}
+{{- end }}
+{{- if and (eq .Values.mlflow.mode "managed") (not .Values.mlflow.trackingUri) }}
+{{- fail "mlflow.trackingUri is required when mlflow.mode is 'managed'" }}
+{{- end }}
+{{- end }}
+{{- end }}
+
+{{/*
 Selector labels for MLflow PostgreSQL
 */}}
 {{- define "lightspeed-agent.mlflowPostgresqlSelectorLabels" -}}

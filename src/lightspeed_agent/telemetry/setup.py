@@ -253,16 +253,31 @@ def _instrument_httpx() -> None:
         logger.warning("Failed to instrument HTTPX: %s", e)
 
 
-def _resolve_mlflow_experiment_id(tracking_uri: str, experiment_name: str) -> str:
+def _resolve_mlflow_experiment_id(
+    tracking_uri: str, experiment_name: str, token: str = "", ca_bundle: str = ""
+) -> str:
     """Resolve an MLflow experiment name to its ID, creating the experiment if needed."""
     import json as _json
+    import ssl
     import urllib.parse
     import urllib.request
 
+    headers: dict[str, str] = {}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+
+    ssl_ctx: ssl.SSLContext | None = None
+    if ca_bundle:
+        ssl_ctx = ssl.create_default_context(cafile=ca_bundle)
+
     encoded_name = urllib.parse.quote(experiment_name)
-    get_url = f"{tracking_uri}/api/2.0/mlflow/experiments/get-by-name?experiment_name={encoded_name}"
+    get_url = (
+        f"{tracking_uri}/api/2.0/mlflow/experiments/get-by-name"
+        f"?experiment_name={encoded_name}"
+    )
+    get_req = urllib.request.Request(get_url, headers=headers)
     try:
-        with urllib.request.urlopen(get_url, timeout=10) as resp:
+        with urllib.request.urlopen(get_req, timeout=10, context=ssl_ctx) as resp:
             data = _json.loads(resp.read())
             return data["experiment"]["experiment_id"]
     except urllib.error.HTTPError as e:
@@ -271,12 +286,19 @@ def _resolve_mlflow_experiment_id(tracking_uri: str, experiment_name: str) -> st
 
     create_url = f"{tracking_uri}/api/2.0/mlflow/experiments/create"
     body = _json.dumps({"name": experiment_name}).encode()
-    req = urllib.request.Request(
-        create_url, data=body, headers={"Content-Type": "application/json"}
-    )
-    with urllib.request.urlopen(req, timeout=10) as resp:
-        data = _json.loads(resp.read())
-        return data["experiment_id"]
+    create_headers = {**headers, "Content-Type": "application/json"}
+    req = urllib.request.Request(create_url, data=body, headers=create_headers)
+    try:
+        with urllib.request.urlopen(req, timeout=10, context=ssl_ctx) as resp:
+            data = _json.loads(resp.read())
+            return data["experiment_id"]
+    except urllib.error.HTTPError as e:
+        if e.code == 403:
+            raise RuntimeError(
+                f"Permission denied: cannot create experiment '{experiment_name}'. "
+                "Ensure the experiment already exists on the MLflow server."
+            ) from e
+        raise
 
 
 def _add_mlflow_processor(settings: Any, provider: TracerProvider) -> None:
@@ -291,7 +313,10 @@ def _add_mlflow_processor(settings: Any, provider: TracerProvider) -> None:
         experiment_id = settings.mlflow_experiment_id
         if not experiment_id and settings.mlflow_experiment_name:
             experiment_id = _resolve_mlflow_experiment_id(
-                tracking_uri, settings.mlflow_experiment_name
+                tracking_uri,
+                settings.mlflow_experiment_name,
+                settings.mlflow_tracking_token,
+                settings.mlflow_ca_bundle,
             )
             logger.info(
                 "Resolved MLflow experiment '%s' to ID %s",
@@ -311,11 +336,17 @@ def _add_mlflow_processor(settings: Any, provider: TracerProvider) -> None:
             mlflow_headers["x-mlflow-log-prompts"] = "true"
         if settings.mlflow_run_tags:
             mlflow_headers["x-mlflow-run-tags"] = settings.mlflow_run_tags
+        if settings.mlflow_tracking_token:
+            mlflow_headers["Authorization"] = f"Bearer {settings.mlflow_tracking_token}"
 
-        mlflow_exporter = OTLPHttpSpanExporter(
-            endpoint=f"{tracking_uri}/v1/traces",
-            headers=mlflow_headers,
-        )
+        exporter_kwargs: dict[str, Any] = {
+            "endpoint": f"{tracking_uri}/v1/traces",
+            "headers": mlflow_headers,
+        }
+        if settings.mlflow_ca_bundle:
+            exporter_kwargs["certificate_file"] = settings.mlflow_ca_bundle
+
+        mlflow_exporter = OTLPHttpSpanExporter(**exporter_kwargs)
         provider.add_span_processor(BatchSpanProcessor(mlflow_exporter))
 
         logger.info(

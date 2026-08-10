@@ -214,7 +214,17 @@ monitoring:
 # ---------------------------------------------------------------------------
 mlflow:
   enabled: false
-  trackingUri: "http://localhost:5000"
+  # Deployment mode: "self-deployed" runs MLflow + PostgreSQL in the cluster;
+  # "managed" connects to an external MLflow instance (e.g., Red Hat managed).
+  mode: self-deployed
+  # Tracking URI — required when mode=managed; ignored when mode=self-deployed
+  # (auto-resolved to the in-cluster service).
+  trackingUri: ""
+  # PEM-encoded CA certificate for MLflow server TLS verification.
+  # When set, the chart mounts it into the agent container automatically.
+  # Only needed when the MLflow server uses a CA not in the default trust store
+  # (e.g., the Red Hat IT Root CA for the managed instance).
+  caCert: ""
   # Experiment name — auto-created on the MLflow server at startup if it doesn't exist.
   experimentName: lightspeed-agent
   # Experiment ID — overrides name-based lookup. Only set to target a pre-existing experiment by ID.
@@ -442,3 +452,5 @@ secrets:
   llmApiKey: ""
   # MLflow dedicated PostgreSQL password (only needed when mlflow.enabled and mlflow.postgresql.mode is "dedicated")
   mlflowDbPassword: ""
+  # Bearer token for managed MLflow instance authentication
+  mlflowTrackingToken: ""

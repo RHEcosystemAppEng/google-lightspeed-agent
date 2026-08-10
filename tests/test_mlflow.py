@@ -41,6 +41,16 @@ class TestMlflowSettingsDefaults:
         settings = Settings()
         assert settings.mlflow_run_tags == ""
 
+    def test_mlflow_tracking_token_default(self):
+        """mlflow_tracking_token defaults to empty string."""
+        settings = Settings()
+        assert settings.mlflow_tracking_token == ""
+
+    def test_mlflow_ca_bundle_default(self):
+        """mlflow_ca_bundle defaults to empty string."""
+        settings = Settings()
+        assert settings.mlflow_ca_bundle == ""
+
 
 class TestMlflowSettingsFromEnv:
     """Verify MLflow settings can be loaded from environment variables."""
@@ -86,6 +96,20 @@ class TestMlflowSettingsFromEnv:
         get_settings.cache_clear()
         settings = Settings()
         assert settings.mlflow_run_tags == "env=prod,team=ai"
+
+    def test_mlflow_tracking_token_from_env(self, monkeypatch):
+        """MLFLOW_TRACKING_TOKEN env var sets mlflow_tracking_token."""
+        monkeypatch.setenv("MLFLOW_TRACKING_TOKEN", "test-token-abc")
+        get_settings.cache_clear()
+        settings = Settings()
+        assert settings.mlflow_tracking_token == "test-token-abc"
+
+    def test_mlflow_ca_bundle_from_env(self, monkeypatch):
+        """MLFLOW_CA_BUNDLE env var sets mlflow_ca_bundle."""
+        monkeypatch.setenv("MLFLOW_CA_BUNDLE", "/path/to/ca.pem")
+        get_settings.cache_clear()
+        settings = Settings()
+        assert settings.mlflow_ca_bundle == "/path/to/ca.pem"
 
 
 class TestMlflowDisabled:
@@ -146,6 +170,7 @@ class TestMlflowIndependent:
         monkeypatch.setenv("OTEL_ENABLED", "false")
         monkeypatch.setenv("MLFLOW_ENABLED", "true")
         monkeypatch.setenv("MLFLOW_TRACKING_URI", "http://mlflow.local:5000")
+        monkeypatch.setenv("MLFLOW_EXPERIMENT_ID", "0")
         get_settings.cache_clear()
 
         import lightspeed_agent.telemetry.setup as telemetry_mod
@@ -177,6 +202,7 @@ class TestMlflowIndependent:
         monkeypatch.setenv("OTEL_ENABLED", "false")
         monkeypatch.setenv("MLFLOW_ENABLED", "true")
         monkeypatch.setenv("MLFLOW_TRACKING_URI", "http://mlflow.local:5000")
+        monkeypatch.setenv("MLFLOW_EXPERIMENT_ID", "0")
         get_settings.cache_clear()
 
         import lightspeed_agent.telemetry.setup as telemetry_mod
@@ -209,6 +235,7 @@ class TestMlflowEnabled:
         monkeypatch.setenv("OTEL_EXPORTER_TYPE", "console")
         monkeypatch.setenv("MLFLOW_ENABLED", "true")
         monkeypatch.setenv("MLFLOW_TRACKING_URI", "http://mlflow.local:5000")
+        monkeypatch.setenv("MLFLOW_EXPERIMENT_ID", "0")
         get_settings.cache_clear()
 
         import lightspeed_agent.telemetry.setup as telemetry_mod
@@ -244,7 +271,7 @@ class TestMlflowEnabled:
         monkeypatch.setenv("OTEL_EXPORTER_TYPE", "console")
         monkeypatch.setenv("MLFLOW_ENABLED", "true")
         monkeypatch.setenv("MLFLOW_TRACKING_URI", "http://mlflow.local:5000")
-        monkeypatch.setenv("MLFLOW_EXPERIMENT_ID", "")
+        monkeypatch.setenv("MLFLOW_EXPERIMENT_ID", "0")
         get_settings.cache_clear()
 
         import lightspeed_agent.telemetry.setup as telemetry_mod
@@ -314,15 +341,15 @@ class TestMlflowExperimentIdHeader:
 
 
 class TestMlflowNoExperimentId:
-    """Verify no experiment-id header when mlflow_experiment_id is empty."""
+    """Verify experiment ID defaults to 0 when not explicitly set."""
 
-    def test_no_experiment_id_header_when_empty(self, monkeypatch):
-        """When mlflow_experiment_id is empty, no x-mlflow-experiment-id header."""
+    def test_defaults_to_zero_when_empty(self, monkeypatch):
+        """When mlflow_experiment_id is not set, defaults to '0' (Default experiment)."""
         monkeypatch.setenv("OTEL_ENABLED", "true")
         monkeypatch.setenv("OTEL_EXPORTER_TYPE", "console")
         monkeypatch.setenv("MLFLOW_ENABLED", "true")
         monkeypatch.setenv("MLFLOW_TRACKING_URI", "http://mlflow.local:5000")
-        monkeypatch.setenv("MLFLOW_EXPERIMENT_ID", "")
+        monkeypatch.setenv("MLFLOW_EXPERIMENT_ID", "0")
         get_settings.cache_clear()
 
         import lightspeed_agent.telemetry.setup as telemetry_mod
@@ -344,7 +371,7 @@ class TestMlflowNoExperimentId:
             mock_http_exporter_cls.assert_called_once()
             call_kwargs = mock_http_exporter_cls.call_args
             headers = call_kwargs.kwargs.get("headers", {})
-            assert "x-mlflow-experiment-id" not in headers
+            assert headers["x-mlflow-experiment-id"] == "0"
 
         telemetry_mod._tracer_provider = None
         get_settings.cache_clear()
@@ -359,6 +386,7 @@ class TestMlflowExperimentNameHeader:
         monkeypatch.setenv("MLFLOW_ENABLED", "true")
         monkeypatch.setenv("MLFLOW_TRACKING_URI", "http://mlflow.local:5000")
         monkeypatch.setenv("MLFLOW_EXPERIMENT_NAME", "my-experiment")
+        monkeypatch.setenv("MLFLOW_EXPERIMENT_ID", "0")
         get_settings.cache_clear()
 
         import lightspeed_agent.telemetry.setup as telemetry_mod
@@ -390,6 +418,7 @@ class TestMlflowLogPromptsHeader:
         monkeypatch.setenv("MLFLOW_ENABLED", "true")
         monkeypatch.setenv("MLFLOW_TRACKING_URI", "http://mlflow.local:5000")
         monkeypatch.setenv("MLFLOW_LOG_PROMPTS", "true")
+        monkeypatch.setenv("MLFLOW_EXPERIMENT_ID", "0")
         get_settings.cache_clear()
 
         import lightspeed_agent.telemetry.setup as telemetry_mod
@@ -417,6 +446,7 @@ class TestMlflowLogPromptsHeader:
         monkeypatch.setenv("MLFLOW_ENABLED", "true")
         monkeypatch.setenv("MLFLOW_TRACKING_URI", "http://mlflow.local:5000")
         monkeypatch.setenv("MLFLOW_LOG_PROMPTS", "false")
+        monkeypatch.setenv("MLFLOW_EXPERIMENT_ID", "0")
         get_settings.cache_clear()
 
         import lightspeed_agent.telemetry.setup as telemetry_mod
@@ -448,6 +478,7 @@ class TestMlflowRunTagsHeader:
         monkeypatch.setenv("MLFLOW_ENABLED", "true")
         monkeypatch.setenv("MLFLOW_TRACKING_URI", "http://mlflow.local:5000")
         monkeypatch.setenv("MLFLOW_RUN_TAGS", "env=prod,team=ai")
+        monkeypatch.setenv("MLFLOW_EXPERIMENT_ID", "0")
         get_settings.cache_clear()
 
         import lightspeed_agent.telemetry.setup as telemetry_mod
@@ -478,6 +509,7 @@ class TestMlflowTrailingSlash:
         monkeypatch.setenv("OTEL_ENABLED", "false")
         monkeypatch.setenv("MLFLOW_ENABLED", "true")
         monkeypatch.setenv("MLFLOW_TRACKING_URI", "http://mlflow.local:5000/")
+        monkeypatch.setenv("MLFLOW_EXPERIMENT_ID", "0")
         get_settings.cache_clear()
 
         import lightspeed_agent.telemetry.setup as telemetry_mod
@@ -500,6 +532,136 @@ class TestMlflowTrailingSlash:
 
         telemetry_mod._tracer_provider = None
         get_settings.cache_clear()
+
+
+class TestMlflowAuthToken:
+    """Verify Authorization header is passed when tracking token is set."""
+
+    def test_auth_header_when_token_set(self, monkeypatch):
+        """When mlflow_tracking_token is set, OTLPSpanExporter gets Authorization header."""
+        monkeypatch.setenv("OTEL_ENABLED", "false")
+        monkeypatch.setenv("MLFLOW_ENABLED", "true")
+        monkeypatch.setenv("MLFLOW_TRACKING_URI", "http://mlflow.local:5000")
+        monkeypatch.setenv("MLFLOW_EXPERIMENT_ID", "42")
+        monkeypatch.setenv("MLFLOW_TRACKING_TOKEN", "my-secret-token")
+        get_settings.cache_clear()
+
+        import lightspeed_agent.telemetry.setup as telemetry_mod
+
+        telemetry_mod._tracer_provider = None
+
+        mock_http_exporter_cls = MagicMock()
+
+        with patch(
+            "opentelemetry.exporter.otlp.proto.http.trace_exporter.OTLPSpanExporter",
+            mock_http_exporter_cls,
+        ):
+            telemetry_mod.setup_telemetry()
+
+            call_kwargs = mock_http_exporter_cls.call_args
+            headers = call_kwargs.kwargs.get("headers", {})
+            assert headers["Authorization"] == "Bearer my-secret-token"
+
+        telemetry_mod._tracer_provider = None
+        get_settings.cache_clear()
+
+    def test_no_auth_header_when_token_empty(self, monkeypatch):
+        """When mlflow_tracking_token is empty, no Authorization header."""
+        monkeypatch.setenv("OTEL_ENABLED", "false")
+        monkeypatch.setenv("MLFLOW_ENABLED", "true")
+        monkeypatch.setenv("MLFLOW_TRACKING_URI", "http://mlflow.local:5000")
+        monkeypatch.setenv("MLFLOW_EXPERIMENT_ID", "42")
+        monkeypatch.setenv("MLFLOW_TRACKING_TOKEN", "")
+        get_settings.cache_clear()
+
+        import lightspeed_agent.telemetry.setup as telemetry_mod
+
+        telemetry_mod._tracer_provider = None
+
+        mock_http_exporter_cls = MagicMock()
+
+        with patch(
+            "opentelemetry.exporter.otlp.proto.http.trace_exporter.OTLPSpanExporter",
+            mock_http_exporter_cls,
+        ):
+            telemetry_mod.setup_telemetry()
+
+            call_kwargs = mock_http_exporter_cls.call_args
+            headers = call_kwargs.kwargs.get("headers", {})
+            assert "Authorization" not in headers
+
+        telemetry_mod._tracer_provider = None
+        get_settings.cache_clear()
+
+
+class TestMlflowExperimentResolutionAuth:
+    """Verify token is passed in experiment resolution REST calls."""
+
+    def test_resolve_passes_auth_header(self):
+        """_resolve_mlflow_experiment_id sends Authorization header when token is set."""
+        from lightspeed_agent.telemetry.setup import _resolve_mlflow_experiment_id
+
+        response_body = b'{"experiment": {"experiment_id": "7"}}'
+
+        with patch("urllib.request.urlopen") as mock_urlopen:
+            mock_resp = MagicMock()
+            mock_resp.read.return_value = response_body
+            mock_resp.__enter__ = lambda s: s
+            mock_resp.__exit__ = MagicMock(return_value=False)
+            mock_urlopen.return_value = mock_resp
+
+            result = _resolve_mlflow_experiment_id(
+                "http://mlflow.local:5000", "test-exp", token="my-token"
+            )
+
+            assert result == "7"
+            call_args = mock_urlopen.call_args
+            req = call_args[0][0]
+            assert req.get_header("Authorization") == "Bearer my-token"
+
+    def test_resolve_no_auth_header_when_empty_token(self):
+        """_resolve_mlflow_experiment_id sends no Authorization header when token is empty."""
+        from lightspeed_agent.telemetry.setup import _resolve_mlflow_experiment_id
+
+        response_body = b'{"experiment": {"experiment_id": "7"}}'
+
+        with patch("urllib.request.urlopen") as mock_urlopen:
+            mock_resp = MagicMock()
+            mock_resp.read.return_value = response_body
+            mock_resp.__enter__ = lambda s: s
+            mock_resp.__exit__ = MagicMock(return_value=False)
+            mock_urlopen.return_value = mock_resp
+
+            result = _resolve_mlflow_experiment_id(
+                "http://mlflow.local:5000", "test-exp", token=""
+            )
+
+            assert result == "7"
+            call_args = mock_urlopen.call_args
+            req = call_args[0][0]
+            assert not req.has_header("Authorization")
+
+
+class TestMlflowExperimentCreationDenied:
+    """Verify clear error when managed instance denies experiment creation."""
+
+    def test_403_on_create_raises_runtime_error(self):
+        """A 403 on experiment create produces a clear RuntimeError."""
+        import urllib.error
+
+        from lightspeed_agent.telemetry.setup import _resolve_mlflow_experiment_id
+
+        def side_effect(req, timeout=10, context=None):
+            url = req.full_url if hasattr(req, "full_url") else req
+            if "get-by-name" in url:
+                raise urllib.error.HTTPError(url, 404, "Not Found", {}, None)
+            raise urllib.error.HTTPError(url, 403, "Forbidden", {}, None)
+
+        with patch("urllib.request.urlopen", side_effect=side_effect):
+            with pytest.raises(RuntimeError, match="Permission denied: cannot create experiment"):
+                _resolve_mlflow_experiment_id(
+                    "http://mlflow.managed:5000", "nonexistent-exp", token="tok"
+                )
 
 
 class TestMlflowImportError:
