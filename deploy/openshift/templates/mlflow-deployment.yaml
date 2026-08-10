@@ -1,4 +1,5 @@
-{{- if .Values.mlflow.enabled }}
+{{- include "lightspeed-agent.validateMlflow" . }}
+{{- if and .Values.mlflow.enabled (eq .Values.mlflow.mode "self-deployed") }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:

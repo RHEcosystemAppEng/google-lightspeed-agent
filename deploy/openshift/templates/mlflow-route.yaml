@@ -1,4 +1,4 @@
-{{- if and .Values.mlflow.enabled .Values.mlflow.route.enabled }}
+{{- if and .Values.mlflow.enabled (eq .Values.mlflow.mode "self-deployed") .Values.mlflow.route.enabled }}
 apiVersion: route.openshift.io/v1
 kind: Route
 metadata:

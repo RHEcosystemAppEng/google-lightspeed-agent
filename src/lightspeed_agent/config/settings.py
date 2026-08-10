@@ -693,6 +693,14 @@ class Settings(BaseSettings):
         default="",
         description="Comma-separated key=value tags for MLflow runs (e.g., env=prod,team=ai)",
     )
+    mlflow_tracking_token: str = Field(
+        default="",
+        description="Bearer token for MLflow tracking server authentication",
+    )
+    mlflow_ca_bundle: str = Field(
+        default="",
+        description="Path to CA certificate file for MLflow TLS verification",
+    )
 
 
 @lru_cache

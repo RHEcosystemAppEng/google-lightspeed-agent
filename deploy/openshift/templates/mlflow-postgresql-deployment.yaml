@@ -1,4 +1,4 @@
-{{- if and .Values.mlflow.enabled (eq .Values.mlflow.postgresql.mode "dedicated") }}
+{{- if and .Values.mlflow.enabled (eq .Values.mlflow.mode "self-deployed") (eq .Values.mlflow.postgresql.mode "dedicated") }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
