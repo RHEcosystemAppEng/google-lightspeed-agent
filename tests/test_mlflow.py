@@ -341,37 +341,29 @@ class TestMlflowExperimentIdHeader:
 
 
 class TestMlflowNoExperimentId:
-    """Verify experiment ID defaults to 0 when not explicitly set."""
+    """Verify error when no experiment ID can be resolved."""
 
-    def test_defaults_to_zero_when_empty(self, monkeypatch):
-        """When mlflow_experiment_id is not set, defaults to '0' (Default experiment)."""
-        monkeypatch.setenv("OTEL_ENABLED", "true")
-        monkeypatch.setenv("OTEL_EXPORTER_TYPE", "console")
+    def test_raises_when_no_experiment_configured(self, monkeypatch):
+        """When neither experiment ID nor name is set, raises RuntimeError."""
+        monkeypatch.setenv("OTEL_ENABLED", "false")
         monkeypatch.setenv("MLFLOW_ENABLED", "true")
         monkeypatch.setenv("MLFLOW_TRACKING_URI", "http://mlflow.local:5000")
-        monkeypatch.setenv("MLFLOW_EXPERIMENT_ID", "0")
+        monkeypatch.setenv("MLFLOW_EXPERIMENT_ID", "")
+        monkeypatch.setenv("MLFLOW_EXPERIMENT_NAME", "")
         get_settings.cache_clear()
 
         import lightspeed_agent.telemetry.setup as telemetry_mod
 
         telemetry_mod._tracer_provider = None
 
-        mock_http_exporter_cls = MagicMock()
-
         with (
-            patch.object(telemetry_mod, "_instrument_fastapi"),
-            patch.object(telemetry_mod, "_instrument_httpx"),
             patch(
                 "opentelemetry.exporter.otlp.proto.http.trace_exporter.OTLPSpanExporter",
-                mock_http_exporter_cls,
+                MagicMock(),
             ),
+            pytest.raises(RuntimeError, match="experiment ID could not be resolved"),
         ):
             telemetry_mod.setup_telemetry()
-
-            mock_http_exporter_cls.assert_called_once()
-            call_kwargs = mock_http_exporter_cls.call_args
-            headers = call_kwargs.kwargs.get("headers", {})
-            assert headers["x-mlflow-experiment-id"] == "0"
 
         telemetry_mod._tracer_provider = None
         get_settings.cache_clear()
@@ -657,11 +649,13 @@ class TestMlflowExperimentCreationDenied:
                 raise urllib.error.HTTPError(url, 404, "Not Found", {}, None)
             raise urllib.error.HTTPError(url, 403, "Forbidden", {}, None)
 
-        with patch("urllib.request.urlopen", side_effect=side_effect):
-            with pytest.raises(RuntimeError, match="Permission denied: cannot create experiment"):
-                _resolve_mlflow_experiment_id(
-                    "http://mlflow.managed:5000", "nonexistent-exp", token="tok"
-                )
+        with (
+            patch("urllib.request.urlopen", side_effect=side_effect),
+            pytest.raises(RuntimeError, match="Permission denied: cannot create experiment"),
+        ):
+            _resolve_mlflow_experiment_id(
+                "http://mlflow.managed:5000", "nonexistent-exp", token="tok"
+            )
 
 
 class TestMlflowImportError:

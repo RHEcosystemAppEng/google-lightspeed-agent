@@ -279,10 +279,16 @@ def _resolve_mlflow_experiment_id(
     try:
         with urllib.request.urlopen(get_req, timeout=10, context=ssl_ctx) as resp:
             data = _json.loads(resp.read())
-            return data["experiment"]["experiment_id"]
-    except urllib.error.HTTPError as e:
-        if e.code != 404:
+            return str(data["experiment"]["experiment_id"])
+    except urllib.error.URLError as e:
+        if isinstance(e, urllib.error.HTTPError) and e.code == 404:
+            pass  # experiment not found, fall through to create
+        elif isinstance(e, urllib.error.HTTPError):
             raise
+        else:
+            raise RuntimeError(
+                f"Cannot reach MLflow server at {tracking_uri}: {e.reason}"
+            ) from e
 
     create_url = f"{tracking_uri}/api/2.0/mlflow/experiments/create"
     body = _json.dumps({"name": experiment_name}).encode()
@@ -291,7 +297,7 @@ def _resolve_mlflow_experiment_id(
     try:
         with urllib.request.urlopen(req, timeout=10, context=ssl_ctx) as resp:
             data = _json.loads(resp.read())
-            return data["experiment_id"]
+            return str(data["experiment_id"])
     except urllib.error.HTTPError as e:
         if e.code == 403:
             raise RuntimeError(
@@ -299,6 +305,10 @@ def _resolve_mlflow_experiment_id(
                 "Ensure the experiment already exists on the MLflow server."
             ) from e
         raise
+    except urllib.error.URLError as e:
+        raise RuntimeError(
+            f"Cannot reach MLflow server at {tracking_uri}: {e.reason}"
+        ) from e
 
 
 def _add_mlflow_processor(settings: Any, provider: TracerProvider) -> None:
@@ -324,12 +334,14 @@ def _add_mlflow_processor(settings: Any, provider: TracerProvider) -> None:
                 experiment_id,
             )
         if not experiment_id:
-            experiment_id = "0"
-            logger.warning("No MLflow experiment configured, using Default (ID 0)")
+            raise RuntimeError(
+                "MLflow experiment ID could not be resolved. "
+                "Set MLFLOW_EXPERIMENT_NAME or MLFLOW_EXPERIMENT_ID."
+            )
 
-        mlflow_headers: dict[str, str] = {}
-        if experiment_id:
-            mlflow_headers["x-mlflow-experiment-id"] = experiment_id
+        mlflow_headers: dict[str, str] = {
+            "x-mlflow-experiment-id": experiment_id,
+        }
         if settings.mlflow_experiment_name:
             mlflow_headers["x-mlflow-experiment-name"] = settings.mlflow_experiment_name
         if settings.mlflow_log_prompts:
