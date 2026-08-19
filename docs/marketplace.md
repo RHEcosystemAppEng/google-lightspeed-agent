@@ -149,10 +149,20 @@ Marketplace sends procurement events via Pub/Sub:
 ### Multi-Agent Product Filtering
 
 In multi-agent deployments where multiple agents share the same Google Cloud
-project and Pub/Sub topic, events are filtered by the `product` field in the
-entitlement data. Each agent only processes events matching its
-`SERVICE_CONTROL_SERVICE_NAME`. Account-only events (no product field) pass
-through without filtering and are handled normally (e.g. account approval).
+project and Pub/Sub topic, events are filtered by product. Each agent only
+processes events matching its `SERVICE_CONTROL_SERVICE_NAME`.
+
+Since most Pub/Sub event types omit the `product` field, the handler fetches
+it from the Procurement API using the entitlement ID. This requires the
+Cloud Run runtime SA to be registered in the **Producer Portal → Technical
+Integration → Partner Procurement API**. The Technical Integration is
+provider-level (per GCP project, not per product), so all instance SAs must
+be registered together — see [GitOps README: Step 2](../deploy/gitops/README.md#2-register-service-accounts-in-the-google-cloud-marketplace-producer-portal).
+
+If the SA is not registered, the Procurement API returns `403 Forbidden`
+and the handler cannot determine the product, causing events to be silently
+dropped. Account-only events (no entitlement data) pass through without
+filtering and are handled normally (e.g., account approval).
 
 ### Handling Entitlements
 
@@ -386,6 +396,7 @@ gcloud logging read \
 | Missing events | Subscription not configured | Verify Pub/Sub subscription |
 | Event processing failed | Handler error | Check logs for exceptions |
 | Entitlement not found | Sync delay | Wait and retry |
+| 403 on Procurement API / events silently dropped | Runtime SA not registered in Producer Portal | Register the Cloud Run SA in Producer Portal → Technical Integration → Partner Procurement API (this is provider-level, not per-product — register all instance SAs together) |
 
 ### Usage Reporting Issues
 

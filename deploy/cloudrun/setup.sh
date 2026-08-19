@@ -213,6 +213,10 @@ roles=(
     "roles/cloudsql.client"
     "roles/serviceusage.serviceUsageConsumer"
 )
+# NOTE: The Cloud Commerce Partner Procurement API (cloudcommerceprocurement.googleapis.com)
+# does not use standard IAM roles. To enable multi-agent product filtering (fetching
+# entitlement product info from the API), register this SA in the GCP Marketplace
+# Producer Portal → Technical Integration → Partner Procurement API.
 
 for role in "${roles[@]}"; do
     log_info "  Granting $role..."
