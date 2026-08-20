@@ -76,6 +76,7 @@ telemetry = [
     "opentelemetry-exporter-zipkin>=1.20.0",
 ]
 eval = [
+    "mlflow>=3.15.0",
     "opentelemetry-exporter-otlp-proto-http>=1.20.0",
 ]
 dev = [
