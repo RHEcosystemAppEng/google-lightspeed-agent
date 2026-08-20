@@ -1,7 +1,7 @@
 # Red Hat Lightspeed Agent for Google Cloud - Makefile
 # Common development and deployment commands
 
-.PHONY: help build build-agent build-marketplace run stop logs logs-mcp clean test test-shell lint dev check-env lock lock-agent lock-handler lock-dev lock-check audit
+.PHONY: help build build-agent build-marketplace run stop logs logs-mcp clean test test-shell lint dev check-env lock lock-agent lock-handler lock-dev lock-mlflow lock-check audit
 
 # Default target
 help:
@@ -18,6 +18,7 @@ help:
 	@echo "  make lock-agent   - Regenerate agent lock file only"
 	@echo "  make lock-handler - Regenerate marketplace handler lock file only"
 	@echo "  make lock-dev     - Regenerate dev lock file only"
+	@echo "  make lock-mlflow  - Regenerate mlflow lock file only"
 	@echo "  make lock-check   - Verify lock files are in sync (used by CI)"
 	@echo "  make audit        - Scan dependencies for known vulnerabilities (pip-audit)"
 	@echo ""
@@ -71,7 +72,7 @@ lint:
 # =============================================================================
 
 lock:
-	$(MAKE) lock-agent lock-handler lock-dev
+	$(MAKE) lock-agent lock-handler lock-dev lock-mlflow
 
 lock-agent:
 	@echo "Regenerating agent lock file..."
@@ -90,6 +91,12 @@ lock-dev:
 	source .venv/bin/activate && uv pip compile --generate-hashes --python-version=3.12 --python-platform=linux \
 		--extra dev --output-file=requirements-dev.txt pyproject.toml
 	@echo "✓ requirements-dev.txt updated"
+
+lock-mlflow:
+	@echo "Regenerating mlflow lock file..."
+	source .venv/bin/activate && uv pip compile --generate-hashes --python-version=3.12 --python-platform=linux \
+		--extra mlflow --output-file=requirements-mlflow.txt pyproject.toml
+	@echo "✓ requirements-mlflow.txt updated"
 
 lock-check:
 	@echo "Checking if lock files are in sync with pyproject.toml..."
@@ -111,6 +118,12 @@ lock-check:
 	@diff -u <(tail -n +3 requirements-dev.txt) <(tail -n +3 /tmp/requirements-dev-check.txt) || \
 		(echo "ERROR: requirements-dev.txt is out of sync. Run 'make lock' to update." && rm -f /tmp/requirements-dev-check.txt && exit 1)
 	@rm -f /tmp/requirements-dev-check.txt
+	@cp requirements-mlflow.txt /tmp/requirements-mlflow-check.txt
+	@uv pip compile --generate-hashes --python-version=3.12 --python-platform=linux \
+		--extra mlflow --output-file=/tmp/requirements-mlflow-check.txt pyproject.toml
+	@diff -u <(tail -n +3 requirements-mlflow.txt) <(tail -n +3 /tmp/requirements-mlflow-check.txt) || \
+		(echo "ERROR: requirements-mlflow.txt is out of sync. Run 'make lock' to update." && rm -f /tmp/requirements-mlflow-check.txt && exit 1)
+	@rm -f /tmp/requirements-mlflow-check.txt
 	@echo "✓ Lock files are in sync"
 
 audit:

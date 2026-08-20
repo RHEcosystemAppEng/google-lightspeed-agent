@@ -77,6 +77,8 @@ a web interface to:
 | **postgresql** | PostgreSQL 16 for session persistence | Both (only when `sessionBackend: database`) |
 | **marketplace-postgresql** | PostgreSQL 16 for marketplace/entitlement data | Standalone only |
 | **redis** | Redis 7 for distributed rate limiting | Both modes |
+| **mlflow** | MLflow Tracking Server for LLM observability | Both (only when `mlflow.enabled: true` and `mlflow.mode: self-deployed`) |
+| **mlflow-postgresql** | PostgreSQL 16 for MLflow metadata | Both (only when `mlflow.enabled`, `mlflow.mode: self-deployed`, and `mlflow.postgresql.mode: dedicated`) |
 | **marketplace-handler** | DCR and marketplace event handler | Standalone only |
 | **standalone-ui** | Web UI for DCR + A2A testing | Standalone only |
 
@@ -1077,6 +1079,86 @@ they are distinguishable in PromQL queries.
 > `monitoring.serviceMonitor.*`, `monitoring.grafanaDashboard.*`). Only
 > `otel.serviceName` must be set per agent since it must be unique.
 
+### MLflow Tracking (LLM Observability)
+
+MLflow provides LLM-specific tracing — token counts, latency, tool call traces,
+and optional prompt/response logging. It works via an OpenTelemetry bridge:
+Google ADK natively generates OTel traces, and MLflow accepts them via its OTLP
+endpoint at `/v1/traces`. The agent adds a second OTel span processor alongside
+the existing exporters. Requires `opentelemetry-exporter-otlp-proto-http` on the
+agent side (included in the container image as a transitive dependency of the
+`[agent]` group; also declared explicitly in the `[mlflow]` group).
+
+| Value | Description | Default |
+|---|---|---|
+| `mlflow.enabled` | Enable MLflow tracing | `false` |
+| `mlflow.mode` | `self-deployed` (deploy MLflow server in-cluster) or `managed` (connect to external instance) | `self-deployed` |
+| `mlflow.trackingUri` | External MLflow URI — required (managed deployment only) | `""` |
+| `mlflow.caCert` | PEM-encoded CA certificate for MLflow TLS verification (managed deployment only) | `""` |
+| `mlflow.experimentName` | MLflow experiment name | `lightspeed-agent` |
+| `mlflow.experimentId` | MLflow experiment ID (overrides name-based lookup) | `""` |
+| `mlflow.logPrompts` | Log LLM prompts/responses (**security-sensitive** — may contain PII) | `false` |
+| `mlflow.runTags` | Extra run tags as `key=value` pairs | `""` |
+| `mlflow.image.repository` | MLflow container image (self-deployed only) | `ghcr.io/mlflow/mlflow` |
+| `mlflow.image.tag` | Image tag (self-deployed only) | `v3.14.0-full` |
+| `mlflow.port` | MLflow server port (self-deployed only) | `5000` |
+| `mlflow.route.enabled` | Create an OpenShift Route for the MLflow UI (self-deployed only) | `false` |
+| `mlflow.auth.type` | Auth type: `none`, `oidc`, `proxy` (self-deployed only) | `none` |
+| `mlflow.postgresql.mode` | Must be `dedicated` — MLflow requires a SQL backend for OTLP trace ingestion (self-deployed only) | `dedicated` |
+| `mlflow.postgresql.database` | Database name (self-deployed only) | `mlflow_tracking` |
+| `mlflow.storage.artifactSize` | PVC size for MLflow artifacts (self-deployed only) | `10Gi` |
+| `secrets.mlflowDbPassword` | MLflow dedicated PostgreSQL password (self-deployed only) | `""` |
+| `secrets.mlflowTrackingToken` | Bearer token for MLflow authentication (managed deployment only) | `""` |
+
+**Self-deployed mode** (deploy MLflow server in-cluster):
+
+```yaml
+# In my-values.yaml:
+mlflow:
+  enabled: true
+  # mode: self-deployed is the default
+
+# In secrets.yaml:
+secrets:
+  mlflowDbPassword: "a-strong-mlflow-password"
+```
+
+After install, the agent automatically sends OTel traces to the in-cluster MLflow server.
+Access the MLflow UI via `oc port-forward`:
+
+```bash
+oc port-forward svc/lightspeed-agent-mlflow 5000:5000 -n lightspeed-agent
+# Open http://localhost:5000 in your browser
+```
+
+**Managed mode** (connect to external MLflow instance):
+
+```yaml
+# In managed-mlflow-values.yaml:
+mlflow:
+  enabled: true
+  mode: managed
+  trackingUri: "https://mlflow.apps.int.spoke.prod.us-west-2.aws.paas.redhat.com"
+  caCert: |
+    -----BEGIN CERTIFICATE-----
+    ...Red Hat IT Root CA PEM content...
+    -----END CERTIFICATE-----
+
+# In managed-mlflow-secrets.yaml:
+secrets:
+  mlflowTrackingToken: "<token from MLflow admin>"
+```
+
+No MLflow server, PostgreSQL, or PVCs are deployed. The agent connects directly to the external instance with Bearer token authentication.
+
+Or enable an OpenShift Route for persistent access:
+
+```yaml
+mlflow:
+  route:
+    enabled: true
+```
+
 ## Authentication
 
 The agent authenticates requests via Red Hat SSO token introspection:
@@ -1194,6 +1276,10 @@ oc logs deployment/lightspeed-agent-postgresql -n lightspeed-agent
 oc logs deployment/lightspeed-agent-marketplace-postgresql -n lightspeed-agent
 # Redis
 oc logs deployment/lightspeed-agent-redis -n lightspeed-agent
+# MLflow (only when mlflow.enabled=true)
+oc logs deployment/lightspeed-agent-mlflow -n lightspeed-agent
+# MLflow PostgreSQL (only when mlflow.enabled and mlflow.postgresql.mode=dedicated)
+oc logs deployment/lightspeed-agent-mlflow-postgresql -n lightspeed-agent
 ```
 
 ### Common issues
