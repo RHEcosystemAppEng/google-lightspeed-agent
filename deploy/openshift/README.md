@@ -112,6 +112,28 @@ curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
   (`python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`)
 - A GCP service account key (if Service Control is enabled)
 
+**Red Hat AI Platform Integration (optional):**
+
+The following features are **disabled by default** and require their respective
+platform components to be pre-installed on the cluster. Each can be enabled
+independently.
+
+| Feature | Helm flag | Required Operator / Component | Minimum Version |
+|---|---|---|---|
+| **MCP Gateway** | `mcpGateway.enabled` | Red Hat Connectivity Link Operator (includes Kuadrant + MCP Gateway) | Connectivity Link 1.3+ |
+| | | Istio / OpenShift Service Mesh (for Envoy ext_proc) | — |
+| | | Gateway API CRDs (`gateway.networking.k8s.io/v1`) | OpenShift 4.19+ ships these by default |
+| **OpenShell** | `openshell.enabled` | OpenShell gateway Helm chart (`oci://ghcr.io/nvidia/openshell/helm-chart`) | 0.6.0+ |
+| | | kubernetes-sigs/agent-sandbox CRDs (`agents.x-k8s.io/v1beta1`) | v0.1.0+ |
+| | | Privileged SCC for `openshell-sandbox` service account | — |
+| **Model as a Service** | `modelService.enabled` | OpenShift AI with MaaS capability (`modelsAsService: Managed`) | OpenShift AI 3.4+ |
+| | | *or* any external OpenAI-compatible gateway (LiteLLM, Portkey, etc.) | — |
+
+> **Note:** MCP Gateway and OpenShell can coexist on the same cluster. MCP Gateway
+> requires Istio / Gateway API / Kuadrant; OpenShell requires the agent-sandbox
+> CRDs and the OpenShell gateway Helm chart. They share no infrastructure
+> dependencies with each other.
+
 ## Deployment — Hybrid Mode
 
 ### 1. Create a project
@@ -498,6 +520,268 @@ The interface guides you through the full order lifecycle:
 Use the **Reset** button to clear all state and start over (the entitlement and
 DCR client are cleaned up from the database).
 
+## Red Hat AI Platform Integration
+
+Three optional integrations align the deployment with Red Hat AI best practices.
+Each is disabled by default and can be enabled independently by setting the
+corresponding flag in your values file.
+
+### MCP Gateway (`mcpGateway.enabled: true`)
+
+Replaces the MCP sidecar with a standalone MCP server registered behind the
+[MCP Gateway](https://github.com/Kuadrant/mcp-gateway) (Red Hat Connectivity
+Link). The gateway federates multiple MCP servers behind a single `/mcp`
+endpoint, providing centralized auth, rate limiting, and per-tool metrics.
+
+**What changes:**
+- The MCP sidecar is removed from the agent pod
+- A standalone MCP server Deployment + Service is created
+- An `HTTPRoute` and `MCPServerRegistration` register the server with the gateway
+- The agent's `MCP_SERVER_URL` points to the gateway endpoint instead of `localhost`
+- A NetworkPolicy restricts MCP pod ingress to the agent and the gateway namespace
+
+**Prerequisites:**
+1. Red Hat Connectivity Link 1.3+ installed (includes MCP Gateway capability)
+2. A Gateway API `Gateway` resource with an MCP listener
+3. An `MCPGatewayExtension` CR extending the gateway with MCP capabilities
+
+**Configuration:**
+
+```yaml
+mcpGateway:
+  enabled: true
+  gatewayName: "mcp-gateway"           # name of the existing Gateway resource
+  gatewayNamespace: "gateway-system"   # namespace of the Gateway resource
+  url: "http://mcp-gateway.gateway-system.svc.cluster.local:8080/mcp"
+  toolPrefix: "redhat_lightspeed_"     # prevents tool name collisions
+```
+
+**Verification:**
+
+```bash
+# Verify standalone MCP server is running
+oc get pods -l app.kubernetes.io/component=mcp-server -n lightspeed-agent
+
+# Check MCPServerRegistration status
+oc get mcpserverregistrations -n lightspeed-agent
+
+# List tools via the gateway
+curl -X POST http://<gateway-host>/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+```
+
+#### Authentication with MCP Gateway
+
+When Gemini Enterprise (or any A2A client) calls the agent, the authentication
+flow involves **two separate identity layers** at the MCP Gateway:
+
+| Layer | Identity | Purpose | Mechanism |
+|---|---|---|---|
+| **Agent identity** | "Which agent is calling the MCP Gateway?" | Authorize the agent to invoke MCP tools | SPIFFE mTLS via Istio Ambient (network layer — no HTTP headers consumed) |
+| **User identity** | "Whose Red Hat data is being accessed?" | Authenticate to console.redhat.com Insights APIs | Red Hat SSO JWT in `Authorization` header — passes through the gateway to the MCP server |
+
+```
+Gemini Enterprise
+    │ Bearer: <Red Hat SSO JWT>
+    ▼
+Agent (validates JWT via SSO introspection)
+    │ Authorization: Bearer <Red Hat SSO JWT>    ← user identity
+    │ mTLS (SPIFFE)                              ← agent identity
+    ▼
+MCP Gateway (Envoy)
+    │ 1. Agent authenticated by mTLS peer certificate (Istio)
+    │ 2. Authorization header passes through untouched
+    ▼
+MCP Server (standalone)
+    │ Uses JWT to call console.redhat.com on behalf of the user
+    ▼
+console.redhat.com (Insights APIs)
+```
+
+The `Authorization` header passes through Envoy by default — no chart changes
+are required for this flow to work.
+
+> **Warning — Kuadrant AuthPolicy**: If you add a Kuadrant `AuthPolicy` to the
+> MCP HTTPRoute, ensure it validates Red Hat SSO JWTs (issuer:
+> `sso.redhat.com`). An AuthPolicy configured for the wrong issuer will reject
+> the user's JWT and break MCP tool calls.
+
+### OpenShell (`openshell.enabled: true`)
+
+Registers the agent with [OpenShell](https://github.com/NVIDIA/openshell),
+NVIDIA's sandboxed execution platform for AI agents. When enabled, a
+`SandboxTemplate` CR is created so the OpenShell gateway can spawn sandboxed
+instances of this agent via the
+[kubernetes-sigs/agent-sandbox](https://github.com/kubernetes-sigs/agent-sandbox)
+CRD controller. Sandbox pods run in isolated containers with policy-enforced
+filesystem, network, process, and inference constraints.
+
+**What changes:**
+- The agent Deployment is labeled with `openshell.nvidia.com/sandbox-template`
+  to associate it with its SandboxTemplate
+- A `SandboxTemplate` CR (`agents.x-k8s.io/v1beta1`) is created, defining how
+  sandboxed instances of the agent should be provisioned (image, env, ports)
+- The sandbox template uses GCP service account credentials
+  (`GOOGLE_APPLICATION_CREDENTIALS`) instead of an API key for authentication
+- A NetworkPolicy allows ingress from the OpenShell gateway namespace to the
+  agent pod
+
+**Prerequisites:**
+1. kubernetes-sigs/agent-sandbox CRDs installed on the cluster:
+   ```bash
+   kubectl apply -f https://github.com/kubernetes-sigs/agent-sandbox/releases/latest/download/manifest.yaml
+   kubectl apply -f https://github.com/kubernetes-sigs/agent-sandbox/releases/latest/download/extensions.yaml
+   ```
+2. OpenShell gateway deployed via its Helm chart:
+   ```bash
+   oc create ns openshell
+   oc adm policy add-scc-to-user privileged -z openshell-sandbox -n openshell
+   helm install openshell oci://ghcr.io/nvidia/openshell/helm-chart \
+     --namespace openshell \
+     --set server.disableTls=true \
+     --set podSecurityContext.fsGroup=null \
+     --set securityContext.runAsUser=null
+   ```
+3. Privileged SCC granted to `openshell-sandbox` SA in the agent namespace:
+   ```bash
+   oc adm policy add-scc-to-user privileged -z openshell-sandbox -n lightspeed-agent
+   ```
+
+**Configuration:**
+
+```yaml
+openshell:
+  enabled: true
+  gatewayNamespace: "openshell"          # namespace of the OpenShell gateway
+  sandboxImage: ""                       # empty = use agent image
+  shutdownPolicy: "Retain"              # "Delete" or "Retain"
+  networkPolicyManagement: "Managed"    # "Managed" or "Unmanaged"
+```
+
+**Verification:**
+
+```bash
+# Check SandboxTemplate was created
+oc get sandboxtemplates -n lightspeed-agent
+
+# Verify the agent Deployment has the OpenShell label
+oc get deployment -l openshell.nvidia.com/sandbox-template -n lightspeed-agent
+
+# Verify NetworkPolicy for OpenShell gateway connectivity
+oc get networkpolicy -n lightspeed-agent | grep openshell
+
+# Check OpenShell gateway can see the agent namespace
+openshell status
+```
+
+### Model as a Service (`modelService.enabled: true`)
+
+Configures the agent to use an external model gateway instead of direct
+Google AI Studio / Vertex AI access. This is the recommended approach for
+production deployments using [OpenShift AI MaaS](https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/3.3/html/govern_llm_access_with_models-as-a-service/),
+which provides centralized model routing, token-based rate limiting, API key
+management, and usage tracking.
+
+The agent connects to the MaaS endpoint using the OpenAI-compatible chat
+completions protocol (via the `litellm` provider). No LiteLLM proxy is deployed
+in the chart — the MaaS gateway runs as a platform-level service managed by
+OpenShift AI.
+
+**What changes:**
+- `LLM_PROVIDER` is set to `litellm`
+- `LLM_MODEL` is set to the model name as the gateway expects it
+- `LLM_API_BASE` is set to the MaaS gateway URL
+- Direct Gemini configuration (`GOOGLE_API_KEY`, Vertex AI settings) is still
+  present in the ConfigMap but not used when the litellm provider is active
+
+**Prerequisites:**
+1. OpenShift AI 3.4+ with MaaS enabled (`modelsAsService: Managed` in the
+   `DataScienceCluster` CR)
+2. A model deployed and published to MaaS (via `InferenceService` + `MaaSModelRef`)
+3. A MaaS API token (create via `POST /maas-api/v1/tokens`)
+
+*Alternatively*, any OpenAI-compatible gateway works (LiteLLM proxy, Portkey,
+or a direct vLLM/KServe endpoint).
+
+**Configuration:**
+
+```yaml
+modelService:
+  enabled: true
+  url: "https://maas.<cluster-domain>/llm/gemini-2.5-flash/v1"
+  model: "vertex_ai/gemini-2.5-flash"
+
+# The MaaS API token goes in secrets.yaml
+secrets:
+  llmApiKey: "your-maas-api-token"
+```
+
+**Examples for different model backends:**
+
+```yaml
+# OpenShift AI MaaS
+modelService:
+  enabled: true
+  url: "https://maas.apps.ocp.example.com/llm/gemini-2.5-flash/v1"
+  model: "vertex_ai/gemini-2.5-flash"
+
+# External LiteLLM proxy (e.g., routing to Vertex AI with a service account)
+modelService:
+  enabled: true
+  url: "http://litellm-service.ai-gateway.svc.cluster.local:4000"
+  model: "vertex_ai/gemini-2.5-flash"
+
+# Direct vLLM / KServe InferenceService on OpenShift AI
+modelService:
+  enabled: true
+  url: "http://llama-isvc-predictor.ai-models.svc.cluster.local:8080/v1"
+  model: "openai/llama-3.1-8b-instruct"
+```
+
+**Verification:**
+
+```bash
+# Check the agent's LLM configuration
+oc get configmap lightspeed-agent-config -n lightspeed-agent \
+  -o jsonpath='{.data.LLM_PROVIDER} {.data.LLM_API_BASE} {.data.LLM_MODEL}'
+
+# Test model access from the agent pod
+AGENT_POD=$(oc get pod -l app.kubernetes.io/component=agent -n lightspeed-agent \
+  -o jsonpath='{.items[0].metadata.name}')
+oc exec -n lightspeed-agent "${AGENT_POD}" -c lightspeed-agent -- \
+  curl -s "${LLM_API_BASE}/models" -H "Authorization: Bearer ${LLM_API_KEY}"
+```
+
+### Enabling All Three Together
+
+For a full stack deployment with all optional integrations:
+
+```yaml
+# my-values.yaml
+mcpGateway:
+  enabled: true
+  gatewayName: "mcp-gateway"
+  gatewayNamespace: "gateway-system"
+  url: "http://mcp-gateway.gateway-system.svc.cluster.local:8080/mcp"
+
+openshell:
+  enabled: true
+  gatewayNamespace: "openshell"
+
+modelService:
+  enabled: true
+  url: "https://maas.apps.ocp.example.com/llm/gemini-2.5-flash/v1"
+  model: "vertex_ai/gemini-2.5-flash"
+```
+
+```bash
+helm upgrade lightspeed-agent deploy/openshift/ \
+  -f deploy/openshift/my-values.yaml \
+  -f deploy/openshift/secrets.yaml \
+  -n lightspeed-agent
+```
+
 ## Configuration Reference
 
 ### Deployment mode
@@ -566,9 +850,11 @@ agent:
 External skills with the same name as a bundled skill override the bundled
 version.
 
-### MCP Sidecar
+### MCP Server
 
-The MCP server runs as a sidecar container in the agent pod.
+The MCP server runs as a sidecar container in the agent pod by default. When
+`mcpGateway.enabled: true`, it runs as a standalone Deployment registered with
+the MCP Gateway instead (see [MCP Gateway](#mcp-gateway-mcpgatewayenabled-true)).
 
 | Value | Description | Default |
 |---|---|---|
@@ -654,6 +940,34 @@ The service account key is mounted into the agent container and `GOOGLE_APPLICAT
 >   [OpenAI-Compatible Endpoints](https://docs.litellm.ai/docs/providers/openai_compatible)
 >   and [LiteLLM Proxy provider](https://docs.litellm.ai/docs/providers/litellm_proxy)
 >   pages.
+
+### MCP Gateway (Red Hat AI)
+
+| Value | Description | Default |
+|---|---|---|
+| `mcpGateway.enabled` | Deploy MCP as standalone + register with MCP Gateway (replaces sidecar) | `false` |
+| `mcpGateway.gatewayName` | Name of the existing Gateway API `Gateway` resource | `mcp-gateway` |
+| `mcpGateway.gatewayNamespace` | Namespace of the Gateway resource | `gateway-system` |
+| `mcpGateway.url` | MCP Gateway endpoint URL (agent connects here) | `http://mcp-gateway.gateway-system.svc.cluster.local:8080/mcp` |
+| `mcpGateway.toolPrefix` | Prefix added to tool names (prevents collisions when multiple MCP servers are federated) | `redhat_lightspeed_` |
+
+### OpenShell (NVIDIA)
+
+| Value | Description | Default |
+|---|---|---|
+| `openshell.enabled` | Create a SandboxTemplate and register with OpenShell | `false` |
+| `openshell.gatewayNamespace` | Namespace where the OpenShell gateway is deployed | `openshell` |
+| `openshell.sandboxImage` | Sandbox container image (empty = agent image) | `""` |
+| `openshell.shutdownPolicy` | Sandbox expiry behavior (`Delete` or `Retain`) | `Retain` |
+| `openshell.networkPolicyManagement` | NetworkPolicy management for sandbox pods (`Managed` or `Unmanaged`) | `Managed` |
+
+### Model as a Service (Red Hat AI)
+
+| Value | Description | Default |
+|---|---|---|
+| `modelService.enabled` | Use an external MaaS gateway for model access | `false` |
+| `modelService.url` | MaaS gateway endpoint URL (OpenAI-compatible API) | `""` |
+| `modelService.model` | Model name as the gateway expects it | `vertex_ai/gemini-2.5-flash` |
 
 ### Authentication
 
