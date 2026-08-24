@@ -108,9 +108,11 @@ No extra flags needed — just run the eval and it picks up the registered datas
 ## Usage
 
 ```bash
+# Prefer environment variables for tokens to avoid exposure in process listings
+export EVAL_AGENT_TOKEN="<bearer-token>"
+
 python -u evals/run_eval.py \
     --agent-url https://lightspeed-agent-<namespace>.apps.<cluster>/ \
-    --token "<bearer-token>" \
     --mlflow-uri https://mlflow-<namespace>.apps.<cluster>/ \
     --judge-model "openai:/Qwen/Qwen3-14B"
 ```
