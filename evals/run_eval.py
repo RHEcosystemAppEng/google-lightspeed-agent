@@ -101,7 +101,9 @@ def format_for_mlflow(dataset: list[dict]) -> list[dict]:
         {
             "inputs": {"question": entry["question"]},
             "expectations": {
-                "expected_response": entry.get("expected_response", ""),
+                "expected_response": json.dumps(entry.get("expected_response", ""))
+                if isinstance(entry.get("expected_response"), list)
+                else entry.get("expected_response", ""),
                 "guidelines": entry["expected_behavior"],
                 "scenario_type": entry["scenario_type"],
                 "question_type": entry.get("question_type", ""),
@@ -182,6 +184,8 @@ def make_predict_fn(agent_url: str, token: str, timeout: int):
     def set_total(n: int):
         total[0] = n
 
+    # @mlflow.trace only captures function inputs (question) and outputs (response text).
+    # Closure variables (token, agent_url) are NOT serialized into trace metadata.
     @mlflow.trace
     def predict_fn(question: str) -> str:
         call_count[0] += 1
@@ -197,9 +201,36 @@ def make_predict_fn(agent_url: str, token: str, timeout: int):
         except (HTTPError, URLError, RuntimeError) as e:
             elapsed = time.time() - start
             print(f"           ERROR after {elapsed:.1f}s: {e}")
-            return f"[ERROR] {e}"
+            return f"[ERROR] Agent request failed ({type(e).__name__})"
 
     return predict_fn, set_total
+
+
+def _check_judge_reachable() -> None:
+    """Verify the judge model endpoint is reachable before starting evaluation.
+
+    Raises ConnectionError if the endpoint is not reachable. This prevents
+    MLflow from logging the judge endpoint URL in trace error messages if
+    the judge fails mid-run.
+    """
+    judge_base_url = os.environ.get("OPENAI_BASE_URL", "")
+    if not judge_base_url:
+        return
+    try:
+        import requests
+
+        r = requests.get(
+            f"{judge_base_url.rstrip('/')}/models",
+            timeout=10,
+            verify=os.environ.get("MLFLOW_TRACKING_INSECURE_TLS", "").lower() != "true",
+        )
+        r.raise_for_status()
+        print("  Judge model endpoint: reachable")
+    except Exception:
+        raise ConnectionError(
+            "Judge model endpoint is not reachable. Aborting to prevent "
+            "endpoint URL from leaking into MLflow trace error messages."
+        )
 
 
 def _upload_dataset(local_path: Path, dataset_name: str) -> None:
@@ -223,8 +254,8 @@ def _load_eval_data(dataset_name: str, local_path: Path):
         n = len(ds.to_df())
         print(f"Using registered dataset '{dataset_name}' ({n} records)")
         return ds
-    except Exception:
-        print(f"Dataset '{dataset_name}' not found on server, using local {local_path}")
+    except Exception as e:
+        print(f"Dataset '{dataset_name}' not found on server ({e}), using local {local_path}")
         raw = load_dataset(local_path)
         mlflow_data = format_for_mlflow(raw)
         print(f"Loaded {len(raw)} evaluation questions from {local_path}")
@@ -329,6 +360,9 @@ def main() -> None:
             sys.exit(1)
 
     # ── Apply TLS patch for internal clusters ────────────────────────
+    # WARNING: This patches HTTPAdapter.send at the class level, disabling TLS
+    # verification for ALL requests calls in this process. This script should
+    # only be run as a standalone eval tool, not imported as a library.
     if os.environ.get("MLFLOW_TRACKING_INSECURE_TLS", "").lower() == "true":
         import requests.adapters
         import urllib3
@@ -360,6 +394,12 @@ def main() -> None:
     eval_data = _load_eval_data(args.dataset_name, args.dataset)
 
     print(f"Judge model: {judge_model}")
+
+    # ── Verify judge model is reachable ──────────────────────────────
+    # Pre-check to fail fast before creating traces. If the judge goes
+    # down mid-run, MLflow's internal error handling may log the judge
+    # endpoint URL in trace error messages — failing early avoids this.
+    _check_judge_reachable()
 
     # ── Build predict function ────────────────────────────────────────
     predict_fn, set_total = make_predict_fn(args.agent_url, args.token, args.timeout)

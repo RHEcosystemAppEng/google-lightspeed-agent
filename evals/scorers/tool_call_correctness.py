@@ -14,7 +14,6 @@ Results:
 from __future__ import annotations
 
 import json
-import sys
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -43,26 +42,22 @@ class ToolCallCorrectness(Scorer):
         elif self.agent_experiment_name:
             exp = mlflow.get_experiment_by_name(self.agent_experiment_name)
             if not exp:
-                print(
-                    f"ERROR: Agent experiment '{self.agent_experiment_name}' not found on "
+                raise ValueError(
+                    f"Agent experiment '{self.agent_experiment_name}' not found on "
                     "MLflow server. Tool call correctness cannot be checked without agent "
                     "traces. Use agent_experiment_name or agent_experiment_id to specify "
-                    "the correct value.",
-                    file=sys.stderr,
+                    "the correct value."
                 )
-                sys.exit(1)
             self._experiment_id_resolved = exp.experiment_id
             print(
                 f"Agent traces experiment: {self.agent_experiment_name} "
                 f"(ID {self._experiment_id_resolved})"
             )
         else:
-            print(
-                "ERROR: Either agent_experiment_name or agent_experiment_id is required "
-                "for ToolCallCorrectness.",
-                file=sys.stderr,
+            raise ValueError(
+                "Either agent_experiment_name or agent_experiment_id is required "
+                "for ToolCallCorrectness."
             )
-            sys.exit(1)
         self._trace_cache = []
         self._cache_lock = threading.Lock()
 
