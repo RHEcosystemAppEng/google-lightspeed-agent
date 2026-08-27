@@ -209,9 +209,9 @@ def make_predict_fn(agent_url: str, token: str, timeout: int):
 def _check_judge_reachable() -> None:
     """Verify the judge model endpoint is reachable before starting evaluation.
 
-    Raises ConnectionError if the endpoint is not reachable. This prevents
-    MLflow from logging the judge endpoint URL in trace error messages if
-    the judge fails mid-run.
+    Raises ConnectionError if the endpoint is not reachable. This catches
+    the common case where the judge is down from the start, avoiding a full
+    eval run that would fail on every scorer.
     """
     judge_base_url = os.environ.get("OPENAI_BASE_URL", "")
     if not judge_base_url:
@@ -226,10 +226,10 @@ def _check_judge_reachable() -> None:
         )
         r.raise_for_status()
         print("  Judge model endpoint: reachable")
-    except Exception:
+    except Exception as e:
         raise ConnectionError(
-            "Judge model endpoint is not reachable. Aborting to prevent "
-            "endpoint URL from leaking into MLflow trace error messages."
+            f"Judge model endpoint pre-check failed ({type(e).__name__}). "
+            "Fix the issue before running evaluation."
         )
 
 
