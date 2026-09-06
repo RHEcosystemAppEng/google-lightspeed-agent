@@ -248,12 +248,6 @@ mlflow:
     # storageClassName: ""   # uncomment to use a specific storage class
   route:
     enabled: false
-  auth:
-    type: none
-    oidc:
-      issuer: ""
-      clientId: ""
-      clientSecret: ""
   postgresql:
     # Must be "dedicated" — MLflow requires a SQL backend for OTLP trace ingestion.
     # File-based backends silently drop traces. The chart fails if set otherwise.

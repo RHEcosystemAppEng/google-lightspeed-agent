@@ -1103,7 +1103,6 @@ agent side (included in the container image as a transitive dependency of the
 | `mlflow.image.tag` | Image tag (self-deployed only) | `v3.14.0-full` |
 | `mlflow.port` | MLflow server port (self-deployed only) | `5000` |
 | `mlflow.route.enabled` | Create an OpenShift Route for the MLflow UI (self-deployed only) | `false` |
-| `mlflow.auth.type` | Auth type: `none`, `oidc`, `proxy` (self-deployed only) | `none` |
 | `mlflow.postgresql.mode` | Must be `dedicated` — MLflow requires a SQL backend for OTLP trace ingestion (self-deployed only) | `dedicated` |
 | `mlflow.postgresql.database` | Database name (self-deployed only) | `mlflow_tracking` |
 | `mlflow.storage.artifactSize` | PVC size for MLflow artifacts (self-deployed only) | `10Gi` |
