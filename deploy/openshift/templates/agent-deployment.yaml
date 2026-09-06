@@ -126,7 +126,7 @@ spec:
               mountPath: /var/run/secrets/gcp
               readOnly: true
             {{- end }}
-            {{- if .Values.mlflow.caCert }}
+            {{- if and .Values.mlflow.enabled .Values.mlflow.caCert }}
             - name: mlflow-ca
               mountPath: /etc/pki/mlflow
               readOnly: true
@@ -218,7 +218,7 @@ spec:
           secret:
             secretName: {{ include "lightspeed-agent.fullname" . }}-gcp-sa-key
         {{- end }}
-        {{- if .Values.mlflow.caCert }}
+        {{- if and .Values.mlflow.enabled .Values.mlflow.caCert }}
         - name: mlflow-ca
           configMap:
             name: {{ include "lightspeed-agent.fullname" . }}-mlflow-ca
