@@ -634,6 +634,118 @@ class TestMlflowExperimentResolutionAuth:
             assert not req.has_header("Authorization")
 
 
+class TestMlflowCaBundleExporter:
+    """Verify CA bundle is passed to OTLPSpanExporter."""
+
+    def test_ca_bundle_passed_to_exporter(self, monkeypatch):
+        """When MLFLOW_CA_BUNDLE is set, certificate_file is passed to OTLPSpanExporter."""
+        monkeypatch.setenv("OTEL_ENABLED", "false")
+        monkeypatch.setenv("MLFLOW_ENABLED", "true")
+        monkeypatch.setenv("MLFLOW_TRACKING_URI", "http://mlflow.local:5000")
+        monkeypatch.setenv("MLFLOW_EXPERIMENT_ID", "42")
+        monkeypatch.setenv("MLFLOW_CA_BUNDLE", "/etc/pki/mlflow/ca.pem")
+        get_settings.cache_clear()
+
+        import lightspeed_agent.telemetry.setup as telemetry_mod
+
+        telemetry_mod._tracer_provider = None
+
+        mock_http_exporter_cls = MagicMock()
+
+        with patch(
+            "opentelemetry.exporter.otlp.proto.http.trace_exporter.OTLPSpanExporter",
+            mock_http_exporter_cls,
+        ):
+            telemetry_mod.setup_telemetry()
+
+            call_kwargs = mock_http_exporter_cls.call_args
+            assert call_kwargs.kwargs.get("certificate_file") == "/etc/pki/mlflow/ca.pem"
+
+        telemetry_mod._tracer_provider = None
+        get_settings.cache_clear()
+
+    def test_no_certificate_file_when_ca_bundle_empty(self, monkeypatch):
+        """When MLFLOW_CA_BUNDLE is empty, certificate_file is not passed."""
+        monkeypatch.setenv("OTEL_ENABLED", "false")
+        monkeypatch.setenv("MLFLOW_ENABLED", "true")
+        monkeypatch.setenv("MLFLOW_TRACKING_URI", "http://mlflow.local:5000")
+        monkeypatch.setenv("MLFLOW_EXPERIMENT_ID", "42")
+        monkeypatch.setenv("MLFLOW_CA_BUNDLE", "")
+        get_settings.cache_clear()
+
+        import lightspeed_agent.telemetry.setup as telemetry_mod
+
+        telemetry_mod._tracer_provider = None
+
+        mock_http_exporter_cls = MagicMock()
+
+        with patch(
+            "opentelemetry.exporter.otlp.proto.http.trace_exporter.OTLPSpanExporter",
+            mock_http_exporter_cls,
+        ):
+            telemetry_mod.setup_telemetry()
+
+            call_kwargs = mock_http_exporter_cls.call_args
+            assert "certificate_file" not in call_kwargs.kwargs
+
+        telemetry_mod._tracer_provider = None
+        get_settings.cache_clear()
+
+
+class TestMlflowExperimentResolutionCaBundle:
+    """Verify CA bundle is passed to SSL context in experiment resolution."""
+
+    def test_resolve_uses_ssl_context_with_ca_bundle(self):
+        """_resolve_mlflow_experiment_id creates SSLContext when ca_bundle is set."""
+        from lightspeed_agent.telemetry.setup import _resolve_mlflow_experiment_id
+
+        response_body = b'{"experiment": {"experiment_id": "7"}}'
+
+        with (
+            patch("urllib.request.urlopen") as mock_urlopen,
+            patch("ssl.create_default_context") as mock_ssl_ctx,
+        ):
+            mock_resp = MagicMock()
+            mock_resp.read.return_value = response_body
+            mock_resp.__enter__ = lambda s: s
+            mock_resp.__exit__ = MagicMock(return_value=False)
+            mock_urlopen.return_value = mock_resp
+
+            result = _resolve_mlflow_experiment_id(
+                "http://mlflow.local:5000", "test-exp", ca_bundle="/path/to/ca.pem"
+            )
+
+            assert result == "7"
+            mock_ssl_ctx.assert_called_once_with(cafile="/path/to/ca.pem")
+            call_args = mock_urlopen.call_args
+            assert call_args.kwargs.get("context") is mock_ssl_ctx.return_value
+
+    def test_resolve_no_ssl_context_when_ca_bundle_empty(self):
+        """_resolve_mlflow_experiment_id passes no SSL context when ca_bundle is empty."""
+        from lightspeed_agent.telemetry.setup import _resolve_mlflow_experiment_id
+
+        response_body = b'{"experiment": {"experiment_id": "7"}}'
+
+        with (
+            patch("urllib.request.urlopen") as mock_urlopen,
+            patch("ssl.create_default_context") as mock_ssl_ctx,
+        ):
+            mock_resp = MagicMock()
+            mock_resp.read.return_value = response_body
+            mock_resp.__enter__ = lambda s: s
+            mock_resp.__exit__ = MagicMock(return_value=False)
+            mock_urlopen.return_value = mock_resp
+
+            result = _resolve_mlflow_experiment_id(
+                "http://mlflow.local:5000", "test-exp", ca_bundle=""
+            )
+
+            assert result == "7"
+            mock_ssl_ctx.assert_not_called()
+            call_args = mock_urlopen.call_args
+            assert call_args.kwargs.get("context") is None
+
+
 class TestMlflowExperimentCreationDenied:
     """Verify clear error when managed instance denies experiment creation."""
 
