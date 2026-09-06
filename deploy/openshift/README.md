@@ -1130,6 +1130,14 @@ oc port-forward svc/lightspeed-agent-mlflow 5000:5000 -n lightspeed-agent
 # Open http://localhost:5000 in your browser
 ```
 
+Or enable an OpenShift Route for persistent access (self-deployed mode only):
+
+```yaml
+mlflow:
+  route:
+    enabled: true
+```
+
 **Managed mode** (connect to external MLflow instance):
 
 ```yaml
@@ -1149,14 +1157,6 @@ secrets:
 ```
 
 No MLflow server, PostgreSQL, or PVCs are deployed. The agent connects directly to the external instance with Bearer token authentication.
-
-Or enable an OpenShift Route for persistent access:
-
-```yaml
-mlflow:
-  route:
-    enabled: true
-```
 
 ## Authentication
 
