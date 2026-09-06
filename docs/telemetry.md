@@ -364,6 +364,16 @@ with tracer.start_as_current_span("my_operation") as span:
 | New Relic | Full-stack observability |
 | Grafana Tempo | Grafana ecosystem |
 
+## MLflow Tracing
+
+MLflow tracing shares the agent's OpenTelemetry infrastructure. The `TracerProvider` generates spans once — MLflow receives a copy of those spans via its own `BatchSpanProcessor` that exports directly to the MLflow Tracking Server's OTLP endpoint (`/v1/traces`). This is a separate export path from the standard OTel exporter (Jaeger, Tempo, Cloud Trace, etc.), and the two can run independently or together:
+
+- `MLFLOW_ENABLED=true` alone — spans go only to MLflow
+- `OTEL_ENABLED=true` alone — spans go only to the OTel backend
+- Both enabled — spans go to both
+
+See [Configuration > MLflow Tracing](configuration.md#mlflow-tracing-llm-observability) for all settings.
+
 ## Troubleshooting
 
 ### Traces Not Appearing

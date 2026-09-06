@@ -106,6 +106,13 @@ spec:
                   key: REDIS_PASSWORD
             - name: RATE_LIMIT_REDIS_URL
               value: {{ printf "redis://default:$(REDIS_PASSWORD)@%s-redis:6379/0" (include "lightspeed-agent.fullname" .) | quote }}
+            {{- if and .Values.mlflow.enabled (eq .Values.mlflow.mode "managed") }}
+            - name: MLFLOW_TRACKING_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "lightspeed-agent.fullname" . }}-secrets
+                  key: MLFLOW_TRACKING_TOKEN
+            {{- end }}
           volumeMounts:
             - name: tmp
               mountPath: /tmp
@@ -117,6 +124,11 @@ spec:
             {{- if .Values.secrets.gcpServiceAccountKey }}
             - name: gcp-sa-key
               mountPath: /var/run/secrets/gcp
+              readOnly: true
+            {{- end }}
+            {{- if and .Values.mlflow.enabled .Values.mlflow.caCert }}
+            - name: mlflow-ca
+              mountPath: /etc/pki/mlflow
               readOnly: true
             {{- end }}
           resources:
@@ -205,4 +217,9 @@ spec:
         - name: gcp-sa-key
           secret:
             secretName: {{ include "lightspeed-agent.fullname" . }}-gcp-sa-key
+        {{- end }}
+        {{- if and .Values.mlflow.enabled .Values.mlflow.caCert }}
+        - name: mlflow-ca
+          configMap:
+            name: {{ include "lightspeed-agent.fullname" . }}-mlflow-ca
         {{- end }}

@@ -459,6 +459,25 @@ gcloud logging read 'jsonPayload.request_id="abc-123" AND jsonPayload.message=~"
 gcloud logging read 'jsonPayload.org_id="org-7" AND jsonPayload.message=~"mcp_jwt_forwarded"' --project=$GOOGLE_CLOUD_PROJECT
 ```
 
+### MLflow Tracing (LLM Observability)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MLFLOW_ENABLED` | `false` | Enable MLflow tracing via OpenTelemetry span export. Works independently of `OTEL_ENABLED`. |
+| `MLFLOW_TRACKING_URI` | `http://localhost:5000` | MLflow tracking server URI |
+| `MLFLOW_EXPERIMENT_NAME` | `lightspeed-agent` | MLflow experiment name (auto-created on first trace if it doesn't exist) |
+| `MLFLOW_EXPERIMENT_ID` | (empty) | MLflow experiment ID. Overrides `MLFLOW_EXPERIMENT_NAME` if set. The experiment must already exist. |
+| `MLFLOW_LOG_PROMPTS` | `false` | Log LLM prompts and responses in traces (**security-sensitive** — may contain PII) |
+| `MLFLOW_RUN_TAGS` | (empty) | Extra run tags as `key=value` pairs (e.g., `env=prod,team=ai`) |
+| `MLFLOW_TRACKING_TOKEN` | (empty) | Bearer token for MLflow server authentication |
+| `MLFLOW_CA_BUNDLE` | (empty) | Path to CA certificate file for MLflow TLS verification |
+
+**Example:**
+
+```bash
+MLFLOW_ENABLED=true
+```
+
 ### Development Settings
 
 | Variable | Default | Description |
