@@ -658,6 +658,33 @@ class TestMlflowExperimentCreationDenied:
             )
 
 
+class TestMlflowExperimentCreationSuccess:
+    """Verify the 404-on-get -> create -> success path."""
+
+    def test_404_then_create_returns_new_id(self):
+        """When get-by-name returns 404, experiment is created and new ID returned."""
+        import urllib.error
+
+        from lightspeed_agent.telemetry.setup import _resolve_mlflow_experiment_id
+
+        def side_effect(req, timeout=10, context=None):
+            url = req.full_url if hasattr(req, "full_url") else req
+            if "get-by-name" in url:
+                raise urllib.error.HTTPError(url, 404, "Not Found", {}, None)
+            resp = MagicMock()
+            resp.read.return_value = b'{"experiment_id": "42"}'
+            resp.__enter__ = lambda s: s
+            resp.__exit__ = MagicMock(return_value=False)
+            return resp
+
+        with patch("urllib.request.urlopen", side_effect=side_effect):
+            result = _resolve_mlflow_experiment_id(
+                "http://mlflow.local:5000", "new-experiment", token="tok"
+            )
+
+        assert result == "42"
+
+
 class TestMlflowImportError:
     """Verify ImportError is handled when exporter package is missing."""
 
