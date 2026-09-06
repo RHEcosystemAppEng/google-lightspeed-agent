@@ -78,6 +78,12 @@ spec:
               mountPath: /tmp
           resources:
             {{- toYaml .Values.mlflow.resources | nindent 12 }}
+          startupProbe:
+            tcpSocket:
+              port: {{ .Values.mlflow.port }}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 12
           readinessProbe:
             httpGet:
               path: /api/2.0/mlflow/experiments/search?max_results=1
