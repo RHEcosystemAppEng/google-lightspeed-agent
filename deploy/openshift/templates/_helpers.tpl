@@ -131,3 +131,18 @@ Only deployed in standalone mode.
 {{- define "lightspeed-agent.uiEnabled" -}}
 {{- eq .Values.deploymentMode "standalone" -}}
 {{- end }}
+
+{{/*
+Selector labels for standalone MCP server
+*/}}
+{{- define "lightspeed-agent.mcpSelectorLabels" -}}
+app.kubernetes.io/name: {{ include "lightspeed-agent.fullname" . }}-mcp
+app.kubernetes.io/component: mcp-server
+{{- end }}
+
+{{/*
+MCP service name
+*/}}
+{{- define "lightspeed-agent.mcpServiceName" -}}
+{{- include "lightspeed-agent.fullname" . }}-mcp
+{{- end }}
