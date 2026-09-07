@@ -117,6 +117,50 @@ UI service name
 {{- end }}
 
 {{/*
+MLflow service name
+*/}}
+{{- define "lightspeed-agent.mlflowServiceName" -}}
+{{- include "lightspeed-agent.fullname" . }}-mlflow
+{{- end }}
+
+{{/*
+Selector labels for MLflow
+*/}}
+{{- define "lightspeed-agent.mlflowSelectorLabels" -}}
+app.kubernetes.io/name: {{ include "lightspeed-agent.fullname" . }}-mlflow
+app.kubernetes.io/component: mlflow
+{{- end }}
+
+{{/*
+MLflow PostgreSQL service name
+*/}}
+{{- define "lightspeed-agent.mlflowPostgresqlServiceName" -}}
+{{- include "lightspeed-agent.fullname" . }}-mlflow-postgresql
+{{- end }}
+
+{{/*
+Validate MLflow configuration when enabled.
+*/}}
+{{- define "lightspeed-agent.validateMlflow" -}}
+{{- if .Values.mlflow.enabled }}
+{{- if and (ne .Values.mlflow.mode "self-deployed") (ne .Values.mlflow.mode "managed") }}
+{{- fail "mlflow.mode must be 'self-deployed' or 'managed'" }}
+{{- end }}
+{{- if and (eq .Values.mlflow.mode "managed") (not .Values.mlflow.trackingUri) }}
+{{- fail "mlflow.trackingUri is required when mlflow.mode is 'managed'" }}
+{{- end }}
+{{- end }}
+{{- end }}
+
+{{/*
+Selector labels for MLflow PostgreSQL
+*/}}
+{{- define "lightspeed-agent.mlflowPostgresqlSelectorLabels" -}}
+app.kubernetes.io/name: {{ include "lightspeed-agent.fullname" . }}-mlflow-postgresql
+app.kubernetes.io/component: mlflow-database
+{{- end }}
+
+{{/*
 Whether the handler should be deployed on OCP.
 Only deployed in standalone mode — in hybrid the handler stays on GCP.
 */}}

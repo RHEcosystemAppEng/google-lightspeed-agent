@@ -1,0 +1,12 @@
+{{- if and .Values.mlflow.enabled .Values.mlflow.caCert }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "lightspeed-agent.fullname" . }}-mlflow-ca
+  labels:
+    {{- include "lightspeed-agent.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mlflow
+data:
+  ca.pem: |
+    {{- .Values.mlflow.caCert | nindent 4 }}
+{{- end }}
