@@ -34,7 +34,7 @@ class ToolCallCorrectness(Scorer):
 
     def model_post_init(self, __context):
         object.__setattr__(self, "_experiment_id_resolved", None)
-        object.__setattr__(self, "_trace_cache", [])
+        object.__setattr__(self, "_trace_cache", None)
         object.__setattr__(self, "_cache_lock", threading.Lock())
         if self.agent_experiment_id:
             self._experiment_id_resolved = self.agent_experiment_id
@@ -58,13 +58,13 @@ class ToolCallCorrectness(Scorer):
                 "Either agent_experiment_name or agent_experiment_id is required "
                 "for ToolCallCorrectness."
             )
-        self._trace_cache = []
-        self._cache_lock = threading.Lock()
 
     def _load_traces(self):
         with self._cache_lock:
-            if self._trace_cache:
+            # Check if cache has been loaded (None = not loaded, [] = loaded but empty)
+            if self._trace_cache is not None:
                 return self._trace_cache
+
             since_ms = int((time.time() - self.trace_hours * 3600) * 1000)
             try:
                 stubs = mlflow.search_traces(
@@ -76,7 +76,8 @@ class ToolCallCorrectness(Scorer):
                 )
             except Exception as e:
                 print(f"    [tool_call] ERROR searching traces: {e}")
-                return []
+                self._trace_cache = []
+                return self._trace_cache
 
             print(
                 f"    [tool_call] Fetching {len(stubs)} traces from experiment "
@@ -89,6 +90,8 @@ class ToolCallCorrectness(Scorer):
                 except Exception:
                     return None
 
+            # Initialize cache as empty list before populating
+            self._trace_cache = []
             with ThreadPoolExecutor(max_workers=self.trace_workers) as pool:
                 results = pool.map(_fetch, stubs)
                 self._trace_cache.extend(t for t in results if t is not None)
@@ -107,12 +110,7 @@ class ToolCallCorrectness(Scorer):
     def __call__(self, *, inputs, expectations, **kwargs):
         expected_raw = expectations.get("expected_tools", "[]")
         expected = json.loads(expected_raw) if isinstance(expected_raw, str) else expected_raw
-        if not expected:
-            return Feedback(
-                name=self.name,
-                value="yes",
-                rationale="No tools expected for this question",
-            )
+
         question = inputs.get("question", "")
         trace = self._find_trace(question)
         if not trace:
@@ -126,6 +124,21 @@ class ToolCallCorrectness(Scorer):
         tools_called = {
             span.name.removeprefix("execute_tool").strip() for span in tool_spans
         }
+
+        # When no tools are expected, verify that no tools were called
+        if not expected:
+            if tools_called:
+                return Feedback(
+                    name=self.name,
+                    value="no",
+                    rationale=f"No tools expected, but agent called: {sorted(tools_called)}",
+                )
+            return Feedback(
+                name=self.name,
+                value="yes",
+                rationale="No tools expected and no tools called",
+            )
+
         expected_set = set(expected)
         missing = expected_set - tools_called
         unexpected = tools_called - expected_set
