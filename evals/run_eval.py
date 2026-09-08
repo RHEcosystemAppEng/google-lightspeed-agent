@@ -206,31 +206,57 @@ def make_predict_fn(agent_url: str, token: str, timeout: int):
     return predict_fn, set_total
 
 
-def _check_judge_reachable() -> None:
-    """Verify the judge model endpoint is reachable before starting evaluation.
+def _check_judge_reachable(judge_model: str) -> None:
+    """Verify the judge model is accessible with valid credentials before evaluation.
 
-    Raises ConnectionError if the endpoint is not reachable. This catches
-    the common case where the judge is down from the start, avoiding a full
-    eval run that would fail on every scorer.
+    Makes a minimal test call to the judge model to verify:
+    1. The endpoint is reachable
+    2. The specific model exists
+    3. Credentials are valid
+
+    This prevents wasting agent invocation costs when the judge setup is broken.
+
+    Args:
+        judge_model: The judge model URI (e.g. "openai:/Qwen/Qwen3-14B")
+
+    Raises:
+        ValueError: If OPENAI_BASE_URL is not set (data leak risk)
+        ConnectionError: If the judge model is not accessible
     """
     judge_base_url = os.environ.get("OPENAI_BASE_URL", "")
     if not judge_base_url:
-        return
-    try:
-        import requests
-
-        r = requests.get(
-            f"{judge_base_url.rstrip('/')}/models",
-            timeout=10,
-            verify=os.environ.get("MLFLOW_TRACKING_INSECURE_TLS", "").lower() != "true",
+        raise ValueError(
+            "OPENAI_BASE_URL must be set. Without it, litellm defaults to "
+            "api.openai.com and eval data would be sent to OpenAI's servers "
+            "(even if authentication fails, the HTTP request body is transmitted "
+            "before the 401 response). Set OPENAI_BASE_URL to your self-hosted "
+            "judge endpoint."
         )
-        r.raise_for_status()
-        print("  Judge model endpoint: reachable")
+
+    try:
+        import litellm
+
+        # Extract model name from URI (e.g. "openai:/Qwen/Qwen3-14B" -> "Qwen/Qwen3-14B")
+        model_name = judge_model.split(":/", 1)[-1] if ":/" in judge_model else judge_model
+
+        # Make a minimal test call to verify model + credentials
+        litellm.completion(
+            model=model_name,
+            messages=[{"role": "user", "content": "test"}],
+            max_tokens=1,
+            api_base=judge_base_url,
+            api_key=os.environ.get("OPENAI_API_KEY", ""),
+        )
+        print(f"  Judge model '{model_name}' at {judge_base_url}: accessible")
     except Exception as e:
         raise ConnectionError(
-            f"Judge model endpoint pre-check failed ({type(e).__name__}). "
-            "Fix the issue before running evaluation."
-        )
+            f"Judge model pre-check failed ({type(e).__name__}: {e}). "
+            f"Verify that:\n"
+            f"  1. OPENAI_BASE_URL is correct: {judge_base_url}\n"
+            f"  2. The model exists: {judge_model}\n"
+            f"  3. OPENAI_API_KEY is valid\n"
+            f"Fix the issue before running evaluation to avoid wasting agent invocation costs."
+        ) from e
 
 
 def _upload_dataset(local_path: Path, dataset_name: str) -> None:
@@ -399,7 +425,7 @@ def main() -> None:
     # Pre-check to fail fast before creating traces. If the judge goes
     # down mid-run, MLflow's internal error handling may log the judge
     # endpoint URL in trace error messages — failing early avoids this.
-    _check_judge_reachable()
+    _check_judge_reachable(judge_model)
 
     # ── Build predict function ────────────────────────────────────────
     predict_fn, set_total = make_predict_fn(args.agent_url, args.token, args.timeout)
