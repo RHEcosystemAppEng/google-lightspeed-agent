@@ -35,7 +35,7 @@ Developer laptop (on VPN)
 pip install -e ".[eval]"
 ```
 
-This installs `mlflow>=3.15.0`. Versions below 3.14.0 silently fall back to `api.openai.com` for built-in scorers like `Correctness()`, even when `MLFLOW_GENAI_JUDGE_DEFAULT_MODEL` is set.
+This installs `mlflow>=3.15.0`.
 
 ## Configuration
 
@@ -126,6 +126,8 @@ Use `python -u` for unbuffered output to see progress in real time.
 | `--agent-url` | `EVAL_AGENT_URL` | `http://localhost:8000` | Agent A2A endpoint |
 | `--token` | `EVAL_AGENT_TOKEN` | (required) | Bearer token for authentication |
 | `--judge-model` | `MLFLOW_GENAI_JUDGE_DEFAULT_MODEL` | (required) | Judge model URI (e.g. `openai:/Qwen/Qwen3-14B`) |
+| | `OPENAI_BASE_URL` | (required) | Self-hosted judge endpoint URL (e.g. `https://<judge-endpoint>/v1`) |
+| | `OPENAI_API_KEY` | (required) | API key for the judge endpoint |
 | `--mlflow-uri` | `MLFLOW_TRACKING_URI` | `http://localhost:5000` | MLflow tracking server |
 | `--experiment` | | `lightspeed-agent-eval` | MLflow experiment name |
 | `--timeout` | | `180` | Timeout per question (seconds) |

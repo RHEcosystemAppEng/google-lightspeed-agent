@@ -243,7 +243,7 @@ def _check_judge_reachable(judge_model: str) -> None:
         litellm.completion(
             model=model_name,
             messages=[{"role": "user", "content": "test"}],
-            max_tokens=1,
+            max_tokens=5,
             api_base=judge_base_url,
             api_key=os.environ.get("OPENAI_API_KEY", ""),
         )
