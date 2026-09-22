@@ -2,6 +2,9 @@
 #
 # Dedicated Redis pod used by the lightspeed-agent rate limiter.
 #
+# CVE-2026-81934: Using Redis 8.10.1+ (fixes TLS use-after-free RCE)
+# Using OpsTree Redis from Quay (Red Hat ecosystem registry)
+#
 # Usage:
 #   podman kube play deploy/podman/redis-pod.yaml
 #   podman kube down deploy/podman/redis-pod.yaml
@@ -17,13 +20,15 @@ spec:
   restartPolicy: Always
   containers:
     - name: redis
-      image: quay.io/fedora/redis-7
+      image: quay.io/opstree/redis:v8.10.1
       args:
-        - "run-redis"
+        - "redis-server"
         - "--appendonly"
         - "yes"
         - "--requirepass"
         - "changeme-dev-redis"
+        - "--dir"
+        - "/data"
       ports:
         - containerPort: 6379
           hostPort: 6379
@@ -33,7 +38,7 @@ spec:
           memory: 256Mi
       volumeMounts:
         - name: redis-data
-          mountPath: /var/lib/redis/data:Z
+          mountPath: /data:Z
   volumes:
     - name: redis-data
       emptyDir: {}

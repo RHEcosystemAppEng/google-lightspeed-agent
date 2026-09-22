@@ -40,7 +40,8 @@ dependencies = [
     "google-auth>=2.0.0",
     "requests>=2.20.0",  # Required by google.auth.transport.requests
     # Redis for distributed rate limiting (used by both agent and marketplace handler)
-    "redis>=5.0.0",
+    # CVE-2026-81934: Update to latest client (8.1.0) for compatibility with patched servers
+    "redis>=8.1.0",
     # Structured JSON logging with proper value escaping (CWE-117 safe)
     "python-json-logger>=3.0.0",
     # CVE-2026-59885: pyasn1 < 0.6.4 OID decoding quadratic time DoS
