@@ -315,10 +315,12 @@ marketplacePostgresql:
 # ---------------------------------------------------------------------------
 # Redis (rate limiting backend)
 # ---------------------------------------------------------------------------
+# CVE-2026-81934: Redis 8.10.1+ required (fixes TLS use-after-free RCE)
+# Using OpsTree Redis from Quay (Red Hat ecosystem registry)
 redis:
   image:
-    repository: quay.io/fedora/redis-7
-    tag: latest
+    repository: quay.io/opstree/redis
+    tag: v8.10.1
     pullPolicy: IfNotPresent
   storage:
     size: 1Gi
