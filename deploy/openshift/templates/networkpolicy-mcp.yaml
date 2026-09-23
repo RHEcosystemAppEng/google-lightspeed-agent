@@ -1,0 +1,32 @@
+{{- if .Values.mcpGateway.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "lightspeed-agent.mcpServiceName" . }}
+  labels:
+    {{- include "lightspeed-agent.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mcp-server
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "lightspeed-agent.mcpSelectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+  ingress:
+    # Allow from the agent pod in the same namespace
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "lightspeed-agent.agentSelectorLabels" . | nindent 14 }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.mcp.port }}
+    # Allow from the MCP Gateway namespace (gateway routes tools/call here)
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.mcpGateway.gatewayNamespace }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.mcp.port }}
+{{- end }}

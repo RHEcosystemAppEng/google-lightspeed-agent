@@ -1,0 +1,14 @@
+{{- if .Values.mcpGateway.enabled }}
+apiVersion: mcp.kuadrant.io/v1alpha1
+kind: MCPServerRegistration
+metadata:
+  name: {{ include "lightspeed-agent.fullname" . }}-mcp
+  labels:
+    {{- include "lightspeed-agent.labels" . | nindent 4 }}
+spec:
+  toolPrefix: {{ .Values.mcpGateway.toolPrefix | quote }}
+  targetRef:
+    group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: {{ include "lightspeed-agent.fullname" . }}-mcp
+{{- end }}
