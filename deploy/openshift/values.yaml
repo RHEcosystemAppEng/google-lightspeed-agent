@@ -233,7 +233,7 @@ mlflow:
   runTags: ""
   image:
     repository: ghcr.io/mlflow/mlflow
-    tag: "v3.14.0-full"
+    tag: "v3.15.0-full"
     pullPolicy: IfNotPresent
   port: 5000
   resources:

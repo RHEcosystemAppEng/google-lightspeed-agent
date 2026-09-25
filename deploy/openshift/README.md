@@ -1100,7 +1100,7 @@ agent side (included in the container image as a transitive dependency of the
 | `mlflow.logPrompts` | Log LLM prompts/responses (**security-sensitive** — may contain PII) | `false` |
 | `mlflow.runTags` | Extra run tags as `key=value` pairs | `""` |
 | `mlflow.image.repository` | MLflow container image (self-deployed only) | `ghcr.io/mlflow/mlflow` |
-| `mlflow.image.tag` | Image tag (self-deployed only) | `v3.14.0-full` |
+| `mlflow.image.tag` | Image tag (self-deployed only) | `v3.15.0-full` |
 | `mlflow.port` | MLflow server port (self-deployed only) | `5000` |
 | `mlflow.route.enabled` | Create an OpenShift Route for the MLflow UI (self-deployed only) | `false` |
 | `mlflow.postgresql.mode` | Must be `dedicated` — MLflow requires a SQL backend for OTLP trace ingestion (self-deployed only) | `dedicated` |
