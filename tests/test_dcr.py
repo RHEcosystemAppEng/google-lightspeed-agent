@@ -110,6 +110,33 @@ class TestModels:
 class TestGoogleJWTValidator:
     """Tests for GoogleJWTValidator."""
 
+    @pytest.mark.asyncio
+    async def test_rejects_hmac_algorithm_before_key_lookup(self, monkeypatch):
+        """Only RS256 is accepted; an HMAC token must not reach key lookup."""
+        import jwt
+
+        from lightspeed_agent.dcr.google_jwt import GoogleJWTValidator
+
+        validator = GoogleJWTValidator()
+        monkeypatch.setattr(validator._settings, "skip_jwt_validation", False)
+        monkeypatch.setattr(validator._settings, "skip_dcr_jwt_validation", False)
+
+        token = jwt.encode(
+            {"sub": "attacker"},
+            "public-key-material-that-is-at-least-32-bytes",
+            algorithm="HS256",
+            headers={"kid": "test-key"},
+        )
+
+        with patch.object(
+            validator._cert_cache, "get_public_key", new_callable=AsyncMock
+        ) as get_public_key:
+            result = await validator.validate_software_statement(token)
+
+        assert isinstance(result, DCRError)
+        assert "Unsupported algorithm: HS256" in result.error_description
+        get_public_key.assert_not_awaited()
+
     def test_audience_uses_organization_url_from_settings(self):
         """Test that the validator uses agent_provider_organization_url as audience."""
         from lightspeed_agent.config import get_settings
