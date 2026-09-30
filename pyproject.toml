@@ -54,7 +54,9 @@ agent = [
     "google-adk==2.4.0",
     "a2a-sdk[http-server]>=0.3.0,<0.4.0",
     # CVE-2026-84377: litellm < 1.96.2 proxy request validation allows credential exfiltration
-    "litellm>=1.96.2,<2.0.0",
+    # litellm < 1.101.0-rc.1: semantic cache tenant isolation bypass (proxy-only, not exploitable
+    # here since litellm is only used as a client SDK, but pinned above the fix as defense-in-depth)
+    "litellm>=1.101.0,<2.0.0",
     "mcp==1.28.1",
     # Configuration
     "python-dotenv>=1.2.2",
