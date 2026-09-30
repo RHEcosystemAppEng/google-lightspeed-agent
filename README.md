@@ -137,7 +137,7 @@ The Lightspeed Agent requires the Red Hat Lightspeed MCP server to be running to
    podman kube play deploy/podman/redis-pod.yaml
 
    # Option B: Standalone container
-   podman run -d -p 6379:6379 --name redis docker.io/library/redis:7-alpine
+   podman run -d -p 6379:6379 --name redis quay.io/ecosystem-appeng/redis:7.2.16
 
    # Option C: Local Redis (if installed)
    redis-server
