@@ -315,10 +315,12 @@ marketplacePostgresql:
 # ---------------------------------------------------------------------------
 # Redis (rate limiting backend)
 # ---------------------------------------------------------------------------
+# Redis 7.2.16 includes the fix for CVE-2026-81934. This Quay image mirrors
+# docker.io/library/redis:7.2.16 to avoid Docker Hub pull limits.
 redis:
   image:
-    repository: quay.io/fedora/redis-7
-    tag: latest
+    repository: quay.io/ecosystem-appeng/redis
+    tag: 7.2.16
     pullPolicy: IfNotPresent
   storage:
     size: 1Gi

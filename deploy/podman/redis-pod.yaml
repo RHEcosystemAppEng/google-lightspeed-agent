@@ -2,6 +2,9 @@
 #
 # Dedicated Redis pod used by the lightspeed-agent rate limiter.
 #
+# Redis 7.2.16 includes the fix for CVE-2026-81934. This Quay image mirrors
+# docker.io/library/redis:7.2.16 to avoid Docker Hub pull limits.
+#
 # Usage:
 #   podman kube play deploy/podman/redis-pod.yaml
 #   podman kube down deploy/podman/redis-pod.yaml
@@ -17,13 +20,15 @@ spec:
   restartPolicy: Always
   containers:
     - name: redis
-      image: quay.io/fedora/redis-7
+      image: quay.io/ecosystem-appeng/redis:7.2.16
       args:
-        - "run-redis"
+        - "redis-server"
         - "--appendonly"
         - "yes"
         - "--requirepass"
         - "changeme-dev-redis"
+        - "--dir"
+        - "/data"
       ports:
         - containerPort: 6379
           hostPort: 6379
@@ -33,7 +38,7 @@ spec:
           memory: 256Mi
       volumeMounts:
         - name: redis-data
-          mountPath: /var/lib/redis/data:Z
+          mountPath: /data:Z
   volumes:
     - name: redis-data
       emptyDir: {}

@@ -102,7 +102,7 @@ curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 - OpenShift 4.x cluster with `oc` and `helm` CLIs
 - Container image access: `quay.io/ecosystem-appeng/google-lightspeed-agent`,
   `quay.io/redhat-services-prod/.../red-hat-lightspeed-mcp`,
-  `quay.io/fedora/redis-7`, `registry.redhat.io/rhel9/postgresql-16` (if using database session backend or standalone mode)
+  `quay.io/ecosystem-appeng/redis:7.2.16`, `registry.redhat.io/rhel9/postgresql-16` (if using database session backend or standalone mode)
 - Google AI Studio API key, Vertex AI project, or GCP service account key (for ADC)
 - Red Hat SSO OAuth credentials (client ID and secret)
 
@@ -711,8 +711,8 @@ when `deploymentMode: standalone`.
 | `rateLimit.redisTimeoutMs` | Redis operation timeout (ms) | `200` |
 | `rateLimit.keyPrefix` | Redis key prefix for rate-limit counters | `lightspeed:ratelimit` |
 | `rateLimit.redisCaCert` | Redis TLS CA certificate path | `""` |
-| `redis.image.repository` | Redis container image | `quay.io/fedora/redis-7` |
-| `redis.image.tag` | Image tag | `latest` |
+| `redis.image.repository` | Redis container image | `quay.io/ecosystem-appeng/redis` |
+| `redis.image.tag` | Image tag | `7.2.16` |
 | `redis.image.pullPolicy` | Image pull policy | `IfNotPresent` |
 | `redis.storage.size` | Redis PVC size | `1Gi` |
 
