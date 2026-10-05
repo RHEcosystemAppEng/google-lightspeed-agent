@@ -39,6 +39,8 @@ dependencies = [
     # Google Cloud authentication (ADC for Procurement API calls)
     "google-auth>=2.0.0",
     "requests>=2.20.0",  # Required by google.auth.transport.requests
+    # CVE-2026-97687/97688/97689: urllib3 security fixes
+    "urllib3>=2.8.0",
     # Redis for distributed rate limiting (used by both agent and marketplace handler)
     # CVE-2026-81934: Update to latest client (8.1.0) for compatibility with patched servers
     "redis>=8.1.0",
