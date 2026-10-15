@@ -57,6 +57,10 @@ agent = [
     # CVE-2026-104874: older C-extension items-view operations leak references
     "multidict>=6.9.1",
     "google-adk==2.4.0",
+    # CVE-2026-96760: Authlib JWS JSON deserialization accepts empty signatures before 1.9.0
+    # CVE-2026-104056: metadata-origin validation is not confirmed fixed in 1.9.1;
+    # this agent does not use Authlib's discovery client.
+    "authlib>=1.9.0,<2.0.0",
     "a2a-sdk[http-server]>=0.3.0,<0.4.0",
     # CVE: fsspec ReferenceFileSystem template evaluation allows code execution before 2026.6.0
     "fsspec>=2026.6.0",
