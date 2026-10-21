@@ -39,6 +39,8 @@ dependencies = [
     # Google Cloud authentication (ADC for Procurement API calls)
     "google-auth>=2.0.0",
     "requests>=2.20.0",  # Required by google.auth.transport.requests
+    # GHSA-6q48-6c7w-9gw2: use certifi's release that distrusts compromised eMudhra intermediates
+    "certifi>=2026.10.19",
     # CVE-2026-97687/97688/97689: urllib3 security fixes
     "urllib3>=2.8.0",
     # Redis for distributed rate limiting (used by both agent and marketplace handler)
