@@ -76,6 +76,13 @@ agent = [
     # Google Cloud integration
     "google-cloud-service-control>=1.0.0",
     # OpenTelemetry for distributed tracing
+    # CVE-2026-112006: opentelemetry-exporter-otlp-proto-http < 1.45.0 disables
+    # TLS verification when OTEL_EXPORTER_OTLP_CERTIFICATE (or a per-signal
+    # variant) is set to an empty string. The fixed 1.45.0 cannot be used here:
+    # google-adk (all releases through 2.12.0) caps opentelemetry-sdk at
+    # <= 1.42.1 while opentelemetry-exporter-otlp-proto-http >= 1.44 requires
+    # sdk ~= 1.44. Mitigated in lightspeed_agent.telemetry.setup by dropping
+    # empty certificate variables before exporters are constructed.
     "opentelemetry-api>=1.20.0",
     "opentelemetry-sdk>=1.20.0",
     "opentelemetry-exporter-otlp>=1.20.0",
@@ -97,7 +104,9 @@ eval = [
     "pillow>=13.0.0",
     # CVE-2026-110855/110856/110857/110859: fix GitPython issues in the eval environment
     "gitpython>=3.2.0",
-    "opentelemetry-exporter-otlp-proto-http>=1.20.0",
+    # CVE-2026-112006: empty OTEL_EXPORTER_OTLP_CERTIFICATE disables TLS
+    # verification in opentelemetry-exporter-otlp-proto-http before 1.45.0
+    "opentelemetry-exporter-otlp-proto-http>=1.45.0",
     # CVE-2026-104874: keep the eval environment on the fixed multidict release
     "multidict>=6.9.1",
 ]

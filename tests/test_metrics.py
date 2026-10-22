@@ -190,6 +190,75 @@ class TestMeterProviderSetup:
             get_settings.cache_clear()
 
 
+class TestEmptyCertificateEnvSanitization:
+    """Tests for the CVE-2026-112006 empty-certificate mitigation."""
+
+    def test_sanitizer_drops_empty_certificate_variables(self, monkeypatch):
+        """Empty OTEL_EXPORTER_OTLP*_CERTIFICATE values are removed from the environment."""
+        from lightspeed_agent.telemetry.setup import _sanitize_empty_certificate_env_vars
+
+        monkeypatch.setenv("OTEL_EXPORTER_OTLP_CERTIFICATE", "")
+        monkeypatch.setenv("OTEL_EXPORTER_OTLP_TRACES_CERTIFICATE", "")
+        monkeypatch.setenv("OTEL_EXPORTER_OTLP_METRICS_CERTIFICATE", "")
+        monkeypatch.setenv("OTEL_EXPORTER_OTLP_LOGS_CERTIFICATE", "")
+
+        _sanitize_empty_certificate_env_vars()
+
+        import os
+
+        assert "OTEL_EXPORTER_OTLP_CERTIFICATE" not in os.environ
+        assert "OTEL_EXPORTER_OTLP_TRACES_CERTIFICATE" not in os.environ
+        assert "OTEL_EXPORTER_OTLP_METRICS_CERTIFICATE" not in os.environ
+        assert "OTEL_EXPORTER_OTLP_LOGS_CERTIFICATE" not in os.environ
+
+    def test_sanitizer_keeps_non_empty_certificate_variables(self, monkeypatch):
+        """Non-empty certificate values (real CA paths) are left untouched."""
+        import os
+
+        from lightspeed_agent.telemetry.setup import _sanitize_empty_certificate_env_vars
+
+        monkeypatch.setenv("OTEL_EXPORTER_OTLP_CERTIFICATE", "/etc/pki/ca.pem")
+
+        _sanitize_empty_certificate_env_vars()
+
+        assert os.environ["OTEL_EXPORTER_OTLP_CERTIFICATE"] == "/etc/pki/ca.pem"
+
+    def test_sanitizer_tolerates_unset_variables(self):
+        """Unset certificate variables do not cause errors."""
+        from lightspeed_agent.telemetry.setup import _sanitize_empty_certificate_env_vars
+
+        _sanitize_empty_certificate_env_vars()
+
+    def test_setup_telemetry_sanitizes_before_exporter_creation(self, monkeypatch):
+        """setup_telemetry removes empty certificate vars before building exporters."""
+        import os
+
+        from lightspeed_agent.config import get_settings
+        from lightspeed_agent.telemetry import setup as setup_mod
+
+        setup_mod._tracer_provider = None
+        setup_mod._meter_provider = None
+
+        monkeypatch.setenv("OTEL_ENABLED", "true")
+        monkeypatch.setenv("OTEL_METRICS_ENABLED", "false")
+        monkeypatch.setenv("MLFLOW_ENABLED", "false")
+        monkeypatch.setenv("OTEL_EXPORTER_TYPE", "console")
+        monkeypatch.setenv("OTEL_EXPORTER_OTLP_CERTIFICATE", "")
+
+        get_settings.cache_clear()
+
+        try:
+            from lightspeed_agent.telemetry.setup import setup_telemetry, shutdown_telemetry
+
+            setup_telemetry()
+
+            assert "OTEL_EXPORTER_OTLP_CERTIFICATE" not in os.environ
+
+            shutdown_telemetry()
+        finally:
+            get_settings.cache_clear()
+
+
 class TestGaugeCallbacks:
     """Tests for OTel gauge callback functions."""
 
