@@ -105,7 +105,8 @@ dev = [
     "ruff>=0.4.0",
     "mypy>=1.10.0",
     "httpx>=0.27.0",
-    "uv>=0.11.0",
+    # CVE-2026-104843 / GHSA-hq85-5cpj-mr62: Windows wheel traversal and unsafe CA bundle
+    "uv>=0.13.4",
     "pip-audit>=2.7.0",
     # PYSEC-2026-3721: pip < 26.2 vulnerability
     "pip==26.2.1",
