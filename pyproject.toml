@@ -95,8 +95,8 @@ eval = [
     "mlflow>=3.15.0",
     # CVE-2026-112390/112391/112406: fix MIC frame counting and PDF denial of service
     "pillow>=13.0.0",
-    # CVE-2026-110855/110856/110857/110859: fix GitPython issues in the eval environment
-    "gitpython>=3.2.0",
+    # CVE-2026-110855/110856/110857/110859/114145: fix GitPython issues in the eval environment
+    "gitpython>=3.2.1",
     "opentelemetry-exporter-otlp-proto-http>=1.20.0",
     # CVE-2026-104874: keep the eval environment on the fixed multidict release
     "multidict>=6.9.1",
