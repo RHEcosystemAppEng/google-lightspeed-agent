@@ -1319,9 +1319,9 @@ matplotlib==3.11.2 \
     --hash=sha256:f2ac30cf5eb5dff1b584627ae0b0e1186551a4f69ae3c75073911da497a29170 \
     --hash=sha256:fea03cf56568cc1cba08b470be6a0559e71c3a5b688d54b7179bb35ba23d0821
     # via mlflow
-mlflow==3.16.0 \
-    --hash=sha256:c4ac5e8634aacad1a3d7d5a1a31be9279593ebd48b84272843682db11970cf71 \
-    --hash=sha256:e39d3e4dd13aab864f821a3c3d871eb5e2db3d4557e60db8592f23cbafa1e830
+mlflow==3.17.2 \
+    --hash=sha256:3fcdb58c683362763bf1cb124eea800b4e3253e16cb5e3adf5b5e562af1fdf2b \
+    --hash=sha256:4e44c03791beb518d8b0a40b0982d958c2634d902f46d67d7907c82107f21fac
     # via lightspeed-agent (pyproject.toml)
 mlflow-skinny==3.16.0 \
     --hash=sha256:f02330c33f231fc19312bc35c64206e1504a63838fbabdac4b1882d6416bd2b8 \
