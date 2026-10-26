@@ -109,6 +109,8 @@ eval = [
     "opentelemetry-exporter-otlp-proto-http>=1.20.0",
     # CVE-2026-104874: keep the eval environment on the fixed multidict release
     "multidict>=6.9.1",
+    # PYSEC-2026-4312: keep the eval environment on the fixed werkzeug release
+    "werkzeug>=3.1.9",
 ]
 dev = [
     "pytest>=8.0.0",
