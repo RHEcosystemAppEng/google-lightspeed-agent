@@ -122,7 +122,9 @@ dev = [
     "pip-audit>=2.7.0",
     # PYSEC-2026-3721: pip < 26.2 vulnerability
     "pip==26.2.1",
-    "msgpack>=1.2.1",
+    # CVE-2026-114613: msgpack < 1.2.3 leaks a decoded map value when strict_map_key
+    # rejects a key, allowing unbounded memory growth on malformed input
+    "msgpack>=1.2.3",
 ]
 
 [project.scripts]
