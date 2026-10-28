@@ -1,6 +1,7 @@
 """OpenTelemetry setup and configuration."""
 
 import logging
+import os
 from typing import TYPE_CHECKING, Any
 
 from opentelemetry import metrics as otel_metrics
@@ -27,6 +28,34 @@ logger = logging.getLogger(__name__)
 
 _tracer_provider: TracerProvider | None = None
 _meter_provider: MeterProvider | None = None
+
+# CVE-2026-112006: opentelemetry-exporter-otlp-proto-http < 1.45.0 passes the
+# value of OTEL_EXPORTER_OTLP*_CERTIFICATE straight to requests' ``verify``
+# argument. An empty string is falsy for requests, which silently disables TLS
+# certificate verification and lets a man-in-the-middle impersonate the
+# collector (including reading credentials from OTEL_EXPORTER_OTLP_HEADERS).
+# The agent environment cannot upgrade to the fixed 1.45.0 because google-adk
+# caps opentelemetry-sdk at <= 1.42.1, so empty values are dropped here to
+# restore the safe default (verification against system CAs).
+_EMPTY_CERTIFICATE_ENV_VARS = (
+    "OTEL_EXPORTER_OTLP_CERTIFICATE",
+    "OTEL_EXPORTER_OTLP_TRACES_CERTIFICATE",
+    "OTEL_EXPORTER_OTLP_METRICS_CERTIFICATE",
+    "OTEL_EXPORTER_OTLP_LOGS_CERTIFICATE",
+)
+
+
+def _sanitize_empty_certificate_env_vars() -> None:
+    """Drop empty-string OTLP certificate variables (CVE-2026-112006)."""
+    for var in _EMPTY_CERTIFICATE_ENV_VARS:
+        if var in os.environ and os.environ[var] == "":
+            del os.environ[var]
+            logger.warning(
+                "Ignoring empty %s: an empty certificate value disables TLS "
+                "verification in opentelemetry-exporter-otlp-proto-http "
+                "(CVE-2026-112006); using system CA verification instead",
+                var,
+            )
 
 
 def _get_sampler(sampler_type: str, sampler_arg: float) -> "Sampler":
@@ -175,6 +204,10 @@ def setup_telemetry() -> None:
     ):
         logger.debug("OpenTelemetry tracing, metrics, and MLflow are disabled")
         return
+
+    # CVE-2026-112006 mitigation: must run before any OTLP exporter is created,
+    # because the exporters read these variables at construction time.
+    _sanitize_empty_certificate_env_vars()
 
     resource = Resource.create(
         {
