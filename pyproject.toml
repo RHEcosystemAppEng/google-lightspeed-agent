@@ -48,8 +48,8 @@ dependencies = [
     "redis>=8.1.0",
     # Structured JSON logging with proper value escaping (CWE-117 safe)
     "python-json-logger>=3.0.0",
-    # CVE-2026-59885: pyasn1 < 0.6.4 OID decoding quadratic time DoS
-    "pyasn1>=0.6.4",
+    # CVE-2026-119194/119195/119196: pyasn1 < 0.6.5 ASN.1 decoding quadratic time DoS
+    "pyasn1>=0.6.5",
 ]
 
 [project.optional-dependencies]
