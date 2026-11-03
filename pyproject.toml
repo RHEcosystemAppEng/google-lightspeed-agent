@@ -96,7 +96,8 @@ agent = [
     "opentelemetry-exporter-prometheus>=0.62b1",
     # joserfc < 1.7.2: JWT trailing-padding malleability bypass
     # CVE-2026-75509/102946: JWT issuer-validation and JWS signature-verification bypasses
-    "joserfc>=1.7.4",
+    # CVE-2026-119283/119284: unbounded JWE recipient processing and JWS memory allocation
+    "joserfc>=1.7.6",
 ]
 telemetry = [
     "opentelemetry-exporter-jaeger>=1.20.0",
