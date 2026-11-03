@@ -74,6 +74,9 @@ agent = [
     # CVE-2026-114612: proxy admin privilege escalation via salt-key reuse (also proxy-only;
     # fixed in 1.103.1, pinned above the fix as defense-in-depth)
     "litellm>=1.103.1,<2.0.0",
+    # Remove the Comodo AAA root from botocore's vendored CA bundle to distrust
+    # compromised eMudhra intermediate certificates (botocore PR #3838).
+    "botocore>=1.43.117",
     "mcp==1.30.0",
     # Configuration
     "python-dotenv>=1.2.2",
