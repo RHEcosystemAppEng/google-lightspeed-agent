@@ -172,6 +172,7 @@ aiohttp==3.14.5 \
     --hash=sha256:ff75a7537413a86e7cafe98e0e1d6e3dc4b15c6349896e7d5c6b881bfdb6d550
     # via
     #   lightspeed-agent (pyproject.toml)
+    #   google-adk
     #   litellm
 aiosignal==1.4.0 \
     --hash=sha256:053243f8b92b990551949e63930a839ff0cf0b0ebbe0597b0f3fb19e1a0fe82e \
@@ -577,7 +578,6 @@ cryptography==50.0.0 \
     #   google-auth
     #   joserfc
     #   pyjwt
-    #   pyopenssl
 distro==1.9.0 \
     --hash=sha256:2fa77c6fd8940f116ee1d6b94a2f90b13b5ea8d019b98bc8bafdcabcdd9bdbed \
     --hash=sha256:7bffd925d65168f85027d8da9af6bddab658135b840670a223589bc0c8ef02b2
@@ -815,9 +815,9 @@ fsspec==2026.9.0 \
     # via
     #   lightspeed-agent (pyproject.toml)
     #   huggingface-hub
-google-adk==2.4.0 \
-    --hash=sha256:5a2996b288d591deefcb277eeeeb7da838d72056675763bfef52ad3b36975dde \
-    --hash=sha256:fba91f1a693e5fc2fd13dc40d625562bd52e44a7baaeecedb01811a68063d847
+google-adk==2.7.0 \
+    --hash=sha256:283e16dc5ffab7684e17098f7282470339e88a3d16ecfa62b4025680672c906b \
+    --hash=sha256:6517c0383d9449484b6398a5b60c6408dbd4de369e957eebc3b9d8d0c90736e9
     # via lightspeed-agent (pyproject.toml)
 google-api-core==2.30.3 \
     --hash=sha256:a85761ba72c444dad5d611c2220633480b2b6be2521eca69cca2dbb3ffd6bfe8 \
@@ -825,9 +825,9 @@ google-api-core==2.30.3 \
     # via
     #   a2a-sdk
     #   google-cloud-service-control
-google-auth==2.53.0 \
-    --hash=sha256:6e7449917c599b35126a99ec268ec6880301f2fea41dce198fe8fd83ff642b68 \
-    --hash=sha256:e7e6aa16f6bee7b2b264830fd04f08087a1d5a836df516251a5d15327b246c9c
+google-auth==2.62.1 \
+    --hash=sha256:015399a5abde39033c69404cc1c079e6d4c2de2993e164c9f4eac6e5376ad72b \
+    --hash=sha256:3c8e1ce2553784ae17fd220e6f88df3281d86ab98019278f436d06dffab17a9e
     # via
     #   lightspeed-agent (pyproject.toml)
     #   google-adk
@@ -838,9 +838,9 @@ google-cloud-service-control==1.19.0 \
     --hash=sha256:0f13f58402c8d28bbac7ecd9db45a1e4f6c9c355764deb7683b252ef4639bf6c \
     --hash=sha256:667e617c14fa79fc6cc82cfb7ce11a031c779123315bc951ad03fb83b7826929
     # via lightspeed-agent (pyproject.toml)
-google-genai==2.10.0 \
-    --hash=sha256:77912cd558cd7dfd5b75c25fd1c609e78d7954dde583331104022a46ea90f9ee \
-    --hash=sha256:d5350311567ae660c24cbc1752aee4b3d660f89c0106d2dcd2a69978c35afe1e
+google-genai==2.34.0 \
+    --hash=sha256:8e182cf3f73384167b96861cf0aef5102b5070f2db1ea11002879e913806ef37 \
+    --hash=sha256:a4cb02aebc4c357f863d2938132f0e3f7967fc5e00b8a4078673f68aad340665
     # via google-adk
 googleapis-common-protos==1.75.0 \
     --hash=sha256:53a062ff3c32552fbd62c11fe23768b78e4ddf0494d5e5fd97d3f4689c75fbbd \
@@ -2012,10 +2012,6 @@ pyjwt==2.15.1 \
     # via
     #   lightspeed-agent (pyproject.toml)
     #   mcp
-pyopenssl==26.4.0 \
-    --hash=sha256:28dfcce0162b9211413e26dfbfdf1d24317fbeba18fc93c12400a1856b2a0bc7 \
-    --hash=sha256:f0eb0cb2d581d3ad2b9c489468485e7f2ab6727d08401bcf9d824c3caddf3c1c
-    # via google-auth
 python-dateutil==2.9.0.post0 \
     --hash=sha256:37dd54208da7e1cd875388217d5e00ebd4179249f90fb72437e91a35459a0ad3 \
     --hash=sha256:a8b2bc7bffae282281c8140a97d3aa9c14da0b136dfe83f850eea9a5f7470427
@@ -2600,7 +2596,6 @@ typing-extensions==4.15.0 \
     #   opentelemetry-semantic-conventions
     #   pydantic
     #   pydantic-core
-    #   pyopenssl
     #   referencing
     #   sqlalchemy
     #   starlette
