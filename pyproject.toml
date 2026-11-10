@@ -59,8 +59,11 @@ agent = [
     # CVE-2026-104874: older C-extension items-view operations leak references
     "multidict>=6.9.1",
     # CVE-2026-115522: FileArtifactService did not scope on-disk paths by app_name,
-    # allowing cross-application artifact access (fixed in 2.7.0; 1.x backport 1.39.1)
-    "google-adk==2.7.0",
+    # allowing cross-application artifact access (fixed in 2.7.0; 1.x backport 1.39.1).
+    # 2.14.0 also raises the opentelemetry-api/sdk ceiling to 1.45.2, which lets
+    # the agent environment use the OTel releases fixing CVE-2026-114603 and
+    # CVE-2026-112006 (see the OpenTelemetry note below).
+    "google-adk==2.14.0",
     # CVE-2026-96760: Authlib JWS JSON deserialization accepts empty signatures before 1.9.0
     # CVE-2026-114616: Authlib < 1.9.1 accepts zero-length HMAC key material, letting a
     # remote attacker forge HS256/HS384/HS512 tokens when a secret lookup returns empty
@@ -85,28 +88,32 @@ agent = [
     # Google Cloud integration
     "google-cloud-service-control>=1.0.0",
     # OpenTelemetry for distributed tracing
+    # CVE-2026-114603: opentelemetry-api < 1.45.1 parses the inbound tracestate
+    # header in quadratic time (DoS); 1.45.2 also bounds the traceparent header.
     # CVE-2026-112006: opentelemetry-exporter-otlp-proto-http < 1.45.0 disables
     # TLS verification when OTEL_EXPORTER_OTLP_CERTIFICATE (or a per-signal
-    # variant) is set to an empty string. The fixed 1.45.0 cannot be used here:
-    # google-adk (all releases through 2.12.0) caps opentelemetry-sdk at
-    # <= 1.42.1 while opentelemetry-exporter-otlp-proto-http >= 1.44 requires
-    # sdk ~= 1.44. Mitigated in lightspeed_agent.telemetry.setup by dropping
-    # empty certificate variables before exporters are constructed.
-    "opentelemetry-api>=1.20.0",
-    "opentelemetry-sdk>=1.20.0",
-    "opentelemetry-exporter-otlp>=1.20.0",
-    "opentelemetry-instrumentation-fastapi>=0.41b0",
-    "opentelemetry-instrumentation-httpx>=0.41b0",
-    "opentelemetry-instrumentation-logging>=0.41b0",
-    "opentelemetry-exporter-prometheus>=0.62b1",
+    # variant) is set to an empty string. google-adk 2.14.0 raised its
+    # opentelemetry-api/sdk ceiling to <=1.45.2, so the agent environment can
+    # use the fixed 1.45.2 stack. Instrumentation packages use the matching
+    # 0.66b2 calibration for the 1.45.2 API.
+    "opentelemetry-api>=1.45.2",
+    "opentelemetry-sdk>=1.45.2",
+    "opentelemetry-exporter-otlp>=1.45.2",
+    "opentelemetry-exporter-otlp-proto-http>=1.45.2",
+    "opentelemetry-instrumentation-fastapi>=0.66b2",
+    "opentelemetry-instrumentation-httpx>=0.66b2",
+    "opentelemetry-instrumentation-logging>=0.66b2",
+    "opentelemetry-exporter-prometheus>=0.66b2",
     # joserfc < 1.7.2: JWT trailing-padding malleability bypass
     # CVE-2026-75509/102946: JWT issuer-validation and JWS signature-verification bypasses
     # CVE-2026-119283/119284: unbounded JWE recipient processing and JWS memory allocation
     "joserfc>=1.7.6",
 ]
 telemetry = [
-    "opentelemetry-exporter-jaeger>=1.20.0",
-    "opentelemetry-exporter-zipkin>=1.20.0",
+    # Jaeger accepts OTLP directly; its native Python exporters are deprecated.
+    # Only the JSON Zipkin exporter is used. The umbrella package also installs
+    # a protobuf exporter requiring protobuf<4, incompatible with the agent.
+    "opentelemetry-exporter-zipkin-json>=1.45.2",
 ]
 eval = [
     # CVE-2026-115886: mlflow scorer deserialization allows SSRF from the (unauthenticated)
@@ -120,8 +127,10 @@ eval = [
     # CVE-2026-110855/110856/110857/110859/114145: fix GitPython issues in the eval environment
     "gitpython>=3.2.1",
     # CVE-2026-112006: empty OTEL_EXPORTER_OTLP_CERTIFICATE disables TLS
-    # verification in opentelemetry-exporter-otlp-proto-http before 1.45.0
-    "opentelemetry-exporter-otlp-proto-http>=1.45.0",
+    # verification in opentelemetry-exporter-otlp-proto-http before 1.45.0.
+    # 1.45.2 also contains the tracestate/traceparent parsing fixes
+    # (CVE-2026-114603).
+    "opentelemetry-exporter-otlp-proto-http>=1.45.2",
     # CVE-2026-104874: keep the eval environment on the fixed multidict release
     "multidict>=6.9.1",
     # PYSEC-2026-4312: keep the eval environment on the fixed werkzeug release

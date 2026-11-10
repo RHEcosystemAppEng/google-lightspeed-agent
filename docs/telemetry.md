@@ -30,9 +30,39 @@ When enabled, OpenTelemetry automatically instruments:
 |------|-------------|----------|
 | `otlp` | OTLP over gRPC (recommended) | `OTEL_EXPORTER_OTLP_ENDPOINT` |
 | `otlp-http` | OTLP over HTTP | `OTEL_EXPORTER_OTLP_HTTP_ENDPOINT` |
-| `jaeger` | Jaeger Thrift | Requires `opentelemetry-exporter-jaeger` |
-| `zipkin` | Zipkin JSON | Requires `opentelemetry-exporter-zipkin` |
+| `zipkin` | Zipkin JSON | Requires the `telemetry` extra (`opentelemetry-exporter-zipkin-json`) |
 | `console` | Print to stdout | For debugging |
+
+OTLP exporters are included in the `agent` extra and work with Jaeger directly.
+For direct Zipkin export, install `pip install -e '.[agent,telemetry]'` when
+running from source. The optional extra installs only the JSON exporter, avoiding
+the legacy Zipkin protobuf exporter's incompatible protobuf requirement.
+
+### Migrating from the native Jaeger exporter
+
+`OTEL_EXPORTER_TYPE=jaeger` is no longer supported. The native Python Jaeger
+exporters are deprecated; Jaeger supports OTLP directly, so no Jaeger exporter
+package or `telemetry` extra is needed. Replace the old configuration with:
+
+```dotenv
+OTEL_ENABLED=true
+OTEL_EXPORTER_TYPE=otlp
+OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
+```
+
+Alternatively, use `OTEL_EXPORTER_TYPE=otlp-http` with
+`OTEL_EXPORTER_OTLP_HTTP_ENDPOINT=http://jaeger:4318`. These are base URLs; the
+agent appends `/v1/traces` for HTTP export. Use HTTPS and the appropriate CA
+configuration for TLS-enabled collectors. Legacy `OTEL_EXPORTER_JAEGER_*`
+variables are no longer used: migrate their endpoint and any authentication/TLS
+settings to the corresponding OTLP settings. Ports 6831/UDP and 14250/gRPC are
+legacy Jaeger protocols, not OTLP endpoints.
+
+The Jaeger OTLP receiver must be enabled (supported since Jaeger 1.35; versions
+before 1.47 require `COLLECTOR_OTLP_ENABLED=true`). See the
+[Jaeger OTLP APIs](https://www.jaegertracing.io/docs/latest/architecture/apis/#opentelemetry-protocol).
+Jaeger accepts traces only; send OTLP metrics to an OpenTelemetry Collector with
+a metrics backend instead of pointing them at Jaeger.
 
 ### Sampling Strategies
 
@@ -206,17 +236,18 @@ receivers:
         endpoint: 0.0.0.0:4318
 
 exporters:
-  # Add your backend exporter (e.g., Jaeger, Zipkin, Cloud Trace)
-  jaeger:
-    endpoint: jaeger:14250
+  # Jaeger receives OTLP directly; no native Jaeger exporter is needed.
+  otlp/jaeger:
+    endpoint: jaeger:4317
     tls:
+      # Plaintext local example only; configure TLS for remote collectors.
       insecure: true
 
 service:
   pipelines:
     traces:
       receivers: [otlp]
-      exporters: [jaeger]
+      exporters: [otlp/jaeger]
 ```
 
 Run the collector:
