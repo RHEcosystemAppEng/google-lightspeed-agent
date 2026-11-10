@@ -190,73 +190,74 @@ class TestMeterProviderSetup:
             get_settings.cache_clear()
 
 
-class TestEmptyCertificateEnvSanitization:
-    """Tests for the CVE-2026-112006 empty-certificate mitigation."""
+class TestOTLPHttpCertificateVerification:
+    """Verify the fixed exporters enforce TLS without environment sanitization."""
 
-    def test_sanitizer_drops_empty_certificate_variables(self, monkeypatch):
-        """Empty OTEL_EXPORTER_OTLP*_CERTIFICATE values are removed from the environment."""
-        from lightspeed_agent.telemetry.setup import _sanitize_empty_certificate_env_vars
-
-        monkeypatch.setenv("OTEL_EXPORTER_OTLP_CERTIFICATE", "")
-        monkeypatch.setenv("OTEL_EXPORTER_OTLP_TRACES_CERTIFICATE", "")
-        monkeypatch.setenv("OTEL_EXPORTER_OTLP_METRICS_CERTIFICATE", "")
-        monkeypatch.setenv("OTEL_EXPORTER_OTLP_LOGS_CERTIFICATE", "")
-
-        _sanitize_empty_certificate_env_vars()
-
+    @pytest.mark.parametrize("signal", ["traces", "metrics", "logs"])
+    @pytest.mark.parametrize(
+        "global_ca,signal_ca,explicit_ca,expected_verify",
+        [
+            (None, None, None, True),
+            ("", None, None, True),
+            (None, "", None, True),
+            ("", "", None, True),
+            ("/global-ca.pem", "", None, "/global-ca.pem"),
+            ("", "/signal-ca.pem", None, "/signal-ca.pem"),
+            ("/global-ca.pem", "/signal-ca.pem", None, "/signal-ca.pem"),
+            ("/global-ca.pem", "/signal-ca.pem", "/explicit-ca.pem", "/explicit-ca.pem"),
+        ],
+    )
+    def test_export_verifies_tls(
+        self, monkeypatch, signal, global_ca, signal_ca, explicit_ca, expected_verify
+    ):
+        """CVE-2026-112006: empty certificate values must never disable TLS."""
         import os
 
-        assert "OTEL_EXPORTER_OTLP_CERTIFICATE" not in os.environ
-        assert "OTEL_EXPORTER_OTLP_TRACES_CERTIFICATE" not in os.environ
-        assert "OTEL_EXPORTER_OTLP_METRICS_CERTIFICATE" not in os.environ
-        assert "OTEL_EXPORTER_OTLP_LOGS_CERTIFICATE" not in os.environ
+        import requests
+        from opentelemetry.exporter.otlp.proto.http._log_exporter import OTLPLogExporter
+        from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter
+        from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+        from opentelemetry.sdk.metrics.export import MetricsData
 
-    def test_sanitizer_keeps_non_empty_certificate_variables(self, monkeypatch):
-        """Non-empty certificate values (real CA paths) are left untouched."""
-        import os
+        variables = {
+            "OTEL_EXPORTER_OTLP_CERTIFICATE": global_ca,
+            f"OTEL_EXPORTER_OTLP_{signal.upper()}_CERTIFICATE": signal_ca,
+        }
+        for name, value in variables.items():
+            if value is None:
+                monkeypatch.delenv(name, raising=False)
+            else:
+                monkeypatch.setenv(name, value)
 
-        from lightspeed_agent.telemetry.setup import _sanitize_empty_certificate_env_vars
+        verification_values = []
 
-        monkeypatch.setenv("OTEL_EXPORTER_OTLP_CERTIFICATE", "/etc/pki/ca.pem")
+        def capture_send(session, request, **kwargs):
+            verification_values.append(kwargs["verify"])
+            response = requests.Response()
+            response.status_code = 200
+            response._content = b""
+            return response
 
-        _sanitize_empty_certificate_env_vars()
-
-        assert os.environ["OTEL_EXPORTER_OTLP_CERTIFICATE"] == "/etc/pki/ca.pem"
-
-    def test_sanitizer_tolerates_unset_variables(self):
-        """Unset certificate variables do not cause errors."""
-        from lightspeed_agent.telemetry.setup import _sanitize_empty_certificate_env_vars
-
-        _sanitize_empty_certificate_env_vars()
-
-    def test_setup_telemetry_sanitizes_before_exporter_creation(self, monkeypatch):
-        """setup_telemetry removes empty certificate vars before building exporters."""
-        import os
-
-        from lightspeed_agent.config import get_settings
-        from lightspeed_agent.telemetry import setup as setup_mod
-
-        setup_mod._tracer_provider = None
-        setup_mod._meter_provider = None
-
-        monkeypatch.setenv("OTEL_ENABLED", "true")
-        monkeypatch.setenv("OTEL_METRICS_ENABLED", "false")
-        monkeypatch.setenv("MLFLOW_ENABLED", "false")
-        monkeypatch.setenv("OTEL_EXPORTER_TYPE", "console")
-        monkeypatch.setenv("OTEL_EXPORTER_OTLP_CERTIFICATE", "")
-
-        get_settings.cache_clear()
-
+        # Capture the effective requests TLS option, not exporter internals.
+        # No collector or network access is needed for these regression tests.
+        monkeypatch.setattr(requests.Session, "send", capture_send)
+        exporter_class = {
+            "traces": OTLPSpanExporter,
+            "metrics": OTLPMetricExporter,
+            "logs": OTLPLogExporter,
+        }[signal]
+        exporter = exporter_class(
+            endpoint=f"https://collector.invalid/v1/{signal}",
+            certificate_file=explicit_ca,
+        )
         try:
-            from lightspeed_agent.telemetry.setup import setup_telemetry, shutdown_telemetry
-
-            setup_telemetry()
-
-            assert "OTEL_EXPORTER_OTLP_CERTIFICATE" not in os.environ
-
-            shutdown_telemetry()
+            batch = MetricsData(resource_metrics=()) if signal == "metrics" else ()
+            assert exporter.export(batch).name == "SUCCESS"
+            assert verification_values == [expected_verify]
+            for name, value in variables.items():
+                assert os.environ.get(name) == value
         finally:
-            get_settings.cache_clear()
+            exporter.shutdown()
 
 
 class TestGaugeCallbacks:
