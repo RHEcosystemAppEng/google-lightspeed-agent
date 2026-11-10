@@ -131,6 +131,7 @@ audit:
 	uv tool run pip-audit --no-deps --disable-pip -r requirements-agent.txt
 	uv tool run pip-audit --no-deps --disable-pip -r requirements-handler.txt
 	uv tool run pip-audit --no-deps --disable-pip -r requirements-dev.txt
+	uv tool run pip-audit --no-deps --disable-pip -r requirements-eval.txt
 	@echo "✓ Vulnerability scan complete"
 
 # =============================================================================
