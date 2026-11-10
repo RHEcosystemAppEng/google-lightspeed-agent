@@ -124,6 +124,10 @@ eval = [
     "multidict>=6.9.1",
     # PYSEC-2026-4312: keep the eval environment on the fixed werkzeug release
     "werkzeug>=3.1.9",
+    # CVE-2026-112307 (GHSA-xmww-55xg-h3vc): OutputPHPFilter left `$` unescaped,
+    # letting attacker-controlled SQL inject PHP interpolations into generated
+    # snippets. Fixed in 0.6.1 (the final sqlparse release).
+    "sqlparse>=0.6.1",
 ]
 dev = [
     "pytest>=8.0.0",
