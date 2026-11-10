@@ -67,18 +67,6 @@ def _create_exporter(exporter_type: str, otlp_endpoint: str, otlp_http_endpoint:
 
         return OTLPSpanExporter(endpoint=f"{otlp_http_endpoint}/v1/traces")
 
-    elif exporter_type == "jaeger":
-        try:
-            from opentelemetry.exporter.jaeger.thrift import JaegerExporter
-
-            return JaegerExporter()
-        except ImportError:
-            logger.error(
-                "Jaeger exporter not installed."
-                " Install with: pip install opentelemetry-exporter-jaeger"
-            )
-            raise
-
     elif exporter_type == "zipkin":
         try:
             from opentelemetry.exporter.zipkin.json import ZipkinExporter
@@ -87,7 +75,7 @@ def _create_exporter(exporter_type: str, otlp_endpoint: str, otlp_http_endpoint:
         except ImportError:
             logger.error(
                 "Zipkin exporter not installed."
-                " Install with: pip install opentelemetry-exporter-zipkin"
+                " Install with: pip install opentelemetry-exporter-zipkin-json"
             )
             raise
 
@@ -158,7 +146,7 @@ def setup_telemetry() -> None:
     """Initialize OpenTelemetry tracing, metrics, and/or MLflow span export.
 
     All three features are independently toggleable:
-    - otel_enabled: standard OTel tracing (Jaeger/Zipkin/OTLP) + instrumentation
+    - otel_enabled: standard OTel tracing (OTLP/Zipkin/console) + instrumentation
     - otel_metrics_enabled: OTel metrics with Prometheus + OTLP export
     - mlflow_enabled: span export to MLflow's OTLP endpoint (works with or without otel_enabled)
     """

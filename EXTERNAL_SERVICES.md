@@ -73,8 +73,8 @@ These services are required for production Cloud Run deployments and are configu
 | Service | Purpose | Required | Key Config |
 |---------|---------|----------|------------|
 | **OpenTelemetry Collector** | Distributed tracing export (gRPC or HTTP) | No | `OTEL_ENABLED`, `OTEL_EXPORTER_OTLP_ENDPOINT` |
-| **Jaeger** | Trace storage/visualization backend | No | `OTEL_EXPORTER_TYPE=jaeger` |
-| **Zipkin** | Trace storage/visualization backend | No | `OTEL_EXPORTER_TYPE=zipkin` |
+| **Jaeger** | Trace storage/visualization backend via OTLP | No | `OTEL_EXPORTER_TYPE=otlp`, `OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317` |
+| **Zipkin** | Trace storage/visualization backend | No | `OTEL_EXPORTER_TYPE=zipkin`; install the `telemetry` extra (JSON exporter) |
 
 ## Container Registries
 

@@ -110,8 +110,10 @@ agent = [
     "joserfc>=1.7.6",
 ]
 telemetry = [
-    "opentelemetry-exporter-jaeger>=1.20.0",
-    "opentelemetry-exporter-zipkin>=1.20.0",
+    # Jaeger accepts OTLP directly; its native Python exporters are deprecated.
+    # Only the JSON Zipkin exporter is used. The umbrella package also installs
+    # a protobuf exporter requiring protobuf<4, incompatible with the agent.
+    "opentelemetry-exporter-zipkin-json>=1.45.2",
 ]
 eval = [
     # CVE-2026-115886: mlflow scorer deserialization allows SSRF from the (unauthenticated)
