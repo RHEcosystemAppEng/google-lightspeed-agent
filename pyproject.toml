@@ -58,7 +58,9 @@ agent = [
     "aiohttp>=3.14.4",
     # CVE-2026-104874: older C-extension items-view operations leak references
     "multidict>=6.9.1",
-    "google-adk==2.4.0",
+    # CVE-2026-115522: FileArtifactService did not scope on-disk paths by app_name,
+    # allowing cross-application artifact access (fixed in 2.7.0; 1.x backport 1.39.1)
+    "google-adk==2.7.0",
     # CVE-2026-96760: Authlib JWS JSON deserialization accepts empty signatures before 1.9.0
     # CVE-2026-114616: Authlib < 1.9.1 accepts zero-length HMAC key material, letting a
     # remote attacker forge HS256/HS384/HS512 tokens when a secret lookup returns empty

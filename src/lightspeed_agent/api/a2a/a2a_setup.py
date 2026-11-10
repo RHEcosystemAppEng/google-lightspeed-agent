@@ -105,7 +105,7 @@ def _get_session_service() -> Any:
             ) from None
 
     logger.info("Using InMemorySessionService for session management")
-    return InMemorySessionService()  # type: ignore[no-untyped-call]
+    return InMemorySessionService()
 
 
 def _create_runner() -> Runner:
@@ -142,7 +142,7 @@ def _create_runner() -> Runner:
         app=app,
         artifact_service=InMemoryArtifactService(),
         session_service=session_service,
-        memory_service=InMemoryMemoryService(),  # type: ignore[no-untyped-call]
+        memory_service=InMemoryMemoryService(),
     )
 
 
