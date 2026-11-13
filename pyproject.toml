@@ -114,7 +114,10 @@ eval = [
     # CVE-2026-53995: FileStore path traversal via crafted trace IDs, fixed in 3.17.2
     # (not exploitable in the deployed server, which requires the PostgreSQL backend,
     # but pinned above the fix as defense-in-depth)
-    "mlflow>=3.17.2",
+    # CVE-2026-127202: FileStore path traversal via an unvalidated model_id on
+    # POST /api/3.0/mlflow/runs/outputs writes files (meta.yaml) outside the run
+    # directory, fixed in 3.18.0 (same PostgreSQL caveat as above)
+    "mlflow>=3.18.0",
     # CVE-2026-112390/112391/112406: fix MIC frame counting and PDF denial of service
     "pillow>=13.0.0",
     # CVE-2026-110855/110856/110857/110859/114145: fix GitPython issues in the eval environment
