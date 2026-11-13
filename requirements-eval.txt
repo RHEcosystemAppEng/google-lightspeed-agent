@@ -1319,17 +1319,17 @@ matplotlib==3.11.2 \
     --hash=sha256:f2ac30cf5eb5dff1b584627ae0b0e1186551a4f69ae3c75073911da497a29170 \
     --hash=sha256:fea03cf56568cc1cba08b470be6a0559e71c3a5b688d54b7179bb35ba23d0821
     # via mlflow
-mlflow==3.17.2 \
-    --hash=sha256:4e44c03791beb518d8b0a40b0982d958c2634d902f46d67d7907c82107f21fac \
-    --hash=sha256:3fcdb58c683362763bf1cb124eea800b4e3253e16cb5e3adf5b5e562af1fdf2b
+mlflow==3.18.0 \
+    --hash=sha256:be7d84ba0d0b12392f5b53260cdb3e6d7b7ef4b80c29da90a89b5a1f6db7102f \
+    --hash=sha256:04e912d5b154b417c5930ba47ef3dc2f74738fb3ba93e3d70499955ec8884540
     # via lightspeed-agent (pyproject.toml)
-mlflow-skinny==3.17.2 \
-    --hash=sha256:31be9190494212ccd94774170fd06f6fe04d209aae3923eefd16f9bf7830d63c \
-    --hash=sha256:5f2a0812d019a8f517a58f1377922f75af4f42832be30c8f1441005b51288596
+mlflow-skinny==3.18.0 \
+    --hash=sha256:93715e152061e0ecabcc9aa70330b296141a806de9da6b2c29cff8703b00608f \
+    --hash=sha256:2653292a390d399ee2dd49e81380a89b16265a05747eb5ea0e6c1b7987e398dd
     # via mlflow
-mlflow-tracing==3.17.2 \
-    --hash=sha256:1502aa892144cbe93b0c2a706b9564011be92903bbb343d19038dcd322ae5e7c \
-    --hash=sha256:35da9f6cc450feae7173941d0d119391f6fe3a41973c0a28ae4a021e6e285c99
+mlflow-tracing==3.18.0 \
+    --hash=sha256:bd756183ee73ec5964a806e2f8cb87cc13689252a51cf09833b25cf9df110d42 \
+    --hash=sha256:1e8300b2718be455de2765ea1db293603636bc3fc38852f0ba25d61761616d27
     # via mlflow
 multidict==6.9.1 \
     --hash=sha256:006c4478de0a1876f4834e14255776286f09b9846b505fe63f67f9d173a9487c \
@@ -2225,7 +2225,9 @@ python-json-logger==4.1.0 \
 python-multipart==0.0.32 \
     --hash=sha256:be54b7f3fa167bb83e4fcd936b887b708f4e57fe75911c02aebf53efaf8d938e \
     --hash=sha256:ff6d3f776f16878c894e52e107296ffc890e913c611b1a4ec6c44e2821fe2e23
-    # via lightspeed-agent (pyproject.toml)
+    # via
+    #   lightspeed-agent (pyproject.toml)
+    #   mlflow-skinny
 pyyaml==6.0.3 \
     --hash=sha256:00c4bdeba853cc34e7dd471f16b4114f4162dc03e6b7afcc2128711f0eca823c \
     --hash=sha256:0150219816b6a1fa26fb4699fb7daa9caf09eb1999f3b70fb6e786805e80375a \
