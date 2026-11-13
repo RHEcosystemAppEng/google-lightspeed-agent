@@ -35,7 +35,7 @@ Developer laptop (on VPN)
 pip install -e ".[eval]"
 ```
 
-This installs `mlflow>=3.17.2`.
+This installs `mlflow>=3.18.0`.
 
 ## Configuration
 
