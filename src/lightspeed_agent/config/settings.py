@@ -629,9 +629,9 @@ class Settings(BaseSettings):
         default="http://localhost:4318",
         description="OTLP exporter endpoint (HTTP)",
     )
-    otel_exporter_type: Literal["otlp", "otlp-http", "jaeger", "zipkin", "console"] = Field(
+    otel_exporter_type: Literal["otlp", "otlp-http", "zipkin", "console"] = Field(
         default="otlp",
-        description="Telemetry exporter type",
+        description="Telemetry exporter type (use otlp or otlp-http for Jaeger)",
     )
     otel_traces_sampler: Literal[
         "always_on",

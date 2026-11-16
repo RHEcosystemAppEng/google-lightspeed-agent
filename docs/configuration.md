@@ -526,7 +526,7 @@ Project metadata and dependencies. Modify to add/update dependencies:
 ```toml
 [project]
 dependencies = [
-    "google-adk==2.7.0",
+    "google-adk==2.14.0",
     # Add more dependencies here
 ]
 ```

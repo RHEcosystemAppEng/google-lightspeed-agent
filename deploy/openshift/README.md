@@ -793,7 +793,7 @@ Deployed only when `deploymentMode: standalone`.
 | `logging.format` | Log format (`json` / `text`) | `json` |
 | `otel.enabled` | Enable OpenTelemetry tracing | `false` |
 | `otel.serviceName` | OTEL service name | `lightspeed_agent` |
-| `otel.exporterType` | Exporter type (`otlp`, `otlp-http`, `console`, `jaeger`, `zipkin`) | `otlp` |
+| `otel.exporterType` | Exporter type (`otlp`, `otlp-http`, `console`, `zipkin`); use OTLP for Jaeger | `otlp` |
 | `otel.otlpEndpoint` | OTLP gRPC endpoint | `http://localhost:4317` |
 | `otel.otlpHttpEndpoint` | OTLP HTTP endpoint | `http://localhost:4318` |
 | `otel.tracesSampler` | Traces sampler strategy | `always_on` |

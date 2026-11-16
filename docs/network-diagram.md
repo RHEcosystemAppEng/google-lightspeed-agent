@@ -22,7 +22,7 @@ graph TB
     subgraph "Observability Backends (Optional)"
         OTLP_GRPC["OTLP gRPC Collector<br/>:4317"]
         OTLP_HTTP["OTLP HTTP Collector<br/>:4318/v1/traces"]
-        JAEGER["Jaeger<br/>:6831/udp"]
+        JAEGER["Jaeger (OTLP)<br/>:4317 / :4318"]
         ZIPKIN["Zipkin<br/>:9411"]
     end
 
@@ -84,7 +84,7 @@ graph TB
     %% === OBSERVABILITY EGRESS ===
     AGENT -. "gRPC :4317" .-> OTLP_GRPC
     AGENT -. "HTTP :4318" .-> OTLP_HTTP
-    AGENT -. "UDP :6831" .-> JAEGER
+    AGENT -. "OTLP gRPC :4317 / HTTP :4318" .-> JAEGER
     AGENT -. "HTTP :9411" .-> ZIPKIN
 
     %% Styling
@@ -123,9 +123,8 @@ graph TB
 | **443** | HTTPS | Google Certificates | **Egress** | X.509 cert fetch for JWT validation |
 | **443** | HTTPS | Google Service Control | **Egress** | Usage metering reports |
 | **443** | HTTPS | console.redhat.com | **Egress** | Insights APIs (via MCP sidecar) |
-| **4317** | gRPC | OTLP Collector | **Egress** | OpenTelemetry traces (optional) |
-| **4318** | HTTP | OTLP Collector | **Egress** | OpenTelemetry traces (optional) |
-| **6831** | UDP | Jaeger | **Egress** | Thrift traces (optional) |
+| **4317** | gRPC | OTLP Collector / Jaeger | **Egress** | OpenTelemetry traces (optional) |
+| **4318** | HTTP | OTLP Collector / Jaeger | **Egress** | OpenTelemetry traces (optional) |
 | **9411** | HTTP | Zipkin | **Egress** | Trace spans (optional) |
 
 ## Key Observations

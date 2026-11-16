@@ -16,7 +16,7 @@ Always use a Python virtual environment — do not install dependencies system-w
 python3.12 -m venv .venv              # Create virtual environment
 source .venv/bin/activate             # Activate it
 pip install -e ".[agent,dev]"         # Install all dependencies (agent + dev)
-# Optional: pip install -e ".[agent,dev,telemetry]"  # Include Jaeger/Zipkin exporters
+# Optional: pip install -e ".[agent,dev,telemetry]"  # Include Zipkin JSON exporter
 python -m lightspeed_agent.main       # Run the agent API server (port 8000)
 ```
 
@@ -105,6 +105,7 @@ When your changes affect architecture, configuration, APIs, or behavior, update 
 - **SQLite vs PostgreSQL**: `ARRAY(String)` columns use a JSON variant for SQLite (see `db/models.py:StringList`). If adding array-type columns, use `StringList` — raw `ARRAY` will break tests.
 - **Dev-only bypasses blocked in prod**: `SKIP_JWT_VALIDATION=true` raises on startup when running on Cloud Run. Don't rely on it for integration testing in deployed environments.
 - **MCP tools are loaded at startup**: Changes to MCP server tool definitions require an agent restart to take effect.
+- **Jaeger uses OTLP**: Use `OTEL_EXPORTER_TYPE=otlp` or `otlp-http`; the deprecated native `jaeger` exporter option has been removed. No telemetry extra is needed for Jaeger.
 - **Two databases, two URLs**: Marketplace data (`DATABASE_URL`) and ADK sessions (`SESSION_DATABASE_URL`) are separate. Mixing them up causes silent data loss or missing tables.
 
 ## Architecture
@@ -185,4 +186,3 @@ When a PR in this repo changes any of the following, also open a companion PR in
 All configuration is via environment variables, managed through Pydantic settings in `config/settings.py`. See `.env.example` for the complete list (30+ vars) and `docs/configuration.md` for detailed documentation.
 
 Key variables: `GOOGLE_API_KEY` (or Vertex AI), `GEMINI_MODEL` (default: `gemini-3.5-flash`), `DATABASE_URL`, `SESSION_DATABASE_URL`, `MCP_TRANSPORT_MODE`, `MCP_SERVER_URL`, `RED_HAT_SSO_CLIENT_ID`/`SECRET`. Dev-only bypasses: `SKIP_JWT_VALIDATION`, `SKIP_DCR_JWT_VALIDATION`, `SKIP_ORDER_VALIDATION`.
-
